@@ -28,17 +28,17 @@ export function TrackingPage() {
   useEffect(() => {
     if (ctxActiveJob) setLocalJobId(ctxActiveJob.id);
     else {
-      const j = jobs.find(j => j.senderId === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status));
+      const j = jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status));
       if (j) setLocalJobId(j.id);
       else {
-        const last = [...jobs].filter(j => j.senderId === 'u1').sort((a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+        const last = [...jobs].filter(j => j.sender_id === 'u1').sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
         if (last) setLocalJobId(last.id);
       }
     }
   }, [ctxActiveJob, jobs]);
 
-  const job = jobs.find(j => j.id === localJobId) || jobs.find(j => j.senderId === 'u1');
+  const job = jobs.find(j => j.id === localJobId) || jobs.find(j => j.sender_id === 'u1');
 
   const [simStep, setSimStep] = useState<number | null>(null);
   const [simulating, setSimulating] = useState(false);
@@ -57,11 +57,11 @@ export function TrackingPage() {
       setSimStep(idx);
       setJobs(prev => prev.map(j => j.id === job.id ? {
         ...j, status: ns,
-        runnerName: ns === 'MATCHED' ? 'Karthik R' : j.runnerName,
-        runnerRating: ns === 'MATCHED' ? 4.9 : j.runnerRating,
-        matchedAt: ns === 'MATCHED' ? new Date().toISOString() : j.matchedAt,
-        pickupConfirmedAt: ns === 'IN_TRANSIT' ? new Date().toISOString() : j.pickupConfirmedAt,
-        deliveredAt: ns === 'DELIVERED' ? new Date().toISOString() : j.deliveredAt,
+        runner_name: ns === 'MATCHED' ? 'Karthik R' : j.runner_name,
+        runner_rating: ns === 'MATCHED' ? 4.9 : j.runner_rating,
+        matched_at: ns === 'MATCHED' ? new Date().toISOString() : j.matched_at,
+        pickup_confirmed_at: ns === 'IN_TRANSIT' ? new Date().toISOString() : j.pickup_confirmed_at,
+        delivered_at: ns === 'DELIVERED' ? new Date().toISOString() : j.delivered_at,
       } : j));
       if (ns === 'DELIVERED') { await new Promise(r => setTimeout(r, 800)); navigate('/rate'); break; }
     }
@@ -89,7 +89,7 @@ export function TrackingPage() {
     );
   }
 
-  const runnerName = job.runnerName && job.runnerName !== 'You' ? job.runnerName : 'Karthik R';
+  const runnerName = job.runner_name && job.runner_name !== 'You' ? job.runner_name : 'Karthik R';
 
   return (
     <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -265,10 +265,10 @@ export function TrackingPage() {
         </div>
         <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
           {[
-            { label: 'From', value: job.pickupLocation, icon: <div className="w-2 h-2 rounded-full bg-cyan-400" /> },
-            { label: 'To', value: job.dropLocation, icon: <div className="w-2 h-2 rounded-full bg-violet-400" /> },
-            { label: 'Item', value: `${job.itemType} · ${job.weight} · ${job.risk} risk` },
-            { label: 'Price', value: `₹${job.agreedPrice || job.priceMin}`, mono: true },
+            { label: 'From', value: job.pickup_location, icon: <div className="w-2 h-2 rounded-full bg-cyan-400" /> },
+            { label: 'To', value: job.drop_location, icon: <div className="w-2 h-2 rounded-full bg-violet-400" /> },
+            { label: 'Item', value: `${job.item_type} · ${job.weight} · ${job.risk} risk` },
+            { label: 'Price', value: `₹${job.agreed_price ?? job.posted_price}`, mono: true },
             { label: 'Job ID', value: job.id, mono: true, muted: true },
           ].map(({ label, value, icon, mono, muted }) => (
             <div key={label} className="flex items-center justify-between gap-3">

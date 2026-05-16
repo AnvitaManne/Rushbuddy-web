@@ -15,9 +15,9 @@ export function RatingPage() {
   const { jobs, setJobs } = useApp();
   const navigate = useNavigate();
 
-  const job = jobs.find(j => j.senderId === 'u1' && j.status === 'DELIVERED')
-    || jobs.find(j => j.senderId === 'u1' && ['CLOSED', 'PENDING_RATING', 'DELIVERED'].includes(j.status))
-    || jobs.find(j => j.senderId === 'u1');
+  const job = jobs.find(j => j.sender_id === 'u1' && j.status === 'DELIVERED')
+    || jobs.find(j => j.sender_id === 'u1' && ['CLOSED', 'PENDING_RATING', 'DELIVERED'].includes(j.status))
+    || jobs.find(j => j.sender_id === 'u1');
 
   const [stars, setStars] = useState(0);
   const [hoveredStar, setHoveredStar] = useState(0);
@@ -29,8 +29,8 @@ export function RatingPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const runnerName = job?.runnerName && job.runnerName !== 'You' ? job.runnerName : 'Karthik R';
-  const basePrice = job?.agreedPrice || job?.priceMax || 40;
+  const runnerName = job?.runner_name && job.runner_name !== 'You' ? job.runner_name : 'Karthik R';
+  const basePrice = job?.agreed_price ?? job?.posted_price ?? 40;
   const total = basePrice + tip;
 
   const handleSubmit = async () => {
@@ -42,7 +42,7 @@ export function RatingPage() {
         ...j,
         status: disputeMode ? 'DISPUTED' : 'CLOSED',
         rating: stars,
-        tipAmount: tip,
+        tip_amount: tip,
       } : j));
     }
     setLoading(false);
@@ -117,7 +117,7 @@ export function RatingPage() {
               Trust Score: 96 · 47 deliveries
             </div>
             <div className="text-xs mt-0.5" style={{ color: '#64748B' }}>
-              {job?.itemType} · {job?.pickupLocation?.split(',')[0]} → {job?.dropLocation?.split(',')[0]}
+              {job?.item_type} · {job?.pickup_location?.split(',')[0]} → {job?.drop_location?.split(',')[0]}
             </div>
           </div>
         </div>

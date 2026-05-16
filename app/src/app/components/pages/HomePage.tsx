@@ -34,24 +34,24 @@ export function HomePage() {
   const { user, setCurrentRole, currentRole, jobs } = useApp();
   const navigate = useNavigate();
 
-  const myJobs = jobs.filter(j => j.senderId === 'u1' || j.runnerId === 'u1');
+  const myJobs = jobs.filter(j => j.sender_id === 'u1' || j.runner_id === 'u1');
   const recentJobs = myJobs.slice(0, 4);
-  const activeJob = jobs.find(j => (j.runnerId === 'u1' || j.senderId === 'u1') && ['MATCHED', 'IN_TRANSIT'].includes(j.status));
+  const activeJob = jobs.find(j => (j.runner_id === 'u1' || j.sender_id === 'u1') && ['MATCHED', 'IN_TRANSIT'].includes(j.status));
 
   const displayUser = user || {
     name: 'Aditi Krishnan',
-    hostelBlock: 'MH-C Block',
-    weeklyEarnings: 320,
-    totalEarnings: 1840,
-    totalDeliveries: 23,
+    hostel_block: 'MH-C Block',
+    weekly_earnings: 320,
+    total_earnings: 1840,
+    total_deliveries: 23,
     rating: 4.8,
-    trustScore: 94,
-    acceptanceRate: 91,
+    trust_score: 94,
+    acceptance_rate: 91,
     streak: 4,
-    bestWeekEarnings: 450,
+    best_week_earnings: 450,
   };
 
-  const weeksProgress = Math.round((displayUser.weeklyEarnings / displayUser.bestWeekEarnings) * 100);
+  const weeksProgress = Math.round((displayUser.weekly_earnings / displayUser.best_week_earnings) * 100);
 
   return (
     <div className="p-4 md:p-6 pb-24 md:pb-6 space-y-5" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -67,7 +67,7 @@ export function HomePage() {
               Hey, {displayUser.name.split(' ')[0]} 👋
             </h1>
             <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
-              {displayUser.hostelBlock} · Verified Runner
+              {displayUser.hostel_block} · Verified Runner
             </p>
           </div>
 
@@ -105,7 +105,7 @@ export function HomePage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate(activeJob.runnerId === 'u1' ? '/runner/active' : '/sender/tracking')}
+          onClick={() => navigate(activeJob.runner_id === 'u1' ? '/runner/active' : '/sender/tracking')}
           className="rounded-xl p-4 cursor-pointer transition-all hover:brightness-110"
           style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
         >
@@ -119,9 +119,9 @@ export function HomePage() {
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-xs text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>ACTIVE JOB</span>
               </div>
-              <p className="text-sm text-white truncate">{activeJob.pickupLocation} → {activeJob.dropLocation}</p>
+              <p className="text-sm text-white truncate">{activeJob.pickup_location} → {activeJob.drop_location}</p>
               <p className="text-xs mt-0.5" style={{ color: '#64748B' }}>
-                {activeJob.itemType} · ₹{activeJob.agreedPrice}
+                {activeJob.item_type} · ₹{activeJob.agreed_price ?? activeJob.posted_price}
               </p>
             </div>
             <ChevronRight size={16} className="text-emerald-400 flex-shrink-0" />
@@ -133,13 +133,13 @@ export function HomePage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           {
-            label: 'This Week', value: `₹${displayUser.weeklyEarnings}`,
+            label: 'This Week', value: `₹${displayUser.weekly_earnings}`,
             sub: `${weeksProgress}% of best week`, icon: TrendingUp,
             color: '#10B981', bg: '#0A1A10', border: '#1A3520',
           },
           {
-            label: 'Total Earned', value: `₹${displayUser.totalEarnings.toLocaleString()}`,
-            sub: `${displayUser.totalDeliveries} deliveries`, icon: Award,
+            label: 'Total Earned', value: `₹${displayUser.total_earnings.toLocaleString()}`,
+            sub: `${displayUser.total_deliveries} deliveries`, icon: Award,
             color: '#6366F1', bg: '#0D0D20', border: '#1E1E45',
           },
           {
@@ -148,7 +148,7 @@ export function HomePage() {
             color: '#F59E0B', bg: '#1A1005', border: '#3B2A0A',
           },
           {
-            label: 'Trust Score', value: `${displayUser.trustScore}`,
+            label: 'Trust Score', value: `${displayUser.trust_score}`,
             sub: `${displayUser.streak}-day streak`, icon: Shield,
             color: '#06B6D4', bg: '#061620', border: '#0E2D3D',
           },
@@ -179,11 +179,11 @@ export function HomePage() {
           <div>
             <div className="text-xs mb-0.5" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>WEEKLY PROGRESS</div>
             <p className="text-sm text-white">
-              ₹{displayUser.bestWeekEarnings - displayUser.weeklyEarnings} away from your best week
+              ₹{displayUser.best_week_earnings - displayUser.weekly_earnings} away from your best week
             </p>
           </div>
           <div className="text-right">
-            <div className="text-xs" style={{ color: '#64748B' }}>Best: ₹{displayUser.bestWeekEarnings}</div>
+            <div className="text-xs" style={{ color: '#64748B' }}>Best: ₹{displayUser.best_week_earnings}</div>
             <div className="text-xs text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
               {displayUser.streak} 🔥 streak
             </div>
@@ -200,7 +200,7 @@ export function HomePage() {
         </div>
         <div className="flex justify-between mt-1.5">
           <span className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>₹0</span>
-          <span className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>₹{displayUser.bestWeekEarnings}</span>
+          <span className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>₹{displayUser.best_week_earnings}</span>
         </div>
       </div>
 
@@ -250,8 +250,8 @@ export function HomePage() {
         </div>
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Acceptance Rate', value: `${displayUser.acceptanceRate}%`, good: displayUser.acceptanceRate >= 80 },
-            { label: 'Deliveries', value: displayUser.totalDeliveries, good: true },
+            { label: 'Acceptance Rate', value: `${displayUser.acceptance_rate}%`, good: displayUser.acceptance_rate >= 80 },
+            { label: 'Deliveries', value: displayUser.total_deliveries, good: true },
             { label: 'Rating', value: `${displayUser.rating}/5.0`, good: displayUser.rating >= 4 },
           ].map(({ label, value, good }) => (
             <div key={label} className="text-center">
@@ -291,21 +291,21 @@ export function HomePage() {
               >
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
-                  {job.itemType === 'Document' ? <Package size={14} className="text-blue-400" /> :
-                    job.itemType === 'Food' ? <span className="text-sm">🍱</span> :
-                      job.itemType === 'Medicine' ? <span className="text-sm">💊</span> :
+                  {job.item_type === 'Document' ? <Package size={14} className="text-blue-400" /> :
+                    job.item_type === 'Food' ? <span className="text-sm">🍱</span> :
+                      job.item_type === 'Medicine' ? <span className="text-sm">💊</span> :
                         <Package size={14} className="text-slate-400" />}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-xs text-white truncate">
-                      {job.pickupLocation} → {job.dropLocation}
+                      {job.pickup_location} → {job.drop_location}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={job.status} />
-                    {job.runnerId === 'u1' ? (
+                    {job.runner_id === 'u1' ? (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Runner</span>
                     ) : (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Sender</span>
@@ -315,10 +315,10 @@ export function HomePage() {
 
                 <div className="text-right flex-shrink-0">
                   <div className="text-sm font-medium text-white" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                    ₹{job.agreedPrice || job.priceMin}
+                    ₹{job.agreed_price ?? job.posted_price}
                   </div>
-                  {job.tipAmount && job.tipAmount > 0 ? (
-                    <div className="text-[10px] text-amber-400">+₹{job.tipAmount} tip</div>
+                  {job.tip_amount && job.tip_amount > 0 ? (
+                    <div className="text-[10px] text-amber-400">+₹{job.tip_amount} tip</div>
                   ) : null}
                 </div>
               </div>

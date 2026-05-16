@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
+import { canRunnerSeeJob } from '@/domain/runnerEligibility';
 import {
   Zap, MapPin, Package, Clock, Filter, Star, Shield,
   AlertCircle, ChevronRight, Lock, RefreshCw, FileText, Coffee, Pill, Box
@@ -28,9 +29,10 @@ const riskBadge = (risk: string) => {
 
 function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string) => void; accepted: boolean }) {
   const [accepting, setAccepting] = useState(false);
-  const isWomensRestricted = job.isWomensHostel;
+  const isWomensRestricted =
+    job.pickup_location_type === 'womens_hostel' || job.drop_location_type === 'womens_hostel';
   const timeSince = (() => {
-    const diff = Date.now() - new Date(job.createdAt).getTime();
+    const diff = Date.now() - new Date(job.created_at).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins}m ago`;
@@ -63,10 +65,10 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center"
             style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
-            {itemIcon(job.itemType)}
+            {itemIcon(job.item_type)}
           </div>
           <div>
-            <div className="text-xs font-medium text-white">{job.itemType}</div>
+            <div className="text-xs font-medium text-white">{job.item_type}</div>
             <div className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</div>
           </div>
         </div>
@@ -93,11 +95,11 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
           </div>
           <div className="flex-1 space-y-2">
             <div>
-              <p className="text-xs text-white">{job.pickupLocation}</p>
+              <p className="text-xs text-white">{job.pickup_location}</p>
               <p className="text-[10px]" style={{ color: '#475569' }}>Pickup</p>
             </div>
             <div>
-              <p className="text-xs text-white">{job.dropLocation}</p>
+              <p className="text-xs text-white">{job.drop_location}</p>
               <p className="text-[10px]" style={{ color: '#475569' }}>Drop</p>
             </div>
           </div>
@@ -126,7 +128,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
             </div>
           )}
           <div className="flex items-center gap-1 text-[11px]" style={{ color: '#64748B' }}>
-            by {job.senderName}
+            by {job.sender_name}
           </div>
         </div>
 
@@ -140,7 +142,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
         <div className="flex items-center justify-between">
           <div>
             <div className="text-white font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.1rem' }}>
-              ₹{job.priceMin}–{job.priceMax}
+              ₹{job.price_floor}–{job.posted_price}
             </div>
             <div className="text-[10px]" style={{ color: '#475569' }}>Sender-set range</div>
           </div>
@@ -174,7 +176,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
               ) : (
                 <>
                   <Zap size={13} />
-                  Accept ₹{job.priceMax}
+                  Accept ₹{job.posted_price}
                 </>
               )}
             </button>
@@ -186,14 +188,16 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
 }
 
 export function RunnerFeedPage() {
-  const { jobs, setJobs, setCurrentRole } = useApp();
+  const { jobs, setJobs, setCurrentRole, user } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('All');
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
 
-  const openJobs = jobs.filter(j => j.status === 'OPEN');
+  const openJobs = jobs.filter(
+    j => j.status === 'OPEN' && user && canRunnerSeeJob(user, j),
+  );
   const filters = ['All', 'Document', 'Food', 'Medicine', 'Object'];
-  const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.itemType === filter);
+  const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);
 
   const handleAccept = (jobId: string) => {
     setCurrentRole('runner');
@@ -201,11 +205,11 @@ export function RunnerFeedPage() {
     setJobs(prev => prev.map(j => j.id === jobId ? {
       ...j,
       status: 'MATCHED',
-      runnerId: 'u1',
-      runnerName: 'You',
-      runnerRating: 4.8,
-      matchedAt: new Date().toISOString(),
-      agreedPrice: j.priceMax,
+      runner_id: 'u1',
+      runner_name: 'You',
+      runner_rating: 4.8,
+      matched_at: new Date().toISOString(),
+      agreed_price: j.posted_price,
     } : j));
     setTimeout(() => navigate('/runner/active'), 1200);
   };
@@ -238,7 +242,7 @@ export function RunnerFeedPage() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Open Jobs', value: openJobs.length, color: '#06B6D4' },
-          { label: 'Potential', value: `₹${openJobs.reduce((s, j) => s + j.priceMax, 0)}`, color: '#10B981' },
+          { label: 'Potential', value: `₹${openJobs.reduce((s, j) => s + j.posted_price, 0)}`, color: '#10B981' },
           { label: 'Avg ETA', value: '~11 min', color: '#F59E0B' },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>

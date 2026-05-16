@@ -120,7 +120,7 @@ export function AppShell() {
             </div>
             <div className="flex flex-col flex-1 min-w-0">
               <span className="text-xs text-white truncate">{user?.name || 'Aditi Krishnan'}</span>
-              <span className="text-[10px] truncate" style={{ color: '#475569' }}>{user?.hostelBlock || 'MH-C Block'}</span>
+              <span className="text-[10px] truncate" style={{ color: '#475569' }}>{user?.hostel_block || 'MH-C Block'}</span>
             </div>
             <button
               onClick={() => navigate('/')}
@@ -174,7 +174,7 @@ export function AppShell() {
                 style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
                 <Shield size={11} className="text-cyan-400" />
                 <span style={{ color: '#94A3B8', fontFamily: 'JetBrains Mono, monospace' }}>
-                  {user.trustScore}
+                  {user.trust_score}
                 </span>
               </div>
             )}
