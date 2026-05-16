@@ -1,17 +1,10 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import type { ItemType, JobType, JobStatus, LocationType, RiskLevel, WeightTier } from '@/domain/enums';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import type { Job, User } from '@/domain/types';
-import {
-  computeExpiresAt,
-  computePriceFloor,
-  generateConfirmationCode,
-  resolveHandoffMode,
-} from '@/domain/jobHelpers';
+import type { UserRole } from '@/domain/enums';
+import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
 
 export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
-
-import type { UserRole } from '@/domain/enums';
 
 interface AppContextType {
   user: User | null;
@@ -30,86 +23,8 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-type MockJobParams = {
-  id: string;
-  sender_id: string;
-  sender_name: string;
-  sender_hostel: string;
-  item_type: ItemType;
-  weight: WeightTier;
-  risk: RiskLevel;
-  pickup_location: string;
-  drop_location: string;
-  description: string;
-  posted_price: number;
-  status: JobStatus;
-  created_at: string;
-  job_type?: JobType;
-  pickup_location_type?: LocationType;
-  drop_location_type?: LocationType;
-  agreed_price?: number;
-  runner_id?: string;
-  runner_name?: string;
-  runner_rating?: number;
-  matched_at?: string;
-  pickup_confirmed_at?: string;
-  delivered_at?: string;
-  eta?: string;
-  distance?: string;
-  tip_amount?: number;
-  rating?: number;
-  confirmation_code?: string;
-};
-
-function buildMockJob(params: MockJobParams): Job {
-  const job_type = params.job_type ?? 'campus_immediate';
-  const created_at = params.created_at;
-  const price_floor = computePriceFloor(
-    params.item_type,
-    params.weight,
-    params.risk,
-    job_type,
-  );
-
-  return {
-    id: params.id,
-    status: params.status,
-    sender_id: params.sender_id,
-    sender_name: params.sender_name,
-    sender_hostel: params.sender_hostel,
-    runner_id: params.runner_id,
-    runner_name: params.runner_name,
-    runner_rating: params.runner_rating,
-    job_type,
-    handoff_mode: resolveHandoffMode(job_type),
-    item_type: params.item_type,
-    weight: params.weight,
-    risk: params.risk,
-    purchase_type: 'carry_only',
-    pickup_location: params.pickup_location,
-    drop_location: params.drop_location,
-    pickup_location_type: params.pickup_location_type ?? 'general',
-    drop_location_type: params.drop_location_type ?? 'general',
-    description: params.description,
-    price_floor,
-    posted_price: params.posted_price,
-    agreed_price: params.agreed_price,
-    confirmation_code: params.confirmation_code ?? generateConfirmationCode(),
-    expires_at: computeExpiresAt(job_type, created_at),
-    condition_acknowledged: Boolean(params.pickup_confirmed_at),
-    created_at,
-    matched_at: params.matched_at,
-    pickup_confirmed_at: params.pickup_confirmed_at,
-    delivered_at: params.delivered_at,
-    eta: params.eta,
-    distance: params.distance,
-    tip_amount: params.tip_amount,
-    rating: params.rating,
-  };
-}
-
 export const mockJobs: Job[] = [
-  buildMockJob({
+  createSampleJob({
     id: 'JOB-2401',
     sender_id: 'u2',
     sender_name: 'Priya Menon',
@@ -127,7 +42,7 @@ export const mockJobs: Job[] = [
     distance: '0.8 km',
     confirmation_code: '4821',
   }),
-  buildMockJob({
+  createSampleJob({
     id: 'JOB-2402',
     sender_id: 'u3',
     sender_name: 'Arjun Sharma',
@@ -145,7 +60,7 @@ export const mockJobs: Job[] = [
     distance: '0.5 km',
     confirmation_code: '7193',
   }),
-  buildMockJob({
+  createSampleJob({
     id: 'JOB-2403',
     sender_id: 'u4',
     sender_name: 'Kavitha R',
@@ -165,7 +80,7 @@ export const mockJobs: Job[] = [
     distance: '1.2 km',
     confirmation_code: '3056',
   }),
-  buildMockJob({
+  createSampleJob({
     id: 'JOB-2404',
     sender_id: 'u5',
     sender_name: 'Rahul Nair',
@@ -188,7 +103,7 @@ export const mockJobs: Job[] = [
     distance: '0.6 km',
     confirmation_code: '8842',
   }),
-  buildMockJob({
+  createSampleJob({
     id: 'JOB-2389',
     sender_id: 'u1',
     sender_name: 'You',
@@ -210,7 +125,7 @@ export const mockJobs: Job[] = [
     tip_amount: 10,
     confirmation_code: '1290',
   }),
-  buildMockJob({
+  createSampleJob({
     id: 'JOB-2376',
     sender_id: 'u6',
     sender_name: 'Sneha Kumar',
@@ -232,7 +147,7 @@ export const mockJobs: Job[] = [
     rating: 5,
     confirmation_code: '5567',
   }),
-  buildMockJob({
+  createSampleJob({
     id: 'JOB-2361',
     sender_id: 'u7',
     sender_name: 'Mohammed A',
@@ -296,6 +211,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+
+    console.debug(`[RushBuddy dev] ${mockJobs.length} mock jobs loaded`);
+    mockJobs.forEach(j => logJobTransition(j.id, '(new)', j.status));
+
+    return attachDevJobDebug({ setJobs, setActiveJob });
+  }, []);
 
   const handleSetUser = (u: User | null) => {
     setUser(u || defaultUser);
