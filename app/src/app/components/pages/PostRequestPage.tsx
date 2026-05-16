@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
 import {
+  computeExpiresAt,
+  computePriceFloor,
+  generateConfirmationCode,
+  resolveHandoffMode,
+} from '@/domain/jobHelpers';
+import {
   FileText, Coffee, Pill, Box, ChevronRight, AlertTriangle,
   MapPin, AlertCircle, Info, Package
 } from 'lucide-react';
@@ -76,21 +82,34 @@ export function PostRequestPage() {
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
 
+    const job_type = 'campus_immediate' as const;
+    const created_at = new Date().toISOString();
+    const price_floor = computePriceFloor(itemType!, weight!, risk!, job_type);
+    const posted_price = priceMax;
+
     const newJob: Job = {
       id: `JOB-${2410 + Math.floor(Math.random() * 90)}`,
-      senderId: 'u1',
-      senderName: 'You',
-      senderHostel: 'MH-C Block',
-      itemType: itemType!,
+      sender_id: 'u1',
+      sender_name: 'You',
+      sender_hostel: 'MH-C Block',
+      job_type,
+      handoff_mode: resolveHandoffMode(job_type),
+      item_type: itemType!,
       weight: weight!,
       risk: risk!,
-      pickupLocation: pickup,
-      dropLocation: drop,
+      purchase_type: 'carry_only',
+      pickup_location: pickup,
+      drop_location: drop,
+      pickup_location_type: 'general',
+      drop_location_type: 'general',
       description,
-      priceMin,
-      priceMax,
+      price_floor,
+      posted_price,
+      confirmation_code: generateConfirmationCode(),
+      expires_at: computeExpiresAt(job_type, created_at),
+      condition_acknowledged: false,
       status: 'OPEN',
-      createdAt: new Date().toISOString(),
+      created_at,
       eta: '~12 min',
       distance: '0.8 km',
     };

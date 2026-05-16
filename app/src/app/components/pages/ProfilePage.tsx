@@ -41,22 +41,22 @@ export function ProfilePage() {
   const displayUser = user || {
     name: 'Aditi Krishnan',
     email: 'aditi.k@vitstudent.ac.in',
-    hostelBlock: 'MH-C Block',
+    hostel_block: 'MH-C Block',
     verified: true,
     rating: 4.8,
-    totalDeliveries: 23,
-    totalEarnings: 1840,
-    weeklyEarnings: 320,
-    acceptanceRate: 91,
-    trustScore: 94,
-    joinedAt: '2026-03-01T00:00:00Z',
+    total_deliveries: 23,
+    total_earnings: 1840,
+    weekly_earnings: 320,
+    acceptance_rate: 91,
+    trust_score: 94,
+    joined_at: '2026-03-01T00:00:00Z',
     gender: 'female' as const,
     streak: 4,
-    bestWeekEarnings: 450,
+    best_week_earnings: 450,
   };
 
-  const myRunnerJobs = jobs.filter(j => j.runnerId === 'u1' && j.status === 'CLOSED');
-  const mySenderJobs = jobs.filter(j => j.senderId === 'u1' && j.status !== 'OPEN');
+  const myRunnerJobs = jobs.filter(j => j.runner_id === 'u1' && j.status === 'CLOSED');
+  const mySenderJobs = jobs.filter(j => j.sender_id === 'u1' && j.status !== 'OPEN');
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -88,12 +88,12 @@ export function ProfilePage() {
               {displayUser.email}
             </p>
             <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <span className="text-xs" style={{ color: '#64748B' }}>📍 {displayUser.hostelBlock}</span>
+              <span className="text-xs" style={{ color: '#64748B' }}>📍 {displayUser.hostel_block}</span>
               <span className="text-xs" style={{ color: '#64748B' }}>
-                Joined {new Date(displayUser.joinedAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                Joined {new Date(displayUser.joined_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
               </span>
               <span className="text-xs" style={{ color: '#64748B' }}>
-                {displayUser.gender === 'female' ? '♀ Female' : '♂ Male'}
+                {displayUser.gender === 'female' ? '♀ Female' : displayUser.gender === 'male' ? '♂ Male' : 'Prefer not to say'}
               </span>
             </div>
           </div>
@@ -103,8 +103,8 @@ export function ProfilePage() {
         <div className="grid grid-cols-4 gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #1E2D45' }}>
           {[
             { label: 'Rating', value: `${displayUser.rating}★`, color: '#F59E0B' },
-            { label: 'Runs', value: displayUser.totalDeliveries, color: '#10B981' },
-            { label: 'Earned', value: `₹${displayUser.totalEarnings.toLocaleString()}`, color: '#06B6D4' },
+            { label: 'Runs', value: displayUser.total_deliveries, color: '#10B981' },
+            { label: 'Earned', value: `₹${displayUser.total_earnings.toLocaleString()}`, color: '#06B6D4' },
             { label: 'Streak', value: `${displayUser.streak}🔥`, color: '#F97316' },
           ].map(({ label, value, color }) => (
             <div key={label} className="text-center">
@@ -144,7 +144,7 @@ export function ProfilePage() {
                   THIS WEEK
                 </div>
                 <div className="text-white font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.3rem' }}>
-                  ₹{displayUser.weeklyEarnings}
+                  ₹{displayUser.weekly_earnings}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-emerald-400">
@@ -183,8 +183,8 @@ export function ProfilePage() {
             </div>
             <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
               {[
-                { label: 'Acceptance Rate', value: displayUser.acceptanceRate, max: 100, unit: '%', color: '#10B981', good: displayUser.acceptanceRate >= 80 },
-                { label: 'Trust Score', value: displayUser.trustScore, max: 100, unit: '', color: '#06B6D4', good: true },
+                { label: 'Acceptance Rate', value: displayUser.acceptance_rate, max: 100, unit: '%', color: '#10B981', good: displayUser.acceptance_rate >= 80 },
+                { label: 'Trust Score', value: displayUser.trust_score, max: 100, unit: '', color: '#06B6D4', good: true },
                 { label: 'On-Time Delivery', value: 96, max: 100, unit: '%', color: '#10B981', good: true },
                 { label: 'Condition Disputes', value: 2, max: 20, unit: ' disputes', color: '#F59E0B', good: true },
               ].map(({ label, value, max, unit, color, good }) => (
@@ -229,15 +229,15 @@ export function ProfilePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium text-white">{job.itemType}</span>
+                      <span className="text-xs font-medium text-white">{job.item_type}</span>
                       <span className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</span>
-                      {job.runnerId === 'u1' && (
+                      {job.runner_id === 'u1' && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded text-cyan-400"
                           style={{ background: '#061620', border: '1px solid #0E2D3D' }}>Runner</span>
                       )}
                     </div>
                     <p className="text-[11px] mt-0.5" style={{ color: '#64748B' }}>
-                      {job.pickupLocation} → {job.dropLocation}
+                      {job.pickup_location} → {job.drop_location}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5">
                       {job.rating && (
@@ -246,19 +246,19 @@ export function ProfilePage() {
                           {job.rating}
                         </div>
                       )}
-                      {job.tipAmount !== undefined && job.tipAmount > 0 && (
-                        <span className="text-[11px] text-emerald-400">+₹{job.tipAmount} tip</span>
+                      {job.tip_amount !== undefined && job.tip_amount > 0 && (
+                        <span className="text-[11px] text-emerald-400">+₹{job.tip_amount} tip</span>
                       )}
                       <span className="text-[11px]" style={{ color: '#475569' }}>
-                        {job.deliveredAt
-                          ? new Date(job.deliveredAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-                          : new Date(job.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        {job.delivered_at
+                          ? new Date(job.delivered_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                          : new Date(job.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </span>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-sm font-semibold text-white" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                      ₹{(job.agreedPrice || job.priceMin) + (job.tipAmount || 0)}
+                      ₹{(job.agreed_price ?? job.posted_price) + (job.tip_amount || 0)}
                     </div>
                     <div className="text-[10px]" style={{ color: '#10B981' }}>CLOSED</div>
                   </div>
@@ -325,7 +325,7 @@ export function ProfilePage() {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-white">Total Trust Score</span>
                 <span className="font-bold text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.2rem' }}>
-                  {displayUser.trustScore}/100
+                  {displayUser.trust_score}/100
                 </span>
               </div>
             </div>

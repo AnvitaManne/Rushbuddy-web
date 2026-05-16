@@ -14,8 +14,8 @@ export function ActiveDeliveryPage() {
   const navigate = useNavigate();
 
   const activeJob = jobs.find(j =>
-    j.runnerId === 'u1' && ['MATCHED', 'IN_TRANSIT'].includes(j.status)
-  ) || jobs.find(j => j.runnerId === 'u1' && j.status !== 'CLOSED');
+    j.runner_id === 'u1' && ['MATCHED', 'IN_TRANSIT'].includes(j.status)
+  ) || jobs.find(j => j.runner_id === 'u1' && j.status !== 'CLOSED');
 
   const [phase, setPhase] = useState<DeliveryPhase>('going_pickup');
   const [condAckLoading, setCondAckLoading] = useState(false);
@@ -154,7 +154,7 @@ export function ActiveDeliveryPage() {
                   <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
                   <span className="text-xs text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>PICKUP LOCATION</span>
                 </div>
-                <p className="text-sm text-white">{activeJob.pickupLocation}</p>
+                <p className="text-sm text-white">{activeJob.pickup_location}</p>
                 <div className="flex items-center gap-3 mt-2">
                   <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
                     <MapPin size={11} />
@@ -171,11 +171,11 @@ export function ActiveDeliveryPage() {
                 style={{ background: '#0B1525', border: '1px solid #1E2D45' }}>
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0"
                   style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', fontSize: '0.9rem' }}>
-                  {activeJob.senderName.charAt(0)}
+                  {activeJob.sender_name.charAt(0)}
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs text-white">{activeJob.senderName}</div>
-                  <div className="text-[10px]" style={{ color: '#64748B' }}>Sender · {activeJob.senderHostel}</div>
+                  <div className="text-xs text-white">{activeJob.sender_name}</div>
+                  <div className="text-[10px]" style={{ color: '#64748B' }}>Sender · {activeJob.sender_hostel}</div>
                 </div>
                 <button className="w-8 h-8 rounded-lg flex items-center justify-center"
                   style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
@@ -213,7 +213,7 @@ export function ActiveDeliveryPage() {
               <div className="rounded-lg p-3 mb-4 space-y-2" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
                 <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>ITEM TO PICK UP</div>
                 {[
-                  { label: 'Type', value: activeJob.itemType },
+                  { label: 'Type', value: activeJob.item_type },
                   { label: 'Weight', value: activeJob.weight },
                   { label: 'Risk', value: activeJob.risk },
                   { label: 'Description', value: activeJob.description || 'None provided' },
@@ -289,11 +289,11 @@ export function ActiveDeliveryPage() {
                   </div>
                   <div className="space-y-2">
                     <div>
-                      <p className="text-xs text-white">{activeJob.pickupLocation}</p>
+                      <p className="text-xs text-white">{activeJob.pickup_location}</p>
                       <p className="text-[10px] text-emerald-400">✓ Picked up</p>
                     </div>
                     <div>
-                      <p className="text-xs text-white">{activeJob.dropLocation}</p>
+                      <p className="text-xs text-white">{activeJob.drop_location}</p>
                       <p className="text-[10px]" style={{ color: '#64748B' }}>Heading here</p>
                     </div>
                   </div>
@@ -348,7 +348,7 @@ export function ActiveDeliveryPage() {
               <div className="mt-4 px-4 py-3 rounded-lg inline-block"
                 style={{ background: '#0A2010', border: '1px solid #1A4020' }}>
                 <div className="text-emerald-400 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.3rem' }}>
-                  +₹{activeJob.agreedPrice || activeJob.priceMax}
+                  +₹{activeJob.agreed_price ?? activeJob.posted_price}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: '#64748B' }}>Base earnings</div>
               </div>
@@ -363,7 +363,7 @@ export function ActiveDeliveryPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-white font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.2rem' }}>
-              ₹{activeJob.agreedPrice || activeJob.priceMax}
+              ₹{activeJob.agreed_price ?? activeJob.posted_price}
             </div>
             <div className="text-[10px] mt-0.5" style={{ color: '#64748B' }}>Agreed base fee</div>
           </div>
