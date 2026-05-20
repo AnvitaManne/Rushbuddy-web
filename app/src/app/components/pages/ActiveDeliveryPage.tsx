@@ -38,7 +38,7 @@ export function ActiveDeliveryPage() {
     setPhase('in_transit');
     if (activeJob) {
       setJobs(prev => prev.map(j => j.id === activeJob.id ? {
-        ...j, status: 'IN_TRANSIT', pickupConfirmedAt: new Date().toISOString()
+        ...j, status: 'IN_TRANSIT', pickup_confirmed_at: new Date().toISOString()
       } : j));
     }
     setCondAckLoading(false);
@@ -50,7 +50,7 @@ export function ActiveDeliveryPage() {
     setPhase('delivered');
     if (activeJob) {
       setJobs(prev => prev.map(j => j.id === activeJob.id ? {
-        ...j, status: 'DELIVERED', deliveredAt: new Date().toISOString()
+        ...j, status: 'DELIVERED', delivered_at: new Date().toISOString()
       } : j));
     }
     setDeliverLoading(false);

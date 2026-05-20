@@ -17,10 +17,6 @@ type ItemType = 'Document' | 'Food' | 'Medicine' | 'Object';
 type Weight = 'Light' | 'Medium' | 'Heavy';
 type Risk = 'Low' | 'Fragile' | 'Valuable';
 
-const BASE_PRICES: Record<ItemType, number> = { Document: 25, Food: 30, Medicine: 35, Object: 40 };
-const WEIGHT_MULT: Record<Weight, number> = { Light: 1, Medium: 1.5, Heavy: 2.5 };
-const RISK_MULT: Record<Risk, number> = { Low: 1, Fragile: 1.3, Valuable: 1.8 };
-
 const ITEM_TYPES: { type: ItemType; icon: React.ReactNode; desc: string }[] = [
   { type: 'Document', icon: <FileText size={18} />, desc: 'Notes, printouts, IDs' },
   { type: 'Food', icon: <Coffee size={18} />, desc: 'Canteen orders, parcels' },
@@ -65,9 +61,11 @@ export function PostRequestPage() {
   const [loading, setLoading] = useState(false);
   const [valuableAck, setValuableAck] = useState(false);
 
+  // priceMin = system floor (single source of truth from domain helper)
   const priceMin = itemType && weight && risk
-    ? Math.round(BASE_PRICES[itemType] * WEIGHT_MULT[weight] * RISK_MULT[risk])
+    ? computePriceFloor(itemType, weight, risk, 'campus_immediate')
     : 0;
+  // priceMax = display-only upper bound shown to sender; actual posted_price set in handlePost
   const priceMax = Math.round(priceMin * 1.4);
 
   const canProceedStep1 = itemType && weight && risk;
