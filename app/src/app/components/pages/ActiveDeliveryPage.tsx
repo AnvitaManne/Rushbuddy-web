@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../../context/AppContext';
+import { useApp, Job } from '../../context/AppContext';
+import { assertTransition } from '@/domain/jobTransitions';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, Phone,
   Clock, ArrowRight, Shield, Star, ChevronDown
@@ -32,37 +33,46 @@ export function ActiveDeliveryPage() {
 
   const elapsed = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
+  const applyStatus = (next: 'IN_TRANSIT' | 'DELIVERED' | 'ISSUE_REPORTED', patch: Partial<Job>) => {
+    if (!activeJob) return false;
+    const check = assertTransition(activeJob.status, next);
+    if (!check.ok) {
+      if (import.meta.env.DEV) {
+        console.warn(`[RushBuddy] Job ${activeJob.id}:`, check.error);
+      }
+      return false;
+    }
+    setJobs(prev => prev.map(j => j.id === activeJob.id ? { ...j, ...patch, status: next } : j));
+    return true;
+  };
+
   const handleConditionAck = async () => {
     setCondAckLoading(true);
     await new Promise(r => setTimeout(r, 1000));
-    setPhase('in_transit');
-    if (activeJob) {
-      setJobs(prev => prev.map(j => j.id === activeJob.id ? {
-        ...j, status: 'IN_TRANSIT', pickup_confirmed_at: new Date().toISOString()
-      } : j));
-    }
+    const ok = applyStatus('IN_TRANSIT', {
+      pickup_confirmed_at: new Date().toISOString(),
+      condition_acknowledged: true,
+    });
+    if (ok) setPhase('in_transit');
     setCondAckLoading(false);
   };
 
   const handleConfirmDelivery = async () => {
     setDeliverLoading(true);
     await new Promise(r => setTimeout(r, 1200));
-    setPhase('delivered');
-    if (activeJob) {
-      setJobs(prev => prev.map(j => j.id === activeJob.id ? {
-        ...j, status: 'DELIVERED', delivered_at: new Date().toISOString()
-      } : j));
+    const ok = applyStatus('DELIVERED', { delivered_at: new Date().toISOString() });
+    if (ok) {
+      setPhase('delivered');
+      await new Promise(r => setTimeout(r, 800));
+      navigate('/home');
     }
     setDeliverLoading(false);
-    await new Promise(r => setTimeout(r, 800));
-    navigate('/home');
   };
 
   const handleIssue = () => {
-    if (activeJob) {
-      setJobs(prev => prev.map(j => j.id === activeJob.id ? { ...j, status: 'ISSUE_REPORTED' } : j));
+    if (applyStatus('ISSUE_REPORTED', {})) {
+      setShowIssuePanel(false);
     }
-    setShowIssuePanel(false);
   };
 
   if (!activeJob) {

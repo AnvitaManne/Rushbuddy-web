@@ -109,7 +109,102 @@ __rushbuddyDev.addJob({ drop_location_type: 'womens_hostel' })
 - Post request: location types, job types, declared value cap, Mode 2 fields.
 - Hide `gender` in UI; map registration labels to snake_case.
 - Job expiry, handoff code entry, automated tests.
+Gaps before Phase 2 (checklist)
+Domain not enforced in app behavior
 
+
+Status updates in pages (
+RunnerFeedPage
+,
+TrackingPage
+,
+ActiveDeliveryPage
+, etc.) do not call
+assertTransition
+/
+canTransition
+.
+
+PostRequestPage
+does not call
+isJobPostingValid
+,
+validatePostedPrice
+, or declared-value checks.
+
+PostRequestPage
+hardcodes
+pickup_location_type
+/
+drop_location_type
+=
+general
+and
+job_type
+=
+campus_immediate
+only.
+Missing product rules (helpers exist, not integrated)
+
+
+Rs. 2,000 declared-value cap:
+DECLARED_VALUE_MAX_INR
+only; no
+declared_value
+on
+Job
+or posting validator.
+
+Handoff code entry at delivery not modeled in UI/state.
+
+Job expiry: no
+EXPIRED
+status or auto-expire from
+expires_at
+.
+
+Mode 2 / intercity: no mock jobs with
+corridor_landmark
+,
+receiver_phone
+, or
+mode_2_landmark
+.
+Testing & quality
+
+
+No automated tests (comment examples only).
+
+ops_notified
+optional everywhere; no default
+false
+at creation.
+UI / privacy (Phase 2 scope)
+
+
+ProfilePage
+still shows gender in UI (plan: internal-only, never displayed).
+
+Runner feed empty until login (
+user
+null →
+canRunnerSeeJob
+never runs).
+Eligibility scope
+
+
+canRunnerSeeJob
+is feed visibility only; accept-time checks (suspension, scope, race on accept) not centralized.
+Docs / naming
+
+
+Plan uses
+Male
+|
+Female
+|
+Prefer not to say
+; domain uses snake_case — map at registration UI in Phase 2.
 ---
 
 *Add `notes/phase-2-summary.md` when Phase 2 is done.*

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
+import type { JobStatus } from '@/domain/enums';
+import { assertTransition } from '@/domain/jobTransitions';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
   AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio
@@ -49,21 +51,43 @@ export function TrackingPage() {
   const simulateProgress = async () => {
     if (!job || simulating) return;
     setSimulating(true);
-    const nextStatuses = ['MATCHED', 'IN_TRANSIT', 'DELIVERED'] as const;
-    for (let i = 0; i < nextStatuses.length; i++) {
-      const ns = nextStatuses[i];
+
+    const statusOrder: JobStatus[] = ['OPEN', 'MATCHED', 'IN_TRANSIT', 'DELIVERED'];
+    const demoTargets: JobStatus[] = ['MATCHED', 'IN_TRANSIT', 'DELIVERED'];
+    let currentStatus = job.status;
+
+    for (const ns of demoTargets) {
+      if (statusOrder.indexOf(ns) <= statusOrder.indexOf(currentStatus)) {
+        continue;
+      }
+
+      const check = assertTransition(currentStatus, ns);
+      if (!check.ok) {
+        if (import.meta.env.DEV) {
+          console.warn(`[RushBuddy] Job ${job.id}:`, check.error);
+        }
+        break;
+      }
+
+      currentStatus = ns;
       const idx = TIMELINE_STEPS.findIndex(s => s.key === ns);
       await new Promise(r => setTimeout(r, 1500));
       setSimStep(idx);
       setJobs(prev => prev.map(j => j.id === job.id ? {
-        ...j, status: ns,
+        ...j,
+        status: ns,
         runner_name: ns === 'MATCHED' ? 'Karthik R' : j.runner_name,
         runner_rating: ns === 'MATCHED' ? 4.9 : j.runner_rating,
         matched_at: ns === 'MATCHED' ? new Date().toISOString() : j.matched_at,
         pickup_confirmed_at: ns === 'IN_TRANSIT' ? new Date().toISOString() : j.pickup_confirmed_at,
         delivered_at: ns === 'DELIVERED' ? new Date().toISOString() : j.delivered_at,
       } : j));
-      if (ns === 'DELIVERED') { await new Promise(r => setTimeout(r, 800)); navigate('/rate'); break; }
+
+      if (ns === 'DELIVERED') {
+        await new Promise(r => setTimeout(r, 800));
+        navigate('/rate');
+        break;
+      }
     }
     setSimulating(false);
   };

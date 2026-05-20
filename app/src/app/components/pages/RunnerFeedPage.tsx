@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
 import { canRunnerSeeJob } from '@/domain/runnerEligibility';
+import { assertTransition } from '@/domain/jobTransitions';
 import {
   Zap, MapPin, Package, Clock, Filter, Star, Shield,
   AlertCircle, ChevronRight, Lock, RefreshCw, FileText, Coffee, Pill, Box
@@ -200,6 +201,17 @@ export function RunnerFeedPage() {
   const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);
 
   const handleAccept = (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+
+    const check = assertTransition(job.status, 'MATCHED');
+    if (!check.ok) {
+      if (import.meta.env.DEV) {
+        console.warn(`[RushBuddy] Job ${jobId}:`, check.error);
+      }
+      return;
+    }
+
     setCurrentRole('runner');
     setAcceptedIds(prev => new Set(prev).add(jobId));
     setJobs(prev => prev.map(j => j.id === jobId ? {
