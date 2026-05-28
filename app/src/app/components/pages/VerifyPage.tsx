@@ -5,7 +5,7 @@ import { Shield, RefreshCw, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-r
 import { motion } from 'motion/react';
 
 export function VerifyPage() {
-  const { pendingEmail, setUser, setIsAuthenticated } = useApp();
+  const { pendingRegistration, setUser, setIsAuthenticated } = useApp();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
@@ -15,6 +15,10 @@ export function VerifyPage() {
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const hasPendingRegistration =
+    pendingRegistration.email.trim().length > 0 &&
+    pendingRegistration.name.trim().length > 0 &&
+    pendingRegistration.hostel_block.trim().length > 0;
 
   useEffect(() => {
     inputRefs.current[0]?.focus();
@@ -49,6 +53,11 @@ export function VerifyPage() {
   };
 
   const handleVerify = async () => {
+    if (!hasPendingRegistration) {
+      setError('Registration details are missing. Please go back and register again.');
+      return;
+    }
+
     const code = otp.join('');
     if (code.length < 6) { setError('Please enter all 6 digits.'); return; }
 
@@ -58,7 +67,18 @@ export function VerifyPage() {
     if (code === '123456') {
       setSuccess(true);
       setIsAuthenticated(true);
-      setUser({ ...defaultUser, email: pendingEmail || defaultUser.email });
+      setUser({
+        ...defaultUser,
+        email: pendingRegistration.email.trim(),
+        name: pendingRegistration.name.trim(),
+        hostel_block: pendingRegistration.hostel_block.trim(),
+        gender: pendingRegistration.gender,
+        verified: true,
+        current_role: null,
+        no_show_count: 0,
+        suspension_status: 'active',
+        trust_score: defaultUser.trust_score,
+      });
       await new Promise(r => setTimeout(r, 1200));
       navigate('/home');
     } else {
@@ -110,7 +130,21 @@ export function VerifyPage() {
         </button>
 
         <div className="rounded-2xl p-8" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-          {success ? (
+          {!hasPendingRegistration ? (
+            <div className="text-center py-4">
+              <h3 className="text-white mb-2" style={{ fontWeight: 600 }}>Registration details missing</h3>
+              <p className="text-sm mb-5" style={{ color: '#64748B' }}>
+                Please return to the registration form and submit your details again.
+              </p>
+              <button
+                onClick={() => navigate('/')}
+                className="w-full py-3 rounded-lg text-sm font-semibold text-white transition-all"
+                style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
+              >
+                Back to registration
+              </button>
+            </div>
+          ) : success ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -145,7 +179,7 @@ export function VerifyPage() {
                   6-digit code sent to
                 </p>
                 <p className="text-sm text-cyan-400 mt-0.5" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {pendingEmail || 'your@vitstudent.ac.in'}
+                  {pendingRegistration.email || 'your@vitstudent.ac.in'}
                 </p>
               </div>
 
