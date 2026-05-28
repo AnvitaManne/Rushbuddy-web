@@ -107,6 +107,11 @@ export function VerifyPage() {
     }, 1000);
   };
 
+  const handleWrongEmail = () => {
+    // Pending registration remains in context so Auth can reuse it if needed.
+    navigate('/');
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6"
       style={{ background: '#060A14', fontFamily: 'Inter, sans-serif' }}>
@@ -181,6 +186,13 @@ export function VerifyPage() {
                 <p className="text-sm text-cyan-400 mt-0.5" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   {pendingRegistration.email || 'your@vitstudent.ac.in'}
                 </p>
+                <button
+                  onClick={handleWrongEmail}
+                  className="text-xs mt-3 underline underline-offset-2 hover:text-cyan-300 transition-colors"
+                  style={{ color: '#67E8F9' }}
+                >
+                  Wrong email? Go back and change it.
+                </button>
               </div>
 
               {/* OTP inputs */}
