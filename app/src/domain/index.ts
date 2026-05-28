@@ -3,4 +3,5 @@ export * from './constants';
 export * from './types';
 export * from './jobTransitions';
 export * from './jobHelpers';
+export * from './postingValidation';
 export * from './runnerEligibility';

@@ -1,4 +1,5 @@
 import type { LocationType, UserGender } from './enums';
+import { validateLocationTypes } from './postingValidation';
 import type { Job, User } from './types';
 
 /** Minimum fields required to validate a job before posting. */
@@ -14,11 +15,7 @@ function isGenderedHostel(type: LocationType): boolean {
  */
 export function isJobPostingValid(jobDraft: JobPostingDraft): boolean {
   const { pickup_location_type, drop_location_type } = jobDraft;
-  const hasMens =
-    pickup_location_type === 'mens_hostel' || drop_location_type === 'mens_hostel';
-  const hasWomens =
-    pickup_location_type === 'womens_hostel' || drop_location_type === 'womens_hostel';
-  return !(hasMens && hasWomens);
+  return validateLocationTypes(pickup_location_type, drop_location_type);
 }
 
 /**

@@ -105,6 +105,9 @@ export interface Job {
   risk: RiskLevel;
   purchase_type: PurchaseType;
 
+  /** Sender-declared item value (INR). Capped at `DECLARED_VALUE_MAX_INR` in V1. */
+  declared_value?: number;
+
   pickup_location: string;
   drop_location: string;
   pickup_location_type: LocationType;
