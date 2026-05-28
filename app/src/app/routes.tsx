@@ -4,6 +4,7 @@ import { AuthPage } from './components/pages/AuthPage';
 import { VerifyPage } from './components/pages/VerifyPage';
 import { HomePage } from './components/pages/HomePage';
 import { PostRequestPage } from './components/pages/PostRequestPage';
+import { RequireAuth } from './components/auth/RequireAuth';
 import { TrackingPage } from './components/pages/TrackingPage';
 import { RunnerFeedPage } from './components/pages/RunnerFeedPage';
 import { ActiveDeliveryPage } from './components/pages/ActiveDeliveryPage';
@@ -18,6 +19,14 @@ function NotFound() {
   return <Navigate to="/" replace />;
 }
 
+function ProtectedPostRequest() {
+  return (
+    <RequireAuth>
+      <PostRequestPage />
+    </RequireAuth>
+  );
+}
+
 export const router = createBrowserRouter([
   // Public auth routes
   { path: '/', Component: AuthPage },
@@ -28,7 +37,7 @@ export const router = createBrowserRouter([
     Component: AppShell,
     children: [
       { path: '/home', Component: HomePage },
-      { path: '/sender/post', Component: PostRequestPage },
+      { path: '/sender/post', Component: ProtectedPostRequest },
       { path: '/sender/tracking', Component: TrackingPage },
       { path: '/runner/feed', Component: RunnerFeedPage },
       { path: '/runner/active', Component: ActiveDeliveryPage },

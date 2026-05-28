@@ -100,6 +100,9 @@ export interface Job {
   drop_location_type: LocationType;
   description: string;
 
+  /** Declared item value (INR) at posting; capped in V1. */
+  declared_value?: number;
+
   /**
    * System-computed minimum from item × weight × risk (and corridor for intercity).
    * Set at creation; immutable.

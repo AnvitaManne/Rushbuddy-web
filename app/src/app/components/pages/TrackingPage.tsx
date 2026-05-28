@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
+import { assertTransition } from '@/domain/jobTransitions';
+import { canSenderCancelJob } from '@/domain/postingValidation';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
-  AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio
+  AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio, KeyRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -20,25 +22,38 @@ function getStepIndex(status: string) {
 }
 
 export function TrackingPage() {
-  const { jobs, setJobs, activeJob: ctxActiveJob } = useApp();
+  const { jobs, setJobs, setActiveJob, activeJob: ctxActiveJob, user } = useApp();
   const navigate = useNavigate();
+  const senderId = user?.id ?? 'u1';
 
   const [localJobId, setLocalJobId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ctxActiveJob) setLocalJobId(ctxActiveJob.id);
+    if (ctxActiveJob?.sender_id === senderId) setLocalJobId(ctxActiveJob.id);
     else {
-      const j = jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status));
+      const j = jobs.find(
+        j =>
+          j.sender_id === senderId &&
+          ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status),
+      );
       if (j) setLocalJobId(j.id);
       else {
-        const last = [...jobs].filter(j => j.sender_id === 'u1').sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        const last = [...jobs]
+          .filter(j => j.sender_id === senderId)
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+          )[0];
         if (last) setLocalJobId(last.id);
       }
     }
-  }, [ctxActiveJob, jobs]);
+  }, [ctxActiveJob, jobs, senderId]);
 
-  const job = jobs.find(j => j.id === localJobId) || jobs.find(j => j.sender_id === 'u1');
+  const job =
+    jobs.find(j => j.id === localJobId && j.sender_id === senderId) ||
+    jobs.find(j => j.sender_id === senderId);
+
+  const isMode2Landmark = job?.handoff_mode === 'mode_2_landmark';
 
   const [simStep, setSimStep] = useState<number | null>(null);
   const [simulating, setSimulating] = useState(false);
@@ -69,10 +84,15 @@ export function TrackingPage() {
   };
 
   const handleCancel = () => {
-    if (job && job.status === 'OPEN') {
-      setJobs(prev => prev.filter(j => j.id !== job.id));
-      navigate('/home');
-    }
+    if (!job || !user) return;
+    if (!canSenderCancelJob(job, user.id)) return;
+    const transition = assertTransition(job.status, 'CLOSED');
+    if (!transition.ok) return;
+    setJobs(prev =>
+      prev.map(j => (j.id === job.id ? { ...j, status: 'CLOSED' as const } : j)),
+    );
+    setActiveJob(null);
+    navigate('/home');
   };
 
   if (!job) {
@@ -204,6 +224,57 @@ export function TrackingPage() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Sender-only handoff code — receiver uses app-less verbal handoff */}
+      {job.confirmation_code && job.status !== 'CLOSED' && (
+        <div
+          className="rounded-xl p-4"
+          style={{ background: '#0D1525', border: '1px solid #2D3A5C' }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <KeyRound size={14} className="text-cyan-400" />
+            <div
+              className="text-xs"
+              style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}
+            >
+              HANDOFF CODE · FOR YOU ONLY
+            </div>
+          </div>
+          <div
+            className="text-center py-3 mb-3 rounded-lg tracking-[0.35em]"
+            style={{
+              background: '#060A14',
+              border: '1px solid #1E2D45',
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '1.75rem',
+              fontWeight: 600,
+              color: '#22D3EE',
+            }}
+          >
+            {job.confirmation_code}
+          </div>
+          <p className="text-xs leading-relaxed" style={{ color: '#94A3B8' }}>
+            {isMode2Landmark ? (
+              <>
+                Share this code only with the person meeting your runner at the landmark
+                {job.corridor_landmark ? (
+                  <>
+                    {' '}
+                    (<span className="text-white">{job.corridor_landmark}</span>)
+                  </>
+                ) : null}
+                . The runner will enter it at the landmark handoff. The receiver does not need
+                the RushBuddy app.
+              </>
+            ) : (
+              <>
+                Share this code only with the person receiving the package. The runner will
+                enter it at handoff. The receiver does not need the RushBuddy app.
+              </>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Runner card (visible after matched) */}
       {displayStep >= 1 && (
