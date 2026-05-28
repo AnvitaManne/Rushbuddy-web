@@ -4,9 +4,12 @@ import { useApp } from '../../context/AppContext';
 import { Mail, ArrowRight, AlertCircle, Zap, Shield, Package } from 'lucide-react';
 import { motion } from 'motion/react';
 
+type AuthStep = 'register' | 'confirm_email';
+
 export function AuthPage() {
   const { setPendingEmail } = useApp();
   const navigate = useNavigate();
+  const [step, setStep] = useState<AuthStep>('register');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [hostel, setHostel] = useState('');
@@ -25,7 +28,14 @@ export function AuthPage() {
     if (!hostel.trim()) { setError('Hostel block is required.'); return; }
 
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
+    await new Promise(r => setTimeout(r, 600));
+    setLoading(false);
+    setStep('confirm_email');
+  };
+
+  const handleConfirmSendOtp = async () => {
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 600));
     setPendingEmail(email);
     setLoading(false);
     navigate('/verify');
@@ -141,6 +151,53 @@ export function AuthPage() {
               </p>
             </div>
 
+            {step === 'confirm_email' ? (
+              <div className="space-y-4">
+                <div className="rounded-lg px-4 py-4" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+                  <p className="text-sm mb-2" style={{ color: '#94A3B8' }}>
+                    We&apos;ll send a 6-digit OTP to:
+                  </p>
+                  <p className="text-cyan-400 text-sm break-all" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    {email}
+                  </p>
+                  <p className="text-xs mt-3" style={{ color: '#64748B' }}>
+                    Is this the correct VIT email? Typos can lock you out until the code expires.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmSendOtp}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all duration-200"
+                  style={{
+                    background: loading ? '#0E2030' : 'linear-gradient(135deg, #06B6D4, #6366F1)',
+                    opacity: loading ? 0.8 : 1,
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Sending OTP...
+                    </>
+                  ) : (
+                    <>
+                      Yes, send OTP
+                      <ArrowRight size={15} />
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setStep('register'); setError(''); }}
+                  className="w-full py-2.5 rounded-lg text-sm transition-colors"
+                  style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#94A3B8' }}
+                >
+                  Edit email
+                </button>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email */}
               <div>
@@ -233,12 +290,13 @@ export function AuthPage() {
                   </>
                 ) : (
                   <>
-                    Send OTP
+                    Continue
                     <ArrowRight size={15} />
                   </>
                 )}
               </button>
             </form>
+            )}
 
             {/* Demo hint */}
             <div className="mt-5 px-3 py-2.5 rounded-lg text-xs" style={{ background: '#070B17', border: '1px solid #1A2535' }}>

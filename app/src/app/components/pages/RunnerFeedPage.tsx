@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
-import { canRunnerSeeJob } from '@/domain/runnerEligibility';
+import { canRunnerSeeJob, matchJobForRunner } from '@/domain/runnerEligibility';
 import {
   Zap, MapPin, Package, Clock, Filter, Star, Shield,
   AlertCircle, ChevronRight, Lock, RefreshCw, FileText, Coffee, Pill, Box
@@ -27,9 +27,19 @@ const riskBadge = (risk: string) => {
   );
 };
 
-function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string) => void; accepted: boolean }) {
+function JobCard({
+  job,
+  onAccept,
+  accepted,
+  onAcceptAttempt,
+}: {
+  job: Job;
+  onAccept: (id: string) => boolean;
+  accepted: boolean;
+  onAcceptAttempt: () => void;
+}) {
   const [accepting, setAccepting] = useState(false);
-  const isWomensRestricted =
+  const isWomensHostelJob =
     job.pickup_location_type === 'womens_hostel' || job.drop_location_type === 'womens_hostel';
   const timeSince = (() => {
     const diff = Date.now() - new Date(job.created_at).getTime();
@@ -40,7 +50,8 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
   })();
 
   const handleAccept = async () => {
-    if (isWomensRestricted || accepting) return;
+    if (accepting || accepted) return;
+    onAcceptAttempt();
     setAccepting(true);
     await new Promise(r => setTimeout(r, 900));
     onAccept(job.id);
@@ -74,7 +85,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
         </div>
         <div className="flex items-center gap-2">
           {riskBadge(job.risk)}
-          {isWomensRestricted && (
+          {isWomensHostelJob && (
             <span className="text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1"
               style={{ background: '#1A0F2E', color: '#A78BFA', fontFamily: 'JetBrains Mono, monospace' }}>
               <Lock size={8} />
@@ -155,12 +166,6 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
               </motion.div>
               Accepted
             </div>
-          ) : isWomensRestricted ? (
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-              style={{ background: '#0D0D20', border: '1px solid #2D1E45', color: '#6B7280' }}>
-              <Lock size={11} />
-              Restricted
-            </div>
           ) : (
             <button
               onClick={handleAccept}
@@ -188,30 +193,40 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
 }
 
 export function RunnerFeedPage() {
-  const { jobs, setJobs, setCurrentRole, user } = useApp();
+  const { jobs, setJobs, setCurrentRole, setActiveJob, user, isAuthenticated } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('All');
-  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
-  const openJobs = jobs.filter(
-    j => j.status === 'OPEN' && user && canRunnerSeeJob(user, j),
-  );
+  const unassignedOpen = jobs.filter(j => j.status === 'OPEN' && !j.runner_id);
+  const openJobs = user
+    ? unassignedOpen.filter(j => canRunnerSeeJob(user, j))
+    : [];
   const filters = ['All', 'Document', 'Food', 'Medicine', 'Object'];
   const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);
 
-  const handleAccept = (jobId: string) => {
+  const handleAccept = (jobId: string): boolean => {
+    if (!user) {
+      const msg = 'Log in to accept jobs.';
+      setAcceptError(msg);
+      console.warn('[RunnerFeed] Accept failed:', msg);
+      return false;
+    }
+
+    const { jobs: nextJobs, error } = matchJobForRunner(jobs, jobId, user);
+    if (error) {
+      setAcceptError(error);
+      console.warn('[RunnerFeed] Accept failed:', error);
+      return false;
+    }
+
+    const matched = nextJobs.find(j => j.id === jobId);
+    setAcceptError(null);
     setCurrentRole('runner');
-    setAcceptedIds(prev => new Set(prev).add(jobId));
-    setJobs(prev => prev.map(j => j.id === jobId ? {
-      ...j,
-      status: 'MATCHED',
-      runner_id: 'u1',
-      runner_name: 'You',
-      runner_rating: 4.8,
-      matched_at: new Date().toISOString(),
-      agreed_price: j.posted_price,
-    } : j));
-    setTimeout(() => navigate('/runner/active'), 1200);
+    setJobs(nextJobs);
+    if (matched) setActiveJob(matched);
+    navigate('/runner/active');
+    return true;
   };
 
   return (
@@ -221,7 +236,7 @@ export function RunnerFeedPage() {
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-            RUNNER FEED · {openJobs.length} OPEN
+            RUNNER FEED · {user ? `${openJobs.length} OPEN` : 'SIGN IN REQUIRED'}
           </div>
           <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>Job Listings</h1>
           <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
@@ -237,6 +252,14 @@ export function RunnerFeedPage() {
           Refresh
         </button>
       </div>
+
+      {acceptError && (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
+          style={{ background: '#1C0A0A', border: '1px solid #3B1A1A' }}>
+          <AlertCircle size={13} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-[11px]" style={{ color: '#FCA5A5' }}>{acceptError}</p>
+        </div>
+      )}
 
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-3">
@@ -289,12 +312,37 @@ export function RunnerFeedPage() {
             className="text-center py-12"
           >
             <Zap size={28} className="text-slate-600 mx-auto mb-3" />
-            <p className="text-sm" style={{ color: '#475569' }}>
-              No open jobs {filter !== 'All' ? `for ${filter}` : ''} right now.
-            </p>
-            <p className="text-xs mt-1" style={{ color: '#334155' }}>
-              New requests show up in real time.
-            </p>
+            {!user || !isAuthenticated ? (
+              <>
+                <p className="text-sm" style={{ color: '#475569' }}>
+                  Sign in to see jobs matched to your profile.
+                </p>
+                <p className="text-xs mt-1 mb-4" style={{ color: '#334155' }}>
+                  The feed uses your account for hostel and safety filters — it stays empty until you verify OTP.
+                </p>
+                <button
+                  onClick={() => navigate('/')}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-cyan-400"
+                  style={{ background: '#061620', border: '1px solid #0E2D3D' }}
+                >
+                  Sign in
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm" style={{ color: '#475569' }}>
+                  No open jobs {filter !== 'All' ? `for ${filter}` : ''} right now.
+                </p>
+                {unassignedOpen.length > 0 && openJobs.length === 0 && (
+                  <p className="text-xs mt-2" style={{ color: '#92400E' }}>
+                    {unassignedOpen.length} job{unassignedOpen.length !== 1 ? 's are' : ' is'} open on campus, but none match your profile (hostel/gender rules).
+                  </p>
+                )}
+                <p className="text-xs mt-1" style={{ color: '#334155' }}>
+                  New requests show up in real time.
+                </p>
+              </>
+            )}
           </motion.div>
         ) : (
           <div className="space-y-3">
@@ -303,7 +351,8 @@ export function RunnerFeedPage() {
                 key={job.id}
                 job={job}
                 onAccept={handleAccept}
-                accepted={acceptedIds.has(job.id)}
+                accepted={job.runner_id === user?.id && job.status === 'MATCHED'}
+                onAcceptAttempt={() => setAcceptError(null)}
               />
             ))}
           </div>

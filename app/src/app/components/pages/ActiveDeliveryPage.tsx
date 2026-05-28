@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import {
@@ -10,12 +10,27 @@ import { motion, AnimatePresence } from 'motion/react';
 type DeliveryPhase = 'going_pickup' | 'condition_ack' | 'in_transit' | 'delivered';
 
 export function ActiveDeliveryPage() {
-  const { jobs, setJobs } = useApp();
+  const { jobs, setJobs, user, activeJob: ctxActiveJob } = useApp();
   const navigate = useNavigate();
 
-  const activeJob = jobs.find(j =>
-    j.runner_id === 'u1' && ['MATCHED', 'IN_TRANSIT'].includes(j.status)
-  ) || jobs.find(j => j.runner_id === 'u1' && j.status !== 'CLOSED');
+  const activeJob = useMemo(() => {
+    if (!user?.id) return undefined;
+
+    if (
+      ctxActiveJob?.runner_id === user.id &&
+      ['MATCHED', 'IN_TRANSIT'].includes(ctxActiveJob.status)
+    ) {
+      return jobs.find(j => j.id === ctxActiveJob.id) ?? ctxActiveJob;
+    }
+
+    const active = jobs.filter(
+      j =>
+        j.runner_id === user.id && ['MATCHED', 'IN_TRANSIT'].includes(j.status),
+    );
+    return active.sort((a, b) =>
+      (b.matched_at ?? '').localeCompare(a.matched_at ?? ''),
+    )[0];
+  }, [jobs, user?.id, ctxActiveJob]);
 
   const [phase, setPhase] = useState<DeliveryPhase>('going_pickup');
   const [condAckLoading, setCondAckLoading] = useState(false);

@@ -1,4 +1,5 @@
-import type { LocationType, UserGender } from './enums';
+import type { JobStatus, LocationType, UserGender } from './enums';
+import { assertTransition } from './jobTransitions';
 import type { Job, User } from './types';
 
 /** Minimum fields required to validate a job before posting. */
@@ -73,6 +74,87 @@ export function canRunnerSeeJob(runner: User, job: Job): boolean {
   }
 
   return runner.gender === required;
+}
+
+const RUNNER_ACTIVE_DELIVERY_STATUSES: readonly JobStatus[] = ['MATCHED', 'IN_TRANSIT'];
+
+/** Runner's in-progress delivery, if any. */
+export function getRunnerActiveDeliveryJob(jobs: Job[], runnerId: string): Job | undefined {
+  return jobs.find(
+    j =>
+      j.runner_id === runnerId &&
+      RUNNER_ACTIVE_DELIVERY_STATUSES.includes(j.status),
+  );
+}
+
+/**
+ * Accept-time validation (feed visibility uses `canRunnerSeeJob` only).
+ * Returns a user-facing error string, or `null` when the runner may accept.
+ */
+export function getRunnerAcceptJobError(
+  runner: User | null,
+  job: Job,
+  allJobs?: Job[],
+): string | null {
+  if (!runner) {
+    return 'Log in to accept jobs.';
+  }
+  if (allJobs) {
+    const active = getRunnerActiveDeliveryJob(allJobs, runner.id);
+    if (active) {
+      return 'Finish your current delivery before accepting another job.';
+    }
+  }
+  if (job.status !== 'OPEN') {
+    return 'Job just taken. Check other listings.';
+  }
+  if (job.runner_id) {
+    return 'Job just taken. Check other listings.';
+  }
+  if (!canRunnerSeeJob(runner, job)) {
+    return 'You are not eligible for this job.';
+  }
+  const transition = assertTransition(job.status, 'MATCHED');
+  if (!transition.ok) {
+    return transition.error;
+  }
+  return null;
+}
+
+/**
+ * Applies OPEN → MATCHED for a runner. Returns unchanged `jobs` and an error when accept fails.
+ */
+export function matchJobForRunner(
+  jobs: Job[],
+  jobId: string,
+  runner: User,
+): { jobs: Job[]; error: string | null } {
+  const current = jobs.find(j => j.id === jobId);
+  if (!current) {
+    return { jobs, error: 'Job not found.' };
+  }
+
+  const error = getRunnerAcceptJobError(runner, current, jobs);
+  if (error) {
+    return { jobs, error };
+  }
+
+  const matched_at = new Date().toISOString();
+  const next = jobs.map(j =>
+    j.id === jobId
+      ? {
+          ...j,
+          status: 'MATCHED' as const,
+          runner_id: runner.id,
+          runner_name: runner.name,
+          runner_rating: runner.rating,
+          matched_at,
+          agreed_price: j.posted_price,
+        }
+      : j,
+  );
+
+  return { jobs: next, error: null };
 }
 
 /*
