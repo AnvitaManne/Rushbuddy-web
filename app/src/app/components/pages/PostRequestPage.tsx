@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
+import type { JobType } from '@/domain';
 import {
   computeExpiresAt,
   computePriceFloor,
@@ -9,13 +10,33 @@ import {
 } from '@/domain/jobHelpers';
 import {
   FileText, Coffee, Pill, Box, ChevronRight, AlertTriangle,
-  MapPin, AlertCircle, Info, Package
+  MapPin, AlertCircle, Info, Package, Zap, Calendar, Train
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type ItemType = 'Document' | 'Food' | 'Medicine' | 'Object';
 type Weight = 'Light' | 'Medium' | 'Heavy';
 type Risk = 'Low' | 'Fragile' | 'Valuable';
+
+const JOB_TYPES: { type: JobType; label: string; desc: string; icon: React.ReactNode }[] = [
+  { type: 'campus_immediate', label: 'Campus Immediate', desc: 'Urgent on-campus delivery', icon: <Zap size={18} /> },
+  { type: 'campus_scheduled', label: 'Campus Scheduled', desc: 'Pick a time window on campus', icon: <Calendar size={18} /> },
+  { type: 'intercity', label: 'Intercity', desc: 'Home ↔ college corridor run', icon: <Train size={18} /> },
+];
+
+const JOB_TYPE_LABELS: Record<JobType, string> = {
+  campus_immediate: 'Campus Immediate',
+  campus_scheduled: 'Campus Scheduled',
+  intercity: 'Intercity',
+};
+
+/** Interim expiry until scheduled_window / travel_date are collected in a later slice. */
+function computeInterimExpiresAt(jobType: JobType, createdAt: string): string {
+  if (jobType === 'campus_immediate') {
+    return computeExpiresAt(jobType, createdAt);
+  }
+  return new Date(new Date(createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString();
+}
 
 const ITEM_TYPES: { type: ItemType; icon: React.ReactNode; desc: string }[] = [
   { type: 'Document', icon: <FileText size={18} />, desc: 'Notes, printouts, IDs' },
@@ -51,6 +72,7 @@ export function PostRequestPage() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
+  const [jobType, setJobType] = useState<JobType | null>(null);
   const [itemType, setItemType] = useState<ItemType | null>(null);
   const [weight, setWeight] = useState<Weight | null>(null);
   const [risk, setRisk] = useState<Risk | null>(null);
@@ -62,14 +84,15 @@ export function PostRequestPage() {
   const [valuableAck, setValuableAck] = useState(false);
 
   // priceMin = system floor (single source of truth from domain helper)
-  const priceMin = itemType && weight && risk
-    ? computePriceFloor(itemType, weight, risk, 'campus_immediate')
+  const priceMin = jobType && itemType && weight && risk
+    ? computePriceFloor(itemType, weight, risk, jobType)
     : 0;
   // priceMax = display-only upper bound shown to sender; actual posted_price set in handlePost
   const priceMax = Math.round(priceMin * 1.4);
 
-  const canProceedStep1 = itemType && weight && risk;
-  const canProceedStep2 = pickup.trim() && drop.trim() && (risk !== 'Valuable' || valuableAck);
+  const canProceedStep1 = jobType !== null;
+  const canProceedStep2 = itemType && weight && risk;
+  const canProceedStep3 = pickup.trim() && drop.trim() && (risk !== 'Valuable' || valuableAck);
 
   const handlePost = async () => {
     const errs: Record<string, string> = {};
@@ -80,7 +103,9 @@ export function PostRequestPage() {
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
 
-    const job_type = 'campus_immediate' as const;
+    if (!jobType) return;
+
+    const job_type = jobType;
     const created_at = new Date().toISOString();
     const price_floor = computePriceFloor(itemType!, weight!, risk!, job_type);
     const posted_price = priceMax;
@@ -104,7 +129,7 @@ export function PostRequestPage() {
       price_floor,
       posted_price,
       confirmation_code: generateConfirmationCode(),
-      expires_at: computeExpiresAt(job_type, created_at),
+      expires_at: computeInterimExpiresAt(job_type, created_at),
       condition_acknowledged: false,
       status: 'OPEN',
       created_at,
@@ -137,7 +162,7 @@ export function PostRequestPage() {
 
       {/* Step indicator */}
       <div className="flex items-center gap-0 mb-6">
-        {['Item Details', 'Locations', 'Review'].map((s, i) => {
+        {['Job Type', 'Item Details', 'Locations', 'Review'].map((s, i) => {
           const stepNum = i + 1;
           const isActive = step === stepNum;
           const isDone = step > stepNum;
@@ -154,7 +179,7 @@ export function PostRequestPage() {
                 </div>
                 <span className="text-xs hidden sm:block" style={{ color: isActive ? '#E2E8F0' : '#475569' }}>{s}</span>
               </div>
-              {i < 2 && (
+              {i < 3 && (
                 <div className="flex-1 mx-2 h-px" style={{ background: isDone ? '#10B981' : '#1E2D45', minWidth: 20 }} />
               )}
             </React.Fragment>
@@ -163,9 +188,47 @@ export function PostRequestPage() {
       </div>
 
       <AnimatePresence mode="wait">
-        {/* Step 1: Item details */}
+        {/* Step 1: Job type */}
         {step === 1 && (
-          <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+          <motion.div key="step1-job-type" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+              <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                JOB TYPE
+              </div>
+              <div className="grid gap-2">
+                {JOB_TYPES.map(({ type, label, desc, icon }) => (
+                  <OptionButton key={type} value={type} selected={jobType === type} onClick={() => setJobType(type)}
+                    className="p-3 text-left w-full">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 mt-0.5">{icon}</div>
+                      <div>
+                        <div className="font-medium text-sm">{label}</div>
+                        <div className="text-[11px] mt-0.5 opacity-60">{desc}</div>
+                      </div>
+                    </div>
+                  </OptionButton>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => canProceedStep1 && setStep(2)}
+              disabled={!canProceedStep1}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
+              style={{
+                background: canProceedStep1 ? 'linear-gradient(135deg, #06B6D4, #6366F1)' : '#1E2D45',
+                color: canProceedStep1 ? 'white' : '#475569',
+              }}
+            >
+              Continue to Item Details
+              <ChevronRight size={16} />
+            </button>
+          </motion.div>
+        )}
+
+        {/* Step 2: Item details */}
+        {step === 2 && (
+          <motion.div key="step2-item-details" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             {/* Item type */}
             <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
               <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -261,24 +324,33 @@ export function PostRequestPage() {
               </motion.div>
             )}
 
-            <button
-              onClick={() => canProceedStep1 && setStep(2)}
-              disabled={!canProceedStep1}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
-              style={{
-                background: canProceedStep1 ? 'linear-gradient(135deg, #06B6D4, #6366F1)' : '#1E2D45',
-                color: canProceedStep1 ? 'white' : '#475569',
-              }}
-            >
-              Continue to Locations
-              <ChevronRight size={16} />
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStep(1)}
+                className="flex-1 py-3 rounded-lg text-sm border transition-all"
+                style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+              >
+                ← Back
+              </button>
+              <button
+                onClick={() => canProceedStep2 && setStep(3)}
+                disabled={!canProceedStep2}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
+                style={{
+                  background: canProceedStep2 ? 'linear-gradient(135deg, #06B6D4, #6366F1)' : '#1E2D45',
+                  color: canProceedStep2 ? 'white' : '#475569',
+                }}
+              >
+                Continue to Locations
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </motion.div>
         )}
 
-        {/* Step 2: Locations */}
-        {step === 2 && (
-          <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+        {/* Step 3: Locations */}
+        {step === 3 && (
+          <motion.div key="step3-locations" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
 
             {/* Valuable disclaimer */}
             {risk === 'Valuable' && (
@@ -408,19 +480,19 @@ export function PostRequestPage() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setStep(1)}
+                onClick={() => setStep(2)}
                 className="flex-1 py-3 rounded-lg text-sm border transition-all"
                 style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
               >
                 ← Back
               </button>
               <button
-                onClick={() => canProceedStep2 && setStep(3)}
-                disabled={!canProceedStep2}
+                onClick={() => canProceedStep3 && setStep(4)}
+                disabled={!canProceedStep3}
                 className="flex-1 py-3 rounded-lg text-sm font-semibold transition-all"
                 style={{
-                  background: canProceedStep2 ? 'linear-gradient(135deg, #06B6D4, #6366F1)' : '#1E2D45',
-                  color: canProceedStep2 ? 'white' : '#475569',
+                  background: canProceedStep3 ? 'linear-gradient(135deg, #06B6D4, #6366F1)' : '#1E2D45',
+                  color: canProceedStep3 ? 'white' : '#475569',
                 }}
               >
                 Review →
@@ -429,9 +501,9 @@ export function PostRequestPage() {
           </motion.div>
         )}
 
-        {/* Step 3: Review */}
-        {step === 3 && (
-          <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+        {/* Step 4: Review */}
+        {step === 4 && (
+          <motion.div key="step4-review" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             <div className="rounded-xl overflow-hidden mb-4" style={{ border: '1px solid #1E2D45' }}>
               <div className="px-4 py-3" style={{ background: '#0D1525', borderBottom: '1px solid #1E2D45' }}>
                 <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -440,6 +512,7 @@ export function PostRequestPage() {
               </div>
               <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
                 {[
+                  { label: 'Job Type', value: jobType ? JOB_TYPE_LABELS[jobType] : '—' },
                   { label: 'Item Type', value: itemType },
                   { label: 'Weight Tier', value: weight },
                   { label: 'Risk Level', value: risk },
@@ -477,7 +550,7 @@ export function PostRequestPage() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setStep(2)}
+                onClick={() => setStep(3)}
                 className="flex-1 py-3 rounded-lg text-sm border"
                 style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
               >
