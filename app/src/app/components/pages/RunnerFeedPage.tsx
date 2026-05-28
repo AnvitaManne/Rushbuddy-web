@@ -41,7 +41,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
   })();
 
   const handleAccept = async () => {
-    if (isWomensRestricted || accepting) return;
+    if (accepting) return;
     setAccepting(true);
     await new Promise(r => setTimeout(r, 900));
     onAccept(job.id);
@@ -155,12 +155,6 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
                 ✓
               </motion.div>
               Accepted
-            </div>
-          ) : isWomensRestricted ? (
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-              style={{ background: '#0D0D20', border: '1px solid #2D1E45', color: '#6B7280' }}>
-              <Lock size={11} />
-              Restricted
             </div>
           ) : (
             <button

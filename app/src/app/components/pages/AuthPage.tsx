@@ -6,12 +6,12 @@ import { motion } from 'motion/react';
 import type { UserGender } from '@/domain/enums';
 
 export function AuthPage() {
-  const { setPendingRegistration } = useApp();
+  const { pendingRegistration, setPendingRegistration } = useApp();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [hostel, setHostel] = useState('');
-  const [gender, setGender] = useState<UserGender | ''>('');
+  const [email, setEmail] = useState(pendingRegistration.email);
+  const [name, setName] = useState(pendingRegistration.name);
+  const [hostel, setHostel] = useState(pendingRegistration.hostel_block);
+  const [gender, setGender] = useState<UserGender | ''>(pendingRegistration.gender);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
