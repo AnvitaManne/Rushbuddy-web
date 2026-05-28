@@ -82,6 +82,8 @@ export function PostRequestPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [valuableAck, setValuableAck] = useState(false);
+  const [carryOnlyAck, setCarryOnlyAck] = useState(false);
+  const [foodReadyAck, setFoodReadyAck] = useState(false);
 
   // priceMin = system floor (single source of truth from domain helper)
   const priceMin = jobType && itemType && weight && risk
@@ -91,7 +93,12 @@ export function PostRequestPage() {
   const priceMax = Math.round(priceMin * 1.4);
 
   const canProceedStep1 = jobType !== null;
-  const canProceedStep2 = itemType && weight && risk;
+  const canProceedStep2 =
+    itemType &&
+    weight &&
+    risk &&
+    carryOnlyAck &&
+    (itemType !== 'Food' || foodReadyAck);
   const canProceedStep3 = pickup.trim() && drop.trim() && (risk !== 'Valuable' || valuableAck);
 
   const handlePost = async () => {
@@ -229,6 +236,29 @@ export function PostRequestPage() {
         {/* Step 2: Item details */}
         {step === 2 && (
           <motion.div key="step2-item-details" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+            {/* Carry-only hard restriction */}
+            <div className="rounded-xl p-4 mb-4" style={{ background: '#0A1520', border: '1px solid #1A3045' }}>
+              <div className="flex items-start gap-3">
+                <Info size={16} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-cyan-200 font-medium mb-1">Carry-Only Service</p>
+                  <p className="text-xs" style={{ color: '#94A3B8' }}>
+                    RushBuddy only supports carry-and-deliver. Items must already be in your possession or at a fixed pickup point.
+                    Purchase-and-deliver is not supported.
+                  </p>
+                  <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={carryOnlyAck}
+                      onChange={e => setCarryOnlyAck(e.target.checked)}
+                      className="w-4 h-4 accent-cyan-400"
+                    />
+                    <span className="text-xs text-cyan-200">I understand — carry-and-deliver only</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
             {/* Item type */}
             <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
               <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -236,8 +266,16 @@ export function PostRequestPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {ITEM_TYPES.map(({ type, icon, desc }) => (
-                  <OptionButton key={type} value={type} selected={itemType === type} onClick={() => setItemType(type)}
-                    className="p-3 text-left">
+                  <OptionButton
+                    key={type}
+                    value={type}
+                    selected={itemType === type}
+                    onClick={() => {
+                      setItemType(type);
+                      if (type !== 'Food') setFoodReadyAck(false);
+                    }}
+                    className="p-3 text-left"
+                  >
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 mt-0.5">{icon}</div>
                       <div>
@@ -249,6 +287,35 @@ export function PostRequestPage() {
                 ))}
               </div>
             </div>
+
+            {/* Food ready confirmation */}
+            {itemType === 'Food' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="rounded-xl p-4 mb-4"
+                style={{ background: '#15120A', border: '1px solid #3B3511' }}
+              >
+                <div className="flex items-start gap-3">
+                  <Coffee size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-amber-200 font-medium mb-1">Food Pickup Check</p>
+                    <p className="text-xs" style={{ color: '#D4A574' }}>
+                      Is this food already ordered and ready for pickup?
+                    </p>
+                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={foodReadyAck}
+                        onChange={e => setFoodReadyAck(e.target.checked)}
+                        className="w-4 h-4 accent-amber-400"
+                      />
+                      <span className="text-xs text-amber-200">Yes, it&apos;s ready</span>
+                    </label>
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
             {/* Weight */}
             <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
