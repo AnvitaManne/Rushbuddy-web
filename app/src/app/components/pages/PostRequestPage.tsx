@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
 import type { JobType, LocationType, ScheduledWindow } from '@/domain';
+import { DECLARED_VALUE_MAX_INR } from '@/domain/constants';
 import {
   computeExpiresAt,
   computePriceFloor,
@@ -10,6 +11,7 @@ import {
   validatePostedPrice,
 } from '@/domain/jobHelpers';
 import {
+  getDeclaredValueError,
   getLocationTypeConflictError,
   validateLocationTypes,
   validatePostRequestDraft,
@@ -160,6 +162,14 @@ function getPostedPriceError(priceFloor: number, input: string): string | undefi
   return undefined;
 }
 
+function parseDeclaredValueInput(input: string): number | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return null;
+  return Math.round(value);
+}
+
 const ITEM_TYPES: { type: ItemType; icon: React.ReactNode; desc: string }[] = [
   { type: 'Document', icon: <FileText size={18} />, desc: 'Notes, printouts, IDs' },
   { type: 'Food', icon: <Coffee size={18} />, desc: 'Canteen orders, parcels' },
@@ -214,6 +224,7 @@ export function PostRequestPage() {
   const [corridorLandmark, setCorridorLandmark] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
   const [postedPriceInput, setPostedPriceInput] = useState('');
+  const [declaredValueInput, setDeclaredValueInput] = useState('');
 
   const price_floor =
     jobType && itemType && weight && risk
@@ -229,6 +240,8 @@ export function PostRequestPage() {
 
   const parsedPostedPrice = parsePostedPriceInput(postedPriceInput);
   const postedPriceError = getPostedPriceError(price_floor, postedPriceInput);
+  const parsedDeclaredValue = parseDeclaredValueInput(declaredValueInput);
+  const declaredValueError = getDeclaredValueError(parsedDeclaredValue);
 
   const locationTypeConflict = getLocationTypeConflictError(pickupLocationType, dropLocationType);
 
@@ -254,7 +267,9 @@ export function PostRequestPage() {
     (itemType !== 'Food' || foodReadyAck) &&
     price_floor > 0 &&
     parsedPostedPrice !== null &&
-    !postedPriceError;
+    !postedPriceError &&
+    parsedDeclaredValue !== null &&
+    !declaredValueError;
   const canProceedStep3 =
     pickup.trim() &&
     drop.trim() &&
@@ -273,6 +288,13 @@ export function PostRequestPage() {
       return;
     }
 
+    const declared_value = parsedDeclaredValue;
+    if (declared_value === null) {
+      setErrors({ declaredValue: getDeclaredValueError(null) ?? 'Declared value is required.' });
+      setStep(2);
+      return;
+    }
+
     const validation = validatePostRequestDraft({
       pickup_location: pickup,
       drop_location: drop,
@@ -280,6 +302,7 @@ export function PostRequestPage() {
       drop_location_type: dropLocationType,
       price_floor,
       posted_price,
+      declared_value,
     });
 
     if (!validation.valid) {
@@ -288,8 +311,11 @@ export function PostRequestPage() {
       if (validation.errors.drop_location) errs.drop = validation.errors.drop_location;
       if (validation.errors.pickup_location_type) errs.locationType = validation.errors.pickup_location_type;
       if (validation.errors.posted_price) errs.postedPrice = validation.errors.posted_price;
+      if (validation.errors.declared_value) errs.declaredValue = validation.errors.declared_value;
       setErrors(errs);
-      setStep(validation.errors.posted_price ? 2 : 3);
+      setStep(
+        validation.errors.posted_price || validation.errors.declared_value ? 2 : 3,
+      );
       return;
     }
 
@@ -359,6 +385,7 @@ export function PostRequestPage() {
       description,
       price_floor,
       posted_price,
+      declared_value,
       confirmation_code: generateConfirmationCode(),
       expires_at,
       scheduled_window,
@@ -761,6 +788,43 @@ export function PostRequestPage() {
               </div>
             </div>
 
+            {/* Declared value */}
+            <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+              <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                DECLARED ITEM VALUE
+              </div>
+              <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                Estimated value (₹1 – ₹{DECLARED_VALUE_MAX_INR.toLocaleString('en-IN')})
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={DECLARED_VALUE_MAX_INR}
+                step={1}
+                value={declaredValueInput}
+                onChange={e => {
+                  setDeclaredValueInput(e.target.value);
+                  setErrors(p => ({ ...p, declaredValue: '' }));
+                }}
+                placeholder="e.g. 500"
+                className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
+                style={{
+                  background: '#060A14',
+                  border: `1px solid ${declaredValueError || errors.declaredValue ? '#EF4444' : '#1E2D45'}`,
+                  fontFamily: 'JetBrains Mono, monospace',
+                }}
+              />
+              <div className="text-[10px] mt-1.5" style={{ color: '#475569' }}>
+                V1 hard cap: items above ₹{DECLARED_VALUE_MAX_INR.toLocaleString('en-IN')} cannot be posted.
+              </div>
+              {(declaredValueError || errors.declaredValue) && (
+                <p className="text-[11px] mt-1 text-red-400 flex items-center gap-1">
+                  <AlertCircle size={10} />
+                  {errors.declaredValue || declaredValueError}
+                </p>
+              )}
+            </div>
+
             {/* Hybrid floor pricing */}
             {price_floor > 0 && (
               <motion.div
@@ -1011,6 +1075,12 @@ export function PostRequestPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between text-sm mt-1">
+                <div style={{ color: '#64748B' }}>Declared value</div>
+                <div className="text-slate-300 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  ₹{parsedDeclaredValue ?? '—'}
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm mt-1">
                 <div style={{ color: '#64748B' }}>Your offer</div>
                 <div className="text-emerald-400 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                   ₹{parsedPostedPrice ?? '—'}
@@ -1069,6 +1139,7 @@ export function PostRequestPage() {
                   { label: 'Item Type', value: itemType },
                   { label: 'Weight Tier', value: weight },
                   { label: 'Risk Level', value: risk },
+                  { label: 'Declared Value', value: parsedDeclaredValue !== null ? `₹${parsedDeclaredValue}` : '—', mono: true },
                   { label: 'Pickup', value: pickup },
                   { label: 'Pickup Type', value: LOCATION_TYPE_LABELS[pickupLocationType] },
                   { label: 'Drop', value: drop },

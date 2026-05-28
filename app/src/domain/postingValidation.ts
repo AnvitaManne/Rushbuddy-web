@@ -35,6 +35,23 @@ export function validateDeclaredValue(value: number): boolean {
   return Number.isFinite(value) && value > 0 && value <= DECLARED_VALUE_MAX_INR;
 }
 
+/** UI-friendly declared-value validation; pass `null` when input is blank or unparsable. */
+export function getDeclaredValueError(value: number | null): string | undefined {
+  if (value === null) {
+    return 'Declared value is required.';
+  }
+  if (!Number.isFinite(value)) {
+    return 'Enter a valid declared value.';
+  }
+  if (value <= 0) {
+    return 'Declared value must be greater than zero.';
+  }
+  if (value > DECLARED_VALUE_MAX_INR) {
+    return `Declared value cannot exceed ₹${DECLARED_VALUE_MAX_INR.toLocaleString('en-IN')} in V1.`;
+  }
+  return undefined;
+}
+
 /**
  * Rejects postings where pickup and drop require different runner genders
  * (men's hostel on one end and women's hostel on the other).
@@ -87,8 +104,11 @@ export function validatePostRequestDraft(
     errors.drop_location_type = LOCATION_TYPE_CONFLICT_MESSAGE;
   }
 
-  if (draft.declared_value !== undefined && !validateDeclaredValue(draft.declared_value)) {
-    errors.declared_value = `Declared value must be between ₹1 and ₹${DECLARED_VALUE_MAX_INR.toLocaleString('en-IN')}.`;
+  const declaredValueError = getDeclaredValueError(
+    draft.declared_value ?? null,
+  );
+  if (declaredValueError) {
+    errors.declared_value = declaredValueError;
   }
 
   if (!Number.isFinite(draft.price_floor) || draft.price_floor < 0) {
@@ -127,5 +147,6 @@ export function validatePostRequestDraft(
  *   drop_location_type: 'general',
  *   price_floor: 25,
  *   posted_price: 30,
+ *   declared_value: 500,
  * }) // { valid: true, errors: {} }
  */
