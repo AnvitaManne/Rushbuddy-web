@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
 import type { JobType, LocationType, ScheduledWindow } from '@/domain';
@@ -7,6 +7,7 @@ import {
   computePriceFloor,
   generateConfirmationCode,
   resolveHandoffMode,
+  validatePostedPrice,
 } from '@/domain/jobHelpers';
 import {
   getLocationTypeConflictError,
@@ -140,6 +141,25 @@ function getTimingReviewValue(
   return formatDatetimeLocalDisplay(travelDt);
 }
 
+function parsePostedPriceInput(input: string): number | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.round(value);
+}
+
+function getPostedPriceError(priceFloor: number, input: string): string | undefined {
+  if (priceFloor <= 0) return undefined;
+  if (!input.trim()) return 'Posted price is required.';
+  const posted = parsePostedPriceInput(input);
+  if (posted === null) return 'Enter a valid posted price.';
+  if (!validatePostedPrice(priceFloor, posted)) {
+    return `Posted price must be at or above the system floor (₹${priceFloor}).`;
+  }
+  return undefined;
+}
+
 const ITEM_TYPES: { type: ItemType; icon: React.ReactNode; desc: string }[] = [
   { type: 'Document', icon: <FileText size={18} />, desc: 'Notes, printouts, IDs' },
   { type: 'Food', icon: <Coffee size={18} />, desc: 'Canteen orders, parcels' },
@@ -193,13 +213,22 @@ export function PostRequestPage() {
   const [travelDateTime, setTravelDateTime] = useState('');
   const [corridorLandmark, setCorridorLandmark] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
+  const [postedPriceInput, setPostedPriceInput] = useState('');
 
-  // priceMin = system floor (single source of truth from domain helper)
-  const priceMin = jobType && itemType && weight && risk
-    ? computePriceFloor(itemType, weight, risk, jobType)
-    : 0;
-  // priceMax = display-only upper bound shown to sender; actual posted_price set in handlePost
-  const priceMax = Math.round(priceMin * 1.4);
+  const price_floor =
+    jobType && itemType && weight && risk
+      ? computePriceFloor(itemType, weight, risk, jobType)
+      : 0;
+  const suggestedPostedPrice = price_floor > 0 ? Math.round(price_floor * 1.4) : 0;
+
+  useEffect(() => {
+    if (price_floor > 0) {
+      setPostedPriceInput(String(suggestedPostedPrice));
+    }
+  }, [price_floor, suggestedPostedPrice]);
+
+  const parsedPostedPrice = parsePostedPriceInput(postedPriceInput);
+  const postedPriceError = getPostedPriceError(price_floor, postedPriceInput);
 
   const locationTypeConflict = getLocationTypeConflictError(pickupLocationType, dropLocationType);
 
@@ -222,7 +251,10 @@ export function PostRequestPage() {
     weight &&
     risk &&
     carryOnlyAck &&
-    (itemType !== 'Food' || foodReadyAck);
+    (itemType !== 'Food' || foodReadyAck) &&
+    price_floor > 0 &&
+    parsedPostedPrice !== null &&
+    !postedPriceError;
   const canProceedStep3 =
     pickup.trim() &&
     drop.trim() &&
@@ -234,7 +266,12 @@ export function PostRequestPage() {
 
     const job_type = jobType;
     const price_floor = computePriceFloor(itemType, weight, risk, job_type);
-    const posted_price = priceMax;
+    const posted_price = parsedPostedPrice;
+    if (posted_price === null || !validatePostedPrice(price_floor, posted_price)) {
+      setErrors({ postedPrice: getPostedPriceError(price_floor, postedPriceInput) ?? 'Invalid posted price.' });
+      setStep(2);
+      return;
+    }
 
     const validation = validatePostRequestDraft({
       pickup_location: pickup,
@@ -250,8 +287,9 @@ export function PostRequestPage() {
       if (validation.errors.pickup_location) errs.pickup = validation.errors.pickup_location;
       if (validation.errors.drop_location) errs.drop = validation.errors.drop_location;
       if (validation.errors.pickup_location_type) errs.locationType = validation.errors.pickup_location_type;
+      if (validation.errors.posted_price) errs.postedPrice = validation.errors.posted_price;
       setErrors(errs);
-      setStep(3);
+      setStep(validation.errors.posted_price ? 2 : 3);
       return;
     }
 
@@ -723,27 +761,54 @@ export function PostRequestPage() {
               </div>
             </div>
 
-            {/* Live price */}
-            {priceMin > 0 && (
+            {/* Hybrid floor pricing */}
+            {price_floor > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-xl p-4 mb-4"
+                className="rounded-xl p-4 mb-4 space-y-4"
                 style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-                      CALCULATED PRICE RANGE
-                    </div>
-                    <div className="text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: '1.5rem' }}>
-                      ₹{priceMin} – ₹{priceMax}
-                    </div>
-                    <div className="text-xs mt-1" style={{ color: '#64748B' }}>
-                      Based on {itemType} × {weight} × {risk} risk
-                    </div>
+                <div>
+                  <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                    SYSTEM PRICE FLOOR
                   </div>
-                  <Info size={16} className="text-slate-600" />
+                  <div className="text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: '1.5rem' }}>
+                    ₹{price_floor}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: '#64748B' }}>
+                    Non-negotiable minimum based on {itemType} × {weight} × {risk} risk
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                    Your posted offer (≥ ₹{price_floor})
+                  </label>
+                  <input
+                    type="number"
+                    min={price_floor}
+                    step={1}
+                    value={postedPriceInput}
+                    onChange={e => {
+                      setPostedPriceInput(e.target.value);
+                      setErrors(p => ({ ...p, postedPrice: '' }));
+                    }}
+                    className="w-full px-3 py-2.5 rounded-lg text-sm text-white outline-none"
+                    style={{
+                      background: '#060A14',
+                      border: `1px solid ${postedPriceError || errors.postedPrice ? '#EF4444' : '#1E2D45'}`,
+                      fontFamily: 'JetBrains Mono, monospace',
+                    }}
+                  />
+                  <div className="text-[10px] mt-1.5" style={{ color: '#475569' }}>
+                    Suggested: ₹{suggestedPostedPrice}. Runners accept this amount as-is.
+                  </div>
+                  {(postedPriceError || errors.postedPrice) && (
+                    <p className="text-[11px] mt-1 text-red-400 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {errors.postedPrice || postedPriceError}
+                    </p>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -934,16 +999,25 @@ export function PostRequestPage() {
 
             {/* Price summary */}
             <div className="rounded-xl p-4 mb-4" style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between text-sm mb-2">
                 <div style={{ color: '#64748B' }}>
                   {itemType} · {weight} · {risk} risk
                 </div>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div style={{ color: '#64748B' }}>Floor</div>
+                <div className="text-slate-300 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  ₹{price_floor}
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm mt-1">
+                <div style={{ color: '#64748B' }}>Your offer</div>
                 <div className="text-emerald-400 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  ₹{priceMin}–₹{priceMax}
+                  ₹{parsedPostedPrice ?? '—'}
                 </div>
               </div>
               <div className="text-[10px] mt-1.5" style={{ color: '#475569' }}>
-                System-calculated. Not editable. Platform fee: ₹0 (beta).
+                Platform fee: ₹0 (beta).
               </div>
             </div>
 
@@ -1000,7 +1074,8 @@ export function PostRequestPage() {
                   { label: 'Drop', value: drop },
                   { label: 'Drop Type', value: LOCATION_TYPE_LABELS[dropLocationType] },
                   { label: 'Description', value: description || '—' },
-                  { label: 'Price Range', value: `₹${priceMin} – ₹${priceMax}`, mono: true, highlight: true },
+                  { label: 'Price Floor', value: `₹${price_floor}`, mono: true },
+                  { label: 'Posted Price', value: `₹${parsedPostedPrice ?? '—'}`, mono: true, highlight: true },
                   { label: 'Platform Fee', value: '₹0 (Beta)', mono: true },
                 ].map(({ label, value, mono, highlight }) => (
                   <div key={label} className="flex items-start justify-between gap-4">
