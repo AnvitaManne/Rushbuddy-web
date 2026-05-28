@@ -35,6 +35,17 @@ export interface ScheduledWindow {
 }
 
 /**
+ * In-flight registration data collected before OTP verification.
+ * Maps directly to `User` fields created on verify.
+ */
+export interface PendingRegistration {
+  email: string;
+  name: string;
+  hostel_block: string;
+  gender: UserGender;
+}
+
+/**
  * Authenticated RushBuddy user.
  * `gender` is matching-only and must not be surfaced in UI.
  */

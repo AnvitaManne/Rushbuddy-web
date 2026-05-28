@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { Job, User } from '@/domain/types';
+import type { Job, PendingRegistration, User } from '@/domain/types';
 import type { UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
 
-export type { Job, User } from '@/domain/types';
+export type { Job, PendingRegistration, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
 
 interface AppContextType {
@@ -15,6 +15,8 @@ interface AppContextType {
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
   activeJob: Job | null;
   setActiveJob: (job: Job | null) => void;
+  pendingRegistration: PendingRegistration;
+  setPendingRegistration: (reg: PendingRegistration) => void;
   pendingEmail: string;
   setPendingEmail: (email: string) => void;
   isAuthenticated: boolean;
@@ -171,6 +173,13 @@ export const mockJobs: Job[] = [
   }),
 ];
 
+const EMPTY_PENDING_REGISTRATION: PendingRegistration = {
+  email: '',
+  name: '',
+  hostel_block: '',
+  gender: 'prefer_not_to_say',
+};
+
 const defaultUser: User = {
   id: 'u1',
   email: 'aditi.k@vitstudent.ac.in',
@@ -209,8 +218,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentRole, setCurrentRole] = useState<UserRole>(null);
   const [jobs, setJobs] = useState<Job[]>(mockJobs);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
-  const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingRegistration, setPendingRegistrationState] = useState<PendingRegistration>(
+    EMPTY_PENDING_REGISTRATION,
+  );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const setPendingRegistration = (reg: PendingRegistration) => {
+    setPendingRegistrationState(reg);
+  };
+
+  const setPendingEmail = (email: string) => {
+    setPendingRegistrationState(prev => ({ ...prev, email }));
+  };
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -235,7 +254,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setJobs,
       activeJob,
       setActiveJob,
-      pendingEmail,
+      pendingRegistration,
+      setPendingRegistration,
+      pendingEmail: pendingRegistration.email,
       setPendingEmail,
       isAuthenticated,
       setIsAuthenticated,
