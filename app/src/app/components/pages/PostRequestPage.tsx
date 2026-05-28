@@ -91,6 +91,16 @@ function validateIntercityTravelDateTime(local: string): string | undefined {
   return undefined;
 }
 
+function validateIntercityMode2Fields(landmark: string, phone: string): string | undefined {
+  if (!landmark.trim()) {
+    return 'Corridor landmark is required.';
+  }
+  if (!phone.trim()) {
+    return 'Receiver phone is required.';
+  }
+  return undefined;
+}
+
 function buildScheduledWindow(start: string, end: string): ScheduledWindow {
   return {
     start: datetimeLocalToIso(start)!,
@@ -181,6 +191,8 @@ export function PostRequestPage() {
   const [scheduledWindowStart, setScheduledWindowStart] = useState('');
   const [scheduledWindowEnd, setScheduledWindowEnd] = useState('');
   const [travelDateTime, setTravelDateTime] = useState('');
+  const [corridorLandmark, setCorridorLandmark] = useState('');
+  const [receiverPhone, setReceiverPhone] = useState('');
 
   // priceMin = system floor (single source of truth from domain helper)
   const priceMin = jobType && itemType && weight && risk
@@ -198,7 +210,13 @@ export function PostRequestPage() {
     travelDateTime,
   );
 
-  const canProceedStep1 = jobType !== null && schedulingError === undefined;
+  const mode2Error =
+    jobType === 'intercity'
+      ? validateIntercityMode2Fields(corridorLandmark, receiverPhone)
+      : undefined;
+
+  const canProceedStep1 =
+    jobType !== null && schedulingError === undefined && mode2Error === undefined;
   const canProceedStep2 =
     itemType &&
     weight &&
@@ -249,6 +267,19 @@ export function PostRequestPage() {
       return;
     }
 
+    if (job_type === 'intercity') {
+      const intercityMode2Error = validateIntercityMode2Fields(corridorLandmark, receiverPhone);
+      if (intercityMode2Error) {
+        setErrors({
+          mode2: intercityMode2Error,
+          corridorLandmark: !corridorLandmark.trim() ? 'Corridor landmark is required.' : '',
+          receiverPhone: !receiverPhone.trim() ? 'Receiver phone is required.' : '',
+        });
+        setStep(1);
+        return;
+      }
+    }
+
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
 
@@ -294,6 +325,8 @@ export function PostRequestPage() {
       expires_at,
       scheduled_window,
       travel_date,
+      corridor_landmark: job_type === 'intercity' ? corridorLandmark.trim() : undefined,
+      receiver_phone: job_type === 'intercity' ? receiverPhone.trim() : undefined,
       condition_acknowledged: false,
       status: 'OPEN',
       created_at,
@@ -374,6 +407,8 @@ export function PostRequestPage() {
                       }
                       if (type !== 'intercity') {
                         setTravelDateTime('');
+                        setCorridorLandmark('');
+                        setReceiverPhone('');
                       }
                     }}
                     className="p-3 text-left w-full"
@@ -471,10 +506,72 @@ export function PostRequestPage() {
               </div>
             )}
 
+            {jobType === 'intercity' && (
+              <div className="rounded-xl p-4 mb-4 space-y-3" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+                <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                  LANDMARK HANDOFF · MODE 2
+                </div>
+                <p className="text-[11px]" style={{ color: '#64748B' }}>
+                  Receiver meets the runner at the corridor landmark. Share your confirmation code with them before handoff.
+                </p>
+                <div>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>Corridor landmark</label>
+                  <input
+                    type="text"
+                    value={corridorLandmark}
+                    onChange={e => {
+                      setCorridorLandmark(e.target.value);
+                      setErrors(p => ({ ...p, corridorLandmark: '', mode2: '' }));
+                    }}
+                    placeholder="e.g. Katpadi Junction north exit"
+                    className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
+                    style={{
+                      ...datetimeInputStyle,
+                      border: `1px solid ${(mode2Error && !corridorLandmark.trim()) || errors.corridorLandmark ? '#EF4444' : '#1E2D45'}`,
+                    }}
+                  />
+                  {errors.corridorLandmark && (
+                    <p className="text-[11px] mt-1 text-red-400 flex items-center gap-1">
+                      <AlertCircle size={10} />{errors.corridorLandmark}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>Receiver phone</label>
+                  <input
+                    type="tel"
+                    value={receiverPhone}
+                    onChange={e => {
+                      setReceiverPhone(e.target.value);
+                      setErrors(p => ({ ...p, receiverPhone: '', mode2: '' }));
+                    }}
+                    placeholder="e.g. 9876543210"
+                    className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
+                    style={{
+                      ...datetimeInputStyle,
+                      border: `1px solid ${(mode2Error && !receiverPhone.trim()) || errors.receiverPhone ? '#EF4444' : '#1E2D45'}`,
+                    }}
+                  />
+                  {errors.receiverPhone && (
+                    <p className="text-[11px] mt-1 text-red-400 flex items-center gap-1">
+                      <AlertCircle size={10} />{errors.receiverPhone}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {(schedulingError || errors.scheduling) && jobType && jobType !== 'campus_immediate' && (
               <p className="text-[11px] mb-4 text-red-400 flex items-center gap-1">
                 <AlertCircle size={10} />
                 {errors.scheduling || schedulingError}
+              </p>
+            )}
+
+            {(mode2Error || errors.mode2) && jobType === 'intercity' && (
+              <p className="text-[11px] mb-4 text-red-400 flex items-center gap-1">
+                <AlertCircle size={10} />
+                {errors.mode2 || mode2Error}
               </p>
             )}
 
@@ -889,6 +986,12 @@ export function PostRequestPage() {
                     label: 'Timing',
                     value: getTimingReviewValue(jobType, scheduledWindowStart, scheduledWindowEnd, travelDateTime),
                   },
+                  ...(jobType === 'intercity'
+                    ? [
+                        { label: 'Corridor Landmark', value: corridorLandmark || '—' },
+                        { label: 'Receiver Phone', value: receiverPhone || '—' },
+                      ]
+                    : []),
                   { label: 'Item Type', value: itemType },
                   { label: 'Weight Tier', value: weight },
                   { label: 'Risk Level', value: risk },
