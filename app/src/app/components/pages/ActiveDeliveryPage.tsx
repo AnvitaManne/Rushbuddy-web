@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
+import { RUNNER_ACTIVE_DELIVERY_STATUSES } from '@/domain/postingValidation';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, Phone,
   Clock, ArrowRight, Shield, Star, ChevronDown
@@ -11,12 +12,15 @@ import { motion, AnimatePresence } from 'motion/react';
 type DeliveryPhase = 'going_pickup' | 'condition_ack' | 'in_transit' | 'delivered';
 
 export function ActiveDeliveryPage() {
-  const { jobs, setJobs } = useApp();
+  const { jobs, setJobs, user, setActiveJob } = useApp();
   const navigate = useNavigate();
 
-  const activeJob = jobs.find(j =>
-    j.runner_id === 'u1' && ['MATCHED', 'IN_TRANSIT'].includes(j.status)
-  ) || jobs.find(j => j.runner_id === 'u1' && j.status !== 'CLOSED');
+  const runnerId = user?.id ?? 'u1';
+  const activeJob = jobs.find(
+    j =>
+      j.runner_id === runnerId &&
+      (RUNNER_ACTIVE_DELIVERY_STATUSES as readonly string[]).includes(j.status),
+  );
 
   const [phase, setPhase] = useState<DeliveryPhase>('going_pickup');
   const [condAckLoading, setCondAckLoading] = useState(false);
@@ -31,6 +35,15 @@ export function ActiveDeliveryPage() {
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    if (!activeJob) return;
+    if (activeJob.status === 'IN_TRANSIT') {
+      setPhase('in_transit');
+    } else if (activeJob.status === 'MATCHED') {
+      setPhase(prev => (prev === 'delivered' ? prev : 'going_pickup'));
+    }
+  }, [activeJob?.id, activeJob?.status]);
+
   const elapsed = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
   const applyStatus = (next: 'IN_TRANSIT' | 'DELIVERED' | 'ISSUE_REPORTED', patch: Partial<Job>) => {
@@ -43,6 +56,9 @@ export function ActiveDeliveryPage() {
       return false;
     }
     setJobs(prev => prev.map(j => j.id === activeJob.id ? { ...j, ...patch, status: next } : j));
+    if (next === 'DELIVERED') {
+      setActiveJob(prev => (prev?.id === activeJob.id ? null : prev));
+    }
     return true;
   };
 

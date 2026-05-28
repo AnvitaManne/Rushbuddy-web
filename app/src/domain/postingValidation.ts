@@ -1,6 +1,21 @@
 import { DECLARED_VALUE_MAX_INR } from './constants';
-import type { LocationType } from './enums';
+import type { JobType, LocationType } from './enums';
+import type { Job, ScheduledWindow } from './types';
 import { validatePostedPrice } from './jobHelpers';
+
+/** Job statuses that block a sender from posting another in-flight request in V1. */
+export const SENDER_ACTIVE_JOB_STATUSES = [
+  'OPEN',
+  'MATCHED',
+  'IN_TRANSIT',
+  'ISSUE_REPORTED',
+] as const satisfies readonly Job['status'][];
+
+/** Runner delivery is in progress for these statuses only. */
+export const RUNNER_ACTIVE_DELIVERY_STATUSES = [
+  'MATCHED',
+  'IN_TRANSIT',
+] as const satisfies readonly Job['status'][];
 
 /** Fields validated by `validatePostRequestDraft`. */
 export type PostRequestField =
@@ -10,10 +25,15 @@ export type PostRequestField =
   | 'drop_location_type'
   | 'declared_value'
   | 'posted_price'
-  | 'price_floor';
+  | 'price_floor'
+  | 'scheduling'
+  | 'corridor_landmark'
+  | 'receiver_phone'
+  | 'sender_active';
 
 /** Minimum input required to validate a post-request form before job creation. */
 export interface PostRequestDraft {
+  job_type: JobType;
   pickup_location: string;
   drop_location: string;
   pickup_location_type: LocationType;
@@ -21,11 +41,32 @@ export interface PostRequestDraft {
   price_floor: number;
   posted_price: number;
   declared_value?: number;
+  scheduled_window_start?: string;
+  scheduled_window_end?: string;
+  travel_datetime?: string;
+  corridor_landmark?: string;
+  receiver_phone?: string;
+  sender_id?: string;
+  existing_jobs?: readonly Job[];
 }
 
 export interface PostRequestValidationResult {
   valid: boolean;
   errors: Partial<Record<PostRequestField, string>>;
+}
+
+/** Converts `<input type="datetime-local">` value to ISO 8601 UTC. */
+export function parseDatetimeLocalToIso(local: string): string | null {
+  if (!local.trim()) return null;
+  const date = new Date(local);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function parseDatetimeInput(input: string): Date | null {
+  if (!input.trim()) return null;
+  const date = new Date(input);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 /**
@@ -80,6 +121,102 @@ export function getLocationTypeConflictError(
     : LOCATION_TYPE_CONFLICT_MESSAGE;
 }
 
+/** Returns the sender's in-flight job, if any. */
+export function getSenderActiveJob(
+  jobs: readonly Job[],
+  senderId: string,
+): Job | undefined {
+  return jobs.find(
+    j =>
+      j.sender_id === senderId &&
+      (SENDER_ACTIVE_JOB_STATUSES as readonly string[]).includes(j.status),
+  );
+}
+
+export function getSenderActiveJobError(
+  jobs: readonly Job[],
+  senderId: string,
+): string | undefined {
+  const active = getSenderActiveJob(jobs, senderId);
+  if (!active) return undefined;
+  return `You already have an active request (${active.id}). Cancel it before posting a new one.`;
+}
+
+/** Validates job-type timing fields from datetime-local inputs. */
+export function validatePostRequestTiming(
+  jobType: JobType,
+  scheduledWindowStart: string,
+  scheduledWindowEnd: string,
+  travelDatetime: string,
+  now: Date = new Date(),
+): string | undefined {
+  if (jobType === 'campus_immediate') return undefined;
+
+  if (jobType === 'campus_scheduled') {
+    if (!scheduledWindowStart.trim() || !scheduledWindowEnd.trim()) {
+      return 'Window start and end are required.';
+    }
+    const start = parseDatetimeInput(scheduledWindowStart);
+    const end = parseDatetimeInput(scheduledWindowEnd);
+    if (!start || !end) {
+      return 'Enter valid window start and end times.';
+    }
+    if (end.getTime() <= start.getTime()) {
+      return 'Window end must be after window start.';
+    }
+    if (end.getTime() <= now.getTime()) {
+      return 'Window end must be in the future.';
+    }
+    return undefined;
+  }
+
+  if (!travelDatetime.trim()) {
+    return 'Travel date and time are required.';
+  }
+  const travel = parseDatetimeInput(travelDatetime);
+  if (!travel) {
+    return 'Enter a valid travel date and time.';
+  }
+  if (travel.getTime() <= now.getTime()) {
+    return 'Travel time must be in the future.';
+  }
+  return undefined;
+}
+
+/** Validates Mode 2 intercity handoff fields. */
+export function validatePostRequestMode2(
+  jobType: JobType,
+  corridorLandmark: string,
+  receiverPhone: string,
+): Partial<Pick<PostRequestValidationResult['errors'], 'corridor_landmark' | 'receiver_phone'>> {
+  if (jobType !== 'intercity') return {};
+
+  const errors: Partial<Record<'corridor_landmark' | 'receiver_phone', string>> = {};
+  if (!corridorLandmark.trim()) {
+    errors.corridor_landmark = 'Corridor landmark is required.';
+  }
+  if (!receiverPhone.trim()) {
+    errors.receiver_phone = 'Receiver phone is required.';
+  }
+  return errors;
+}
+
+/** Builds a domain `ScheduledWindow` from datetime-local strings. */
+export function buildScheduledWindowFromLocal(
+  start: string,
+  end: string,
+): ScheduledWindow {
+  return {
+    start: parseDatetimeLocalToIso(start)!,
+    end: parseDatetimeLocalToIso(end)!,
+  };
+}
+
+/** YYYY-MM-DD for `Job.travel_date` from a datetime-local value. */
+export function toTravelDateFromLocal(local: string): string {
+  return parseDatetimeLocalToIso(local)!.slice(0, 10);
+}
+
 /**
  * Aggregates post-request field checks for the Post Request UI.
  * Does not mutate the draft; returns per-field errors when invalid.
@@ -88,6 +225,35 @@ export function validatePostRequestDraft(
   draft: PostRequestDraft,
 ): PostRequestValidationResult {
   const errors: Partial<Record<PostRequestField, string>> = {};
+
+  if (draft.sender_id && draft.existing_jobs) {
+    const activeJobError = getSenderActiveJobError(draft.existing_jobs, draft.sender_id);
+    if (activeJobError) {
+      errors.sender_active = activeJobError;
+    }
+  }
+
+  const timingError = validatePostRequestTiming(
+    draft.job_type,
+    draft.scheduled_window_start ?? '',
+    draft.scheduled_window_end ?? '',
+    draft.travel_datetime ?? '',
+  );
+  if (timingError) {
+    errors.scheduling = timingError;
+  }
+
+  const mode2Errors = validatePostRequestMode2(
+    draft.job_type,
+    draft.corridor_landmark ?? '',
+    draft.receiver_phone ?? '',
+  );
+  if (mode2Errors.corridor_landmark) {
+    errors.corridor_landmark = mode2Errors.corridor_landmark;
+  }
+  if (mode2Errors.receiver_phone) {
+    errors.receiver_phone = mode2Errors.receiver_phone;
+  }
 
   if (!draft.pickup_location.trim()) {
     errors.pickup_location = 'Pickup location is required';
@@ -127,26 +293,3 @@ export function validatePostRequestDraft(
     errors,
   };
 }
-
-/*
- * --- Examples (no test runner) ---
- *
- * validateDeclaredValue(500)    // true
- * validateDeclaredValue(2000)   // true
- * validateDeclaredValue(2001)   // false
- * validateDeclaredValue(0)      // false
- *
- * validateLocationTypes('general', 'general')           // true
- * validateLocationTypes('womens_hostel', 'womens_hostel') // true
- * validateLocationTypes('mens_hostel', 'womens_hostel') // false
- *
- * validatePostRequestDraft({
- *   pickup_location: 'MBA Gate',
- *   drop_location: 'MH-B Room 214',
- *   pickup_location_type: 'general',
- *   drop_location_type: 'general',
- *   price_floor: 25,
- *   posted_price: 30,
- *   declared_value: 500,
- * }) // { valid: true, errors: {} }
- */

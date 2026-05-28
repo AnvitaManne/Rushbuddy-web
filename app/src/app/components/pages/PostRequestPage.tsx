@@ -11,10 +11,16 @@ import {
   validatePostedPrice,
 } from '@/domain/jobHelpers';
 import {
+  buildScheduledWindowFromLocal,
   getDeclaredValueError,
   getLocationTypeConflictError,
+  getSenderActiveJobError,
+  parseDatetimeLocalToIso,
+  toTravelDateFromLocal,
   validateLocationTypes,
   validatePostRequestDraft,
+  validatePostRequestMode2,
+  validatePostRequestTiming,
 } from '@/domain/postingValidation';
 import {
   FileText, Coffee, Pill, Box, ChevronRight, AlertTriangle,
@@ -55,78 +61,10 @@ const datetimeInputStyle = {
   border: '1px solid #1E2D45',
 } as const;
 
-/** Converts `<input type="datetime-local">` value to ISO 8601 UTC. */
-function datetimeLocalToIso(local: string): string | null {
-  if (!local.trim()) return null;
-  const date = new Date(local);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
-
 function formatDatetimeLocalDisplay(local: string): string {
-  const iso = datetimeLocalToIso(local);
+  const iso = parseDatetimeLocalToIso(local);
   if (!iso) return local || '—';
   return new Date(iso).toLocaleString();
-}
-
-function validateCampusScheduledWindow(start: string, end: string): string | undefined {
-  if (!start.trim() || !end.trim()) {
-    return 'Window start and end are required.';
-  }
-  const startIso = datetimeLocalToIso(start);
-  const endIso = datetimeLocalToIso(end);
-  if (!startIso || !endIso) {
-    return 'Enter valid window start and end times.';
-  }
-  if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
-    return 'Window end must be after window start.';
-  }
-  return undefined;
-}
-
-function validateIntercityTravelDateTime(local: string): string | undefined {
-  if (!local.trim()) {
-    return 'Travel date and time are required.';
-  }
-  if (!datetimeLocalToIso(local)) {
-    return 'Enter a valid travel date and time.';
-  }
-  return undefined;
-}
-
-function validateIntercityMode2Fields(landmark: string, phone: string): string | undefined {
-  if (!landmark.trim()) {
-    return 'Corridor landmark is required.';
-  }
-  if (!phone.trim()) {
-    return 'Receiver phone is required.';
-  }
-  return undefined;
-}
-
-function buildScheduledWindow(start: string, end: string): ScheduledWindow {
-  return {
-    start: datetimeLocalToIso(start)!,
-    end: datetimeLocalToIso(end)!,
-  };
-}
-
-/** YYYY-MM-DD for `Job.travel_date` from a datetime-local value. */
-function toTravelDate(local: string): string {
-  return datetimeLocalToIso(local)!.slice(0, 10);
-}
-
-function getJobTimingError(
-  jobType: JobType | null,
-  scheduledStart: string,
-  scheduledEnd: string,
-  travelDateTime: string,
-): string | undefined {
-  if (!jobType || jobType === 'campus_immediate') return undefined;
-  if (jobType === 'campus_scheduled') {
-    return validateCampusScheduledWindow(scheduledStart, scheduledEnd);
-  }
-  return validateIntercityTravelDateTime(travelDateTime);
 }
 
 function getTimingReviewValue(
@@ -141,6 +79,13 @@ function getTimingReviewValue(
     return `${formatDatetimeLocalDisplay(scheduledStart)} → ${formatDatetimeLocalDisplay(scheduledEnd)}`;
   }
   return formatDatetimeLocalDisplay(travelDt);
+}
+
+function getPostReviewNotice(jobType: JobType | null): string {
+  if (jobType === 'intercity') {
+    return 'Posting this job will notify eligible runners on the corridor route. Matching is first-come, first-served. You can cancel before a runner accepts.';
+  }
+  return 'Posting this job will notify eligible runners on campus. Matching is first-come, first-served. You can cancel before a runner accepts.';
 }
 
 function parsePostedPriceInput(input: string): number | null {
@@ -168,6 +113,14 @@ function parseDeclaredValueInput(input: string): number | null {
   const value = Number(trimmed);
   if (!Number.isFinite(value)) return null;
   return Math.round(value);
+}
+
+function validationErrorStep(errors: Partial<Record<string, string>>): number {
+  if (errors.scheduling || errors.corridorLandmark || errors.receiverPhone || errors.mode2 || errors.activeJob) {
+    return 1;
+  }
+  if (errors.postedPrice || errors.declaredValue) return 2;
+  return 3;
 }
 
 const ITEM_TYPES: { type: ItemType; icon: React.ReactNode; desc: string }[] = [
@@ -200,7 +153,7 @@ function OptionButton<T extends string>({
 }
 
 export function PostRequestPage() {
-  const { setJobs, setCurrentRole, setActiveJob } = useApp();
+  const { user, jobs, setJobs, setCurrentRole, setActiveJob } = useApp();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
@@ -224,6 +177,7 @@ export function PostRequestPage() {
   const [corridorLandmark, setCorridorLandmark] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
   const [postedPriceInput, setPostedPriceInput] = useState('');
+  const [postedPriceTouched, setPostedPriceTouched] = useState(false);
   const [declaredValueInput, setDeclaredValueInput] = useState('');
 
   const price_floor =
@@ -233,10 +187,10 @@ export function PostRequestPage() {
   const suggestedPostedPrice = price_floor > 0 ? Math.round(price_floor * 1.4) : 0;
 
   useEffect(() => {
-    if (price_floor > 0) {
+    if (price_floor > 0 && !postedPriceTouched && !postedPriceInput.trim()) {
       setPostedPriceInput(String(suggestedPostedPrice));
     }
-  }, [price_floor, suggestedPostedPrice]);
+  }, [price_floor, suggestedPostedPrice, postedPriceTouched, postedPriceInput]);
 
   const parsedPostedPrice = parsePostedPriceInput(postedPriceInput);
   const postedPriceError = getPostedPriceError(price_floor, postedPriceInput);
@@ -244,21 +198,29 @@ export function PostRequestPage() {
   const declaredValueError = getDeclaredValueError(parsedDeclaredValue);
 
   const locationTypeConflict = getLocationTypeConflictError(pickupLocationType, dropLocationType);
+  const senderActiveJobError = user ? getSenderActiveJobError(jobs, user.id) : undefined;
 
-  const schedulingError = getJobTimingError(
-    jobType,
-    scheduledWindowStart,
-    scheduledWindowEnd,
-    travelDateTime,
-  );
+  const schedulingError = jobType
+    ? validatePostRequestTiming(
+        jobType,
+        scheduledWindowStart,
+        scheduledWindowEnd,
+        travelDateTime,
+      )
+    : undefined;
 
-  const mode2Error =
+  const mode2FieldErrors =
     jobType === 'intercity'
-      ? validateIntercityMode2Fields(corridorLandmark, receiverPhone)
-      : undefined;
+      ? validatePostRequestMode2(jobType, corridorLandmark, receiverPhone)
+      : {};
+  const mode2Error =
+    mode2FieldErrors.corridor_landmark || mode2FieldErrors.receiver_phone;
 
   const canProceedStep1 =
-    jobType !== null && schedulingError === undefined && mode2Error === undefined;
+    jobType !== null &&
+    !senderActiveJobError &&
+    schedulingError === undefined &&
+    !mode2Error;
   const canProceedStep2 =
     itemType &&
     weight &&
@@ -277,72 +239,54 @@ export function PostRequestPage() {
     validateLocationTypes(pickupLocationType, dropLocationType);
 
   const handlePost = async () => {
-    if (!jobType || !itemType || !weight || !risk) return;
+    if (!user || !jobType || !itemType || !weight || !risk) return;
 
     const job_type = jobType;
     const price_floor = computePriceFloor(itemType, weight, risk, job_type);
     const posted_price = parsedPostedPrice;
-    if (posted_price === null || !validatePostedPrice(price_floor, posted_price)) {
-      setErrors({ postedPrice: getPostedPriceError(price_floor, postedPriceInput) ?? 'Invalid posted price.' });
-      setStep(2);
-      return;
-    }
-
     const declared_value = parsedDeclaredValue;
-    if (declared_value === null) {
-      setErrors({ declaredValue: getDeclaredValueError(null) ?? 'Declared value is required.' });
-      setStep(2);
-      return;
-    }
 
     const validation = validatePostRequestDraft({
+      job_type,
       pickup_location: pickup,
       drop_location: drop,
       pickup_location_type: pickupLocationType,
       drop_location_type: dropLocationType,
       price_floor,
-      posted_price,
-      declared_value,
+      posted_price: posted_price ?? 0,
+      declared_value: declared_value ?? undefined,
+      scheduled_window_start: scheduledWindowStart,
+      scheduled_window_end: scheduledWindowEnd,
+      travel_datetime: travelDateTime,
+      corridor_landmark: corridorLandmark,
+      receiver_phone: receiverPhone,
+      sender_id: user.id,
+      existing_jobs: jobs,
     });
 
     if (!validation.valid) {
       const errs: Record<string, string> = {};
+      if (validation.errors.sender_active) errs.activeJob = validation.errors.sender_active;
+      if (validation.errors.scheduling) errs.scheduling = validation.errors.scheduling;
+      if (validation.errors.corridor_landmark) errs.corridorLandmark = validation.errors.corridor_landmark;
+      if (validation.errors.receiver_phone) errs.receiverPhone = validation.errors.receiver_phone;
       if (validation.errors.pickup_location) errs.pickup = validation.errors.pickup_location;
       if (validation.errors.drop_location) errs.drop = validation.errors.drop_location;
       if (validation.errors.pickup_location_type) errs.locationType = validation.errors.pickup_location_type;
       if (validation.errors.posted_price) errs.postedPrice = validation.errors.posted_price;
       if (validation.errors.declared_value) errs.declaredValue = validation.errors.declared_value;
-      setErrors(errs);
-      setStep(
-        validation.errors.posted_price || validation.errors.declared_value ? 2 : 3,
-      );
-      return;
-    }
-
-    const timingError = getJobTimingError(
-      jobType,
-      scheduledWindowStart,
-      scheduledWindowEnd,
-      travelDateTime,
-    );
-    if (timingError) {
-      setErrors({ scheduling: timingError });
-      setStep(1);
-      return;
-    }
-
-    if (job_type === 'intercity') {
-      const intercityMode2Error = validateIntercityMode2Fields(corridorLandmark, receiverPhone);
-      if (intercityMode2Error) {
-        setErrors({
-          mode2: intercityMode2Error,
-          corridorLandmark: !corridorLandmark.trim() ? 'Corridor landmark is required.' : '',
-          receiverPhone: !receiverPhone.trim() ? 'Receiver phone is required.' : '',
-        });
-        setStep(1);
-        return;
+      if (validation.errors.corridor_landmark || validation.errors.receiver_phone) {
+        errs.mode2 =
+          validation.errors.corridor_landmark ||
+          validation.errors.receiver_phone ||
+          'Complete landmark handoff details.';
       }
+      setErrors(errs);
+      setStep(validationErrorStep(errs));
+      return;
     }
+
+    if (posted_price === null || declared_value === null) return;
 
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
@@ -354,10 +298,10 @@ export function PostRequestPage() {
     let travelDateTimeIso: string | undefined;
 
     if (job_type === 'campus_scheduled') {
-      scheduled_window = buildScheduledWindow(scheduledWindowStart, scheduledWindowEnd);
+      scheduled_window = buildScheduledWindowFromLocal(scheduledWindowStart, scheduledWindowEnd);
     } else if (job_type === 'intercity') {
-      travelDateTimeIso = datetimeLocalToIso(travelDateTime)!;
-      travel_date = toTravelDate(travelDateTime);
+      travelDateTimeIso = parseDatetimeLocalToIso(travelDateTime)!;
+      travel_date = toTravelDateFromLocal(travelDateTime);
     }
 
     const expires_at = computeExpiresAt(
@@ -369,9 +313,9 @@ export function PostRequestPage() {
 
     const newJob: Job = {
       id: `JOB-${2410 + Math.floor(Math.random() * 90)}`,
-      sender_id: 'u1',
-      sender_name: 'You',
-      sender_hostel: 'MH-C Block',
+      sender_id: user.id,
+      sender_name: user.name,
+      sender_hostel: user.hostel_block,
       job_type,
       handoff_mode: resolveHandoffMode(job_type),
       item_type: itemType!,
@@ -411,6 +355,13 @@ export function PostRequestPage() {
 
       {/* Header */}
       <div className="mb-6">
+        {(senderActiveJobError || errors.activeJob) && (
+          <div className="rounded-xl p-3 mb-4 flex items-start gap-2"
+            style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+            <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-300">{errors.activeJob || senderActiveJobError}</p>
+          </div>
+        )}
         <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
           SENDER FLOW · POST REQUEST
         </div>
@@ -592,12 +543,12 @@ export function PostRequestPage() {
                     className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
                     style={{
                       ...datetimeInputStyle,
-                      border: `1px solid ${(mode2Error && !corridorLandmark.trim()) || errors.corridorLandmark ? '#EF4444' : '#1E2D45'}`,
+                      border: `1px solid ${mode2FieldErrors.corridor_landmark || errors.corridorLandmark ? '#EF4444' : '#1E2D45'}`,
                     }}
                   />
-                  {errors.corridorLandmark && (
+                  {(errors.corridorLandmark || mode2FieldErrors.corridor_landmark) && (
                     <p className="text-[11px] mt-1 text-red-400 flex items-center gap-1">
-                      <AlertCircle size={10} />{errors.corridorLandmark}
+                      <AlertCircle size={10} />{errors.corridorLandmark || mode2FieldErrors.corridor_landmark}
                     </p>
                   )}
                 </div>
@@ -614,12 +565,12 @@ export function PostRequestPage() {
                     className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
                     style={{
                       ...datetimeInputStyle,
-                      border: `1px solid ${(mode2Error && !receiverPhone.trim()) || errors.receiverPhone ? '#EF4444' : '#1E2D45'}`,
+                      border: `1px solid ${(mode2FieldErrors.receiver_phone && !receiverPhone.trim()) || errors.receiverPhone ? '#EF4444' : '#1E2D45'}`,
                     }}
                   />
-                  {errors.receiverPhone && (
+                  {(errors.receiverPhone || mode2FieldErrors.receiver_phone) && (
                     <p className="text-[11px] mt-1 text-red-400 flex items-center gap-1">
-                      <AlertCircle size={10} />{errors.receiverPhone}
+                      <AlertCircle size={10} />{errors.receiverPhone || mode2FieldErrors.receiver_phone}
                     </p>
                   )}
                 </div>
@@ -854,6 +805,7 @@ export function PostRequestPage() {
                     step={1}
                     value={postedPriceInput}
                     onChange={e => {
+                      setPostedPriceTouched(true);
                       setPostedPriceInput(e.target.value);
                       setErrors(p => ({ ...p, postedPrice: '' }));
                     }}
@@ -864,8 +816,22 @@ export function PostRequestPage() {
                       fontFamily: 'JetBrains Mono, monospace',
                     }}
                   />
-                  <div className="text-[10px] mt-1.5" style={{ color: '#475569' }}>
-                    Suggested: ₹{suggestedPostedPrice}. Runners accept this amount as-is.
+                  <div className="flex items-center justify-between gap-2 mt-1.5">
+                    <div className="text-[10px]" style={{ color: '#475569' }}>
+                      Suggested: ₹{suggestedPostedPrice}. Runners accept this amount as-is.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPostedPriceInput(String(suggestedPostedPrice));
+                        setPostedPriceTouched(true);
+                        setErrors(p => ({ ...p, postedPrice: '' }));
+                      }}
+                      className="text-[10px] px-2 py-1 rounded border transition-all"
+                      style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#94A3B8' }}
+                    >
+                      Use suggested
+                    </button>
                   </div>
                   {(postedPriceError || errors.postedPrice) && (
                     <p className="text-[11px] mt-1 text-red-400 flex items-center gap-1">
@@ -1170,8 +1136,7 @@ export function PostRequestPage() {
               style={{ background: '#070B17', border: '1px solid #1A2535' }}>
               <Info size={13} className="text-cyan-400 flex-shrink-0 mt-0.5" />
               <p className="text-[11px]" style={{ color: '#64748B' }}>
-                Posting this job will notify all available runners on campus. Matching is first-come, first-served.
-                You can cancel before a runner accepts.
+                {getPostReviewNotice(jobType)}
               </p>
             </div>
 
@@ -1185,9 +1150,12 @@ export function PostRequestPage() {
               </button>
               <button
                 onClick={handlePost}
-                disabled={loading}
+                disabled={loading || !!senderActiveJobError}
                 className="flex-[2] flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
-                style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)', opacity: loading ? 0.8 : 1 }}
+                style={{
+                  background: 'linear-gradient(135deg, #06B6D4, #6366F1)',
+                  opacity: loading || senderActiveJobError ? 0.8 : 1,
+                }}
               >
                 {loading ? (
                   <>

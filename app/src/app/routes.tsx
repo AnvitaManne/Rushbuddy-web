@@ -9,6 +9,7 @@ import { RunnerFeedPage } from './components/pages/RunnerFeedPage';
 import { ActiveDeliveryPage } from './components/pages/ActiveDeliveryPage';
 import { RatingPage } from './components/pages/RatingPage';
 import { ProfilePage } from './components/pages/ProfilePage';
+import { RequireAuth } from './components/auth/RequireAuth';
 
 function RedirectToHome() {
   return <Navigate to="/home" replace />;
@@ -16,6 +17,14 @@ function RedirectToHome() {
 
 function NotFound() {
   return <Navigate to="/" replace />;
+}
+
+function AuthenticatedPostRequestPage() {
+  return (
+    <RequireAuth>
+      <PostRequestPage />
+    </RequireAuth>
+  );
 }
 
 export const router = createBrowserRouter([
@@ -28,7 +37,7 @@ export const router = createBrowserRouter([
     Component: AppShell,
     children: [
       { path: '/home', Component: HomePage },
-      { path: '/sender/post', Component: PostRequestPage },
+      { path: '/sender/post', Component: AuthenticatedPostRequestPage },
       { path: '/sender/tracking', Component: TrackingPage },
       { path: '/runner/feed', Component: RunnerFeedPage },
       { path: '/runner/active', Component: ActiveDeliveryPage },
