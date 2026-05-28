@@ -12,6 +12,7 @@ export function AuthPage() {
   const [name, setName] = useState('');
   const [hostel, setHostel] = useState('');
   const [gender, setGender] = useState<UserGender | ''>('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +28,11 @@ export function AuthPage() {
     if (!hostel.trim()) { setError('Hostel block is required.'); return; }
     if (!gender) { setError('Please select your gender.'); return; }
 
+    setShowConfirmation(true);
+  };
+
+  const handleSendCode = async () => {
+    if (!gender) return;
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
     setPendingRegistration({
@@ -149,6 +155,60 @@ export function AuthPage() {
               </p>
             </div>
 
+            {showConfirmation ? (
+              <div className="space-y-4">
+                <div
+                  className="rounded-lg p-4"
+                  style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                >
+                  <p className="text-sm" style={{ color: '#94A3B8' }}>
+                    We&apos;ll send a code to
+                  </p>
+                  <p
+                    className="text-base mt-1 break-all"
+                    style={{ color: '#E2E8F0', fontFamily: 'JetBrains Mono, monospace' }}
+                  >
+                    {email}
+                  </p>
+                  <p className="text-sm mt-2" style={{ color: '#94A3B8' }}>
+                    Is this correct?
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSendCode}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all duration-200"
+                  style={{
+                    background: loading ? '#0E2030' : 'linear-gradient(135deg, #06B6D4, #6366F1)',
+                    opacity: loading ? 0.8 : 1,
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Sending code...
+                    </>
+                  ) : (
+                    <>
+                      Yes, Send Code
+                      <ArrowRight size={15} />
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmation(false)}
+                  disabled={loading}
+                  className="w-full py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                  style={{ background: '#0D1525', border: '1px solid #1E2D45', color: '#94A3B8' }}
+                >
+                  Change Email
+                </button>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email */}
               <div>
@@ -271,6 +331,7 @@ export function AuthPage() {
                 )}
               </button>
             </form>
+            )}
 
             {/* Demo hint */}
             <div className="mt-5 px-3 py-2.5 rounded-lg text-xs" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
