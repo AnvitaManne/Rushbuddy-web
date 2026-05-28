@@ -39,6 +39,9 @@ export function validateDeclaredValue(value: number): boolean {
  * Rejects postings where pickup and drop require different runner genders
  * (men's hostel on one end and women's hostel on the other).
  */
+export const LOCATION_TYPE_CONFLICT_MESSAGE =
+  "Pickup and drop cannot mix men's and women's hostel on the same job.";
+
 export function validateLocationTypes(
   pickup_location_type: LocationType,
   drop_location_type: LocationType,
@@ -48,6 +51,16 @@ export function validateLocationTypes(
   const hasWomens =
     pickup_location_type === 'womens_hostel' || drop_location_type === 'womens_hostel';
   return !(hasMens && hasWomens);
+}
+
+/** Returns the conflict message when location types cannot be matched to one runner. */
+export function getLocationTypeConflictError(
+  pickup_location_type: LocationType,
+  drop_location_type: LocationType,
+): string | undefined {
+  return validateLocationTypes(pickup_location_type, drop_location_type)
+    ? undefined
+    : LOCATION_TYPE_CONFLICT_MESSAGE;
 }
 
 /**
@@ -70,10 +83,8 @@ export function validatePostRequestDraft(
   if (
     !validateLocationTypes(draft.pickup_location_type, draft.drop_location_type)
   ) {
-    errors.pickup_location_type =
-      "Pickup and drop cannot mix men's and women's hostel on the same job.";
-    errors.drop_location_type =
-      "Pickup and drop cannot mix men's and women's hostel on the same job.";
+    errors.pickup_location_type = LOCATION_TYPE_CONFLICT_MESSAGE;
+    errors.drop_location_type = LOCATION_TYPE_CONFLICT_MESSAGE;
   }
 
   if (draft.declared_value !== undefined && !validateDeclaredValue(draft.declared_value)) {

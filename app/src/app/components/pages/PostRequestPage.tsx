@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
-import type { JobType } from '@/domain';
+import type { JobType, LocationType } from '@/domain';
 import {
   computeExpiresAt,
   computePriceFloor,
   generateConfirmationCode,
   resolveHandoffMode,
 } from '@/domain/jobHelpers';
+import {
+  getLocationTypeConflictError,
+  validateLocationTypes,
+  validatePostRequestDraft,
+} from '@/domain/postingValidation';
 import {
   FileText, Coffee, Pill, Box, ChevronRight, AlertTriangle,
   MapPin, AlertCircle, Info, Package, Zap, Calendar, Train
@@ -28,6 +33,18 @@ const JOB_TYPE_LABELS: Record<JobType, string> = {
   campus_immediate: 'Campus Immediate',
   campus_scheduled: 'Campus Scheduled',
   intercity: 'Intercity',
+};
+
+const LOCATION_TYPE_OPTIONS: { type: LocationType; label: string }[] = [
+  { type: 'general', label: 'General / Public Area' },
+  { type: 'mens_hostel', label: "Men's Hostel" },
+  { type: 'womens_hostel', label: "Women's Hostel" },
+];
+
+const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
+  general: 'General / Public Area',
+  mens_hostel: "Men's Hostel",
+  womens_hostel: "Women's Hostel",
 };
 
 /** Interim expiry until scheduled_window / travel_date are collected in a later slice. */
@@ -78,6 +95,8 @@ export function PostRequestPage() {
   const [risk, setRisk] = useState<Risk | null>(null);
   const [pickup, setPickup] = useState('');
   const [drop, setDrop] = useState('');
+  const [pickupLocationType, setPickupLocationType] = useState<LocationType>('general');
+  const [dropLocationType, setDropLocationType] = useState<LocationType>('general');
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -92,6 +111,8 @@ export function PostRequestPage() {
   // priceMax = display-only upper bound shown to sender; actual posted_price set in handlePost
   const priceMax = Math.round(priceMin * 1.4);
 
+  const locationTypeConflict = getLocationTypeConflictError(pickupLocationType, dropLocationType);
+
   const canProceedStep1 = jobType !== null;
   const canProceedStep2 =
     itemType &&
@@ -99,23 +120,42 @@ export function PostRequestPage() {
     risk &&
     carryOnlyAck &&
     (itemType !== 'Food' || foodReadyAck);
-  const canProceedStep3 = pickup.trim() && drop.trim() && (risk !== 'Valuable' || valuableAck);
+  const canProceedStep3 =
+    pickup.trim() &&
+    drop.trim() &&
+    (risk !== 'Valuable' || valuableAck) &&
+    validateLocationTypes(pickupLocationType, dropLocationType);
 
   const handlePost = async () => {
-    const errs: Record<string, string> = {};
-    if (!pickup.trim()) errs.pickup = 'Pickup location is required';
-    if (!drop.trim()) errs.drop = 'Drop location is required';
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (!jobType || !itemType || !weight || !risk) return;
+
+    const job_type = jobType;
+    const price_floor = computePriceFloor(itemType, weight, risk, job_type);
+    const posted_price = priceMax;
+
+    const validation = validatePostRequestDraft({
+      pickup_location: pickup,
+      drop_location: drop,
+      pickup_location_type: pickupLocationType,
+      drop_location_type: dropLocationType,
+      price_floor,
+      posted_price,
+    });
+
+    if (!validation.valid) {
+      const errs: Record<string, string> = {};
+      if (validation.errors.pickup_location) errs.pickup = validation.errors.pickup_location;
+      if (validation.errors.drop_location) errs.drop = validation.errors.drop_location;
+      if (validation.errors.pickup_location_type) errs.locationType = validation.errors.pickup_location_type;
+      setErrors(errs);
+      setStep(3);
+      return;
+    }
 
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
 
-    if (!jobType) return;
-
-    const job_type = jobType;
     const created_at = new Date().toISOString();
-    const price_floor = computePriceFloor(itemType!, weight!, risk!, job_type);
-    const posted_price = priceMax;
 
     const newJob: Job = {
       id: `JOB-${2410 + Math.floor(Math.random() * 90)}`,
@@ -130,8 +170,8 @@ export function PostRequestPage() {
       purchase_type: 'carry_only',
       pickup_location: pickup,
       drop_location: drop,
-      pickup_location_type: 'general',
-      drop_location_type: 'general',
+      pickup_location_type: pickupLocationType,
+      drop_location_type: dropLocationType,
       description,
       price_floor,
       posted_price,
@@ -481,6 +521,25 @@ export function PostRequestPage() {
                     <AlertCircle size={10} />{errors.pickup}
                   </p>
                 )}
+                <div className="mt-2">
+                  <div className="text-[10px] mb-1.5" style={{ color: '#64748B' }}>Pickup area type</div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {LOCATION_TYPE_OPTIONS.map(({ type, label }) => (
+                      <OptionButton
+                        key={`pickup-${type}`}
+                        value={type}
+                        selected={pickupLocationType === type}
+                        onClick={() => {
+                          setPickupLocationType(type);
+                          setErrors(p => ({ ...p, locationType: '' }));
+                        }}
+                        className="px-2 py-2 text-[10px] text-center leading-tight"
+                      >
+                        {label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Drop */}
@@ -510,7 +569,33 @@ export function PostRequestPage() {
                     <AlertCircle size={10} />{errors.drop}
                   </p>
                 )}
+                <div className="mt-2">
+                  <div className="text-[10px] mb-1.5" style={{ color: '#64748B' }}>Drop area type</div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {LOCATION_TYPE_OPTIONS.map(({ type, label }) => (
+                      <OptionButton
+                        key={`drop-${type}`}
+                        value={type}
+                        selected={dropLocationType === type}
+                        onClick={() => {
+                          setDropLocationType(type);
+                          setErrors(p => ({ ...p, locationType: '' }));
+                        }}
+                        className="px-2 py-2 text-[10px] text-center leading-tight"
+                      >
+                        {label}
+                      </OptionButton>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              {(locationTypeConflict || errors.locationType) && (
+                <p className="text-[11px] text-red-400 flex items-center gap-1">
+                  <AlertCircle size={10} />
+                  {errors.locationType || locationTypeConflict}
+                </p>
+              )}
 
               {/* Description */}
               <div>
@@ -584,7 +669,9 @@ export function PostRequestPage() {
                   { label: 'Weight Tier', value: weight },
                   { label: 'Risk Level', value: risk },
                   { label: 'Pickup', value: pickup },
+                  { label: 'Pickup Type', value: LOCATION_TYPE_LABELS[pickupLocationType] },
                   { label: 'Drop', value: drop },
+                  { label: 'Drop Type', value: LOCATION_TYPE_LABELS[dropLocationType] },
                   { label: 'Description', value: description || '—' },
                   { label: 'Price Range', value: `₹${priceMin} – ₹${priceMax}`, mono: true, highlight: true },
                   { label: 'Platform Fee', value: '₹0 (Beta)', mono: true },
