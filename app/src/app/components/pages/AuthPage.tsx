@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { Mail, ArrowRight, AlertCircle, Zap, Shield, Package } from 'lucide-react';
 import { motion } from 'motion/react';
+import type { UserGender } from '@/domain/enums';
 
 export function AuthPage() {
-  const { setPendingEmail } = useApp();
+  const { setPendingRegistration } = useApp();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [hostel, setHostel] = useState('');
+  const [gender, setGender] = useState<UserGender | ''>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -23,10 +25,16 @@ export function AuthPage() {
     }
     if (!name.trim()) { setError('Full name is required.'); return; }
     if (!hostel.trim()) { setError('Hostel block is required.'); return; }
+    if (!gender) { setError('Please select your gender.'); return; }
 
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
-    setPendingEmail(email);
+    setPendingRegistration({
+      email: email.trim(),
+      name: name.trim(),
+      hostel_block: hostel.trim(),
+      gender,
+    });
     setLoading(false);
     navigate('/verify');
   };
@@ -201,6 +209,30 @@ export function AuthPage() {
                   onBlur={e => { e.target.style.borderColor = '#1E2D45'; e.target.style.boxShadow = 'none'; }}
                   required
                 />
+              </div>
+
+              {/* Gender */}
+              <div>
+                <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                  Gender
+                </label>
+                <select
+                  value={gender}
+                  onChange={e => {
+                    setGender(e.target.value as UserGender | '');
+                    setError('');
+                  }}
+                  className="w-full px-4 py-2.5 rounded-lg text-sm text-white outline-none transition-all"
+                  style={{ background: '#060A14', border: `1px solid ${error && !gender ? '#EF4444' : '#1E2D45'}` }}
+                  onFocus={e => { e.target.style.borderColor = '#06B6D4'; e.target.style.boxShadow = '0 0 0 2px rgba(6,182,212,0.1)'; }}
+                  onBlur={e => { e.target.style.borderColor = '#1E2D45'; e.target.style.boxShadow = 'none'; }}
+                  required
+                >
+                  <option value="" disabled>Select gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
               </div>
 
               {/* Error */}
