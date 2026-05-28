@@ -45,12 +45,16 @@ export function ActiveDeliveryPage() {
   const [showIssuePanel, setShowIssuePanel] = useState(false);
   const [issueText, setIssueText] = useState('');
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [photoCaptured, setPhotoCaptured] = useState(false);
+  const [pickupPhotoUrl, setPickupPhotoUrl] = useState<string | null>(null);
   const [conditionNote, setConditionNote] = useState('');
+
+  const requiresPickupPhoto =
+    activeJob?.risk === 'Fragile' || activeJob?.risk === 'Valuable';
+  const canAcknowledgeCondition = !requiresPickupPhoto || pickupPhotoUrl !== null;
 
   useEffect(() => {
     setConditionNote('');
-    setPhotoCaptured(false);
+    setPickupPhotoUrl(null);
     if (!activeJob) {
       setPhase('going_pickup');
       return;
@@ -69,8 +73,14 @@ export function ActiveDeliveryPage() {
 
   const elapsed = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
+  const handleCapturePhoto = () => {
+    if (!activeJob) return;
+    setPickupPhotoUrl(`mock://pickup-photo/${activeJob.id}/${Date.now()}`);
+  };
+
   const handleConditionAck = async () => {
     if (!activeJob) return;
+    if (requiresPickupPhoto && !pickupPhotoUrl) return;
 
     const transition = assertTransition(activeJob.status, 'IN_TRANSIT');
     if (!transition.ok) {
@@ -93,6 +103,7 @@ export function ActiveDeliveryPage() {
               condition_acknowledged: true,
               condition_note: trimmedNote || undefined,
               pickup_confirmed_at,
+              photo_url: pickupPhotoUrl ?? undefined,
             }
           : j,
       ),
@@ -315,34 +326,70 @@ export function ActiveDeliveryPage() {
                 />
               </div>
 
-              {/* Photo option for fragile/valuable */}
-              {(activeJob.risk === 'Fragile' || activeJob.risk === 'Valuable') && (
-                <div className="rounded-lg p-3 mb-4" style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
-                  <p className="text-xs font-medium text-white mb-2">
-                    📸 Recommended: Photograph item at pickup
+              {/* Pickup photo — mandatory for Fragile/Valuable */}
+              {requiresPickupPhoto && (
+                <div className="rounded-lg p-3 mb-4" style={{ background: '#1A1005', border: '1px solid #3B2A0A' }}>
+                  <p className="text-xs font-medium text-amber-300 mb-2">
+                    📸 Mandatory: Photograph item at pickup
                   </p>
-                  <p className="text-[11px] mb-3" style={{ color: '#64748B' }}>
-                    Risk level is <span className="text-amber-400">{activeJob.risk}</span>. A photo protects both parties in a dispute.
+                  <p className="text-[11px] mb-3" style={{ color: '#92400E' }}>
+                    Risk level is <span className="text-amber-400">{activeJob.risk}</span>. You must capture a
+                    pickup photo before condition acknowledgement.
                   </p>
                   <button
-                    onClick={() => setPhotoCaptured(true)}
+                    type="button"
+                    onClick={handleCapturePhoto}
                     className="text-xs px-3 py-1.5 rounded-lg transition-all"
                     style={{
-                      background: photoCaptured ? '#0A2010' : '#0B1120',
-                      border: `1px solid ${photoCaptured ? '#1A4020' : '#1E2D45'}`,
-                      color: photoCaptured ? '#10B981' : '#64748B',
+                      background: pickupPhotoUrl ? '#0A2010' : '#0B1120',
+                      border: `1px solid ${pickupPhotoUrl ? '#1A4020' : '#3B2A0A'}`,
+                      color: pickupPhotoUrl ? '#10B981' : '#64748B',
                     }}
                   >
-                    {photoCaptured ? '✓ Photo captured' : 'Capture photo (simulated)'}
+                    {pickupPhotoUrl ? '✓ Photo captured' : 'Capture photo (simulated)'}
+                  </button>
+                  {!pickupPhotoUrl && (
+                    <p className="text-[10px] mt-2" style={{ color: '#92400E' }}>
+                      Condition acknowledgement is blocked until photo is captured.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {activeJob.risk === 'Low' && (
+                <div className="rounded-lg p-3 mb-4" style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
+                  <p className="text-xs font-medium text-white mb-2">
+                    📸 Suggested: Photograph item at pickup
+                  </p>
+                  <p className="text-[11px] mb-3" style={{ color: '#64748B' }}>
+                    Optional for Low risk — skip if the item looks fine.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCapturePhoto}
+                    className="text-xs px-3 py-1.5 rounded-lg transition-all"
+                    style={{
+                      background: pickupPhotoUrl ? '#0A2010' : '#0B1120',
+                      border: `1px solid ${pickupPhotoUrl ? '#1A4020' : '#1E2D45'}`,
+                      color: pickupPhotoUrl ? '#10B981' : '#64748B',
+                    }}
+                  >
+                    {pickupPhotoUrl ? '✓ Photo captured' : 'Capture photo (simulated)'}
                   </button>
                 </div>
               )}
 
               <button
                 onClick={handleConditionAck}
-                disabled={condAckLoading}
+                disabled={condAckLoading || !canAcknowledgeCondition}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-3"
-                style={{ background: condAckLoading ? '#1A1005' : 'linear-gradient(135deg, #F59E0B, #EF4444)', opacity: condAckLoading ? 0.8 : 1 }}
+                style={{
+                  background: condAckLoading || !canAcknowledgeCondition
+                    ? '#1A1005'
+                    : 'linear-gradient(135deg, #F59E0B, #EF4444)',
+                  opacity: condAckLoading || !canAcknowledgeCondition ? 0.5 : 1,
+                  cursor: condAckLoading || !canAcknowledgeCondition ? 'not-allowed' : 'pointer',
+                }}
               >
                 {condAckLoading ? (
                   <>

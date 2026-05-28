@@ -130,6 +130,7 @@ export interface Job {
   condition_acknowledged: boolean;
   /** Optional runner note at pickup (e.g. pre-existing damage). Not required for Low risk. */
   condition_note?: string;
+  /** Pickup photo URL; required at condition ack for Fragile/Valuable jobs. */
   photo_url?: string;
   dropoff_photo_url?: string;
   no_answer_at?: string;
