@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job } from '../../context/AppContext';
-import type { JobType, LocationType } from '@/domain';
+import type { JobType, LocationType, ScheduledWindow } from '@/domain';
 import {
   computeExpiresAt,
   computePriceFloor,
@@ -47,12 +47,87 @@ const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
   womens_hostel: "Women's Hostel",
 };
 
-/** Interim expiry until scheduled_window / travel_date are collected in a later slice. */
-function computeInterimExpiresAt(jobType: JobType, createdAt: string): string {
-  if (jobType === 'campus_immediate') {
-    return computeExpiresAt(jobType, createdAt);
+const datetimeInputStyle = {
+  background: '#060A14',
+  border: '1px solid #1E2D45',
+} as const;
+
+/** Converts `<input type="datetime-local">` value to ISO 8601 UTC. */
+function datetimeLocalToIso(local: string): string | null {
+  if (!local.trim()) return null;
+  const date = new Date(local);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+function formatDatetimeLocalDisplay(local: string): string {
+  const iso = datetimeLocalToIso(local);
+  if (!iso) return local || '—';
+  return new Date(iso).toLocaleString();
+}
+
+function validateCampusScheduledWindow(start: string, end: string): string | undefined {
+  if (!start.trim() || !end.trim()) {
+    return 'Window start and end are required.';
   }
-  return new Date(new Date(createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString();
+  const startIso = datetimeLocalToIso(start);
+  const endIso = datetimeLocalToIso(end);
+  if (!startIso || !endIso) {
+    return 'Enter valid window start and end times.';
+  }
+  if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+    return 'Window end must be after window start.';
+  }
+  return undefined;
+}
+
+function validateIntercityTravelDateTime(local: string): string | undefined {
+  if (!local.trim()) {
+    return 'Travel date and time are required.';
+  }
+  if (!datetimeLocalToIso(local)) {
+    return 'Enter a valid travel date and time.';
+  }
+  return undefined;
+}
+
+function buildScheduledWindow(start: string, end: string): ScheduledWindow {
+  return {
+    start: datetimeLocalToIso(start)!,
+    end: datetimeLocalToIso(end)!,
+  };
+}
+
+/** YYYY-MM-DD for `Job.travel_date` from a datetime-local value. */
+function toTravelDate(local: string): string {
+  return datetimeLocalToIso(local)!.slice(0, 10);
+}
+
+function getJobTimingError(
+  jobType: JobType | null,
+  scheduledStart: string,
+  scheduledEnd: string,
+  travelDateTime: string,
+): string | undefined {
+  if (!jobType || jobType === 'campus_immediate') return undefined;
+  if (jobType === 'campus_scheduled') {
+    return validateCampusScheduledWindow(scheduledStart, scheduledEnd);
+  }
+  return validateIntercityTravelDateTime(travelDateTime);
+}
+
+function getTimingReviewValue(
+  jobType: JobType | null,
+  scheduledStart: string,
+  scheduledEnd: string,
+  travelDt: string,
+): string {
+  if (!jobType) return '—';
+  if (jobType === 'campus_immediate') return 'Expires 30 min after posting';
+  if (jobType === 'campus_scheduled') {
+    return `${formatDatetimeLocalDisplay(scheduledStart)} → ${formatDatetimeLocalDisplay(scheduledEnd)}`;
+  }
+  return formatDatetimeLocalDisplay(travelDt);
 }
 
 const ITEM_TYPES: { type: ItemType; icon: React.ReactNode; desc: string }[] = [
@@ -103,6 +178,9 @@ export function PostRequestPage() {
   const [valuableAck, setValuableAck] = useState(false);
   const [carryOnlyAck, setCarryOnlyAck] = useState(false);
   const [foodReadyAck, setFoodReadyAck] = useState(false);
+  const [scheduledWindowStart, setScheduledWindowStart] = useState('');
+  const [scheduledWindowEnd, setScheduledWindowEnd] = useState('');
+  const [travelDateTime, setTravelDateTime] = useState('');
 
   // priceMin = system floor (single source of truth from domain helper)
   const priceMin = jobType && itemType && weight && risk
@@ -113,7 +191,14 @@ export function PostRequestPage() {
 
   const locationTypeConflict = getLocationTypeConflictError(pickupLocationType, dropLocationType);
 
-  const canProceedStep1 = jobType !== null;
+  const schedulingError = getJobTimingError(
+    jobType,
+    scheduledWindowStart,
+    scheduledWindowEnd,
+    travelDateTime,
+  );
+
+  const canProceedStep1 = jobType !== null && schedulingError === undefined;
   const canProceedStep2 =
     itemType &&
     weight &&
@@ -152,10 +237,40 @@ export function PostRequestPage() {
       return;
     }
 
+    const timingError = getJobTimingError(
+      jobType,
+      scheduledWindowStart,
+      scheduledWindowEnd,
+      travelDateTime,
+    );
+    if (timingError) {
+      setErrors({ scheduling: timingError });
+      setStep(1);
+      return;
+    }
+
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
 
     const created_at = new Date().toISOString();
+
+    let scheduled_window: ScheduledWindow | undefined;
+    let travel_date: string | undefined;
+    let travelDateTimeIso: string | undefined;
+
+    if (job_type === 'campus_scheduled') {
+      scheduled_window = buildScheduledWindow(scheduledWindowStart, scheduledWindowEnd);
+    } else if (job_type === 'intercity') {
+      travelDateTimeIso = datetimeLocalToIso(travelDateTime)!;
+      travel_date = toTravelDate(travelDateTime);
+    }
+
+    const expires_at = computeExpiresAt(
+      job_type,
+      created_at,
+      scheduled_window,
+      travelDateTimeIso,
+    );
 
     const newJob: Job = {
       id: `JOB-${2410 + Math.floor(Math.random() * 90)}`,
@@ -176,7 +291,9 @@ export function PostRequestPage() {
       price_floor,
       posted_price,
       confirmation_code: generateConfirmationCode(),
-      expires_at: computeInterimExpiresAt(job_type, created_at),
+      expires_at,
+      scheduled_window,
+      travel_date,
       condition_acknowledged: false,
       status: 'OPEN',
       created_at,
@@ -244,8 +361,23 @@ export function PostRequestPage() {
               </div>
               <div className="grid gap-2">
                 {JOB_TYPES.map(({ type, label, desc, icon }) => (
-                  <OptionButton key={type} value={type} selected={jobType === type} onClick={() => setJobType(type)}
-                    className="p-3 text-left w-full">
+                  <OptionButton
+                    key={type}
+                    value={type}
+                    selected={jobType === type}
+                    onClick={() => {
+                      setJobType(type);
+                      setErrors(p => ({ ...p, scheduling: '' }));
+                      if (type !== 'campus_scheduled') {
+                        setScheduledWindowStart('');
+                        setScheduledWindowEnd('');
+                      }
+                      if (type !== 'intercity') {
+                        setTravelDateTime('');
+                      }
+                    }}
+                    className="p-3 text-left w-full"
+                  >
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 mt-0.5">{icon}</div>
                       <div>
@@ -257,6 +389,94 @@ export function PostRequestPage() {
                 ))}
               </div>
             </div>
+
+            {jobType === 'campus_immediate' && (
+              <div className="rounded-xl p-4 mb-4" style={{ background: '#0A1520', border: '1px solid #1A3045' }}>
+                <div className="flex items-start gap-3">
+                  <Info size={16} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs" style={{ color: '#94A3B8' }}>
+                    This request goes live immediately and expires 30 minutes after posting if unmatched.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {jobType === 'campus_scheduled' && (
+              <div className="rounded-xl p-4 mb-4 space-y-3" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+                <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                  SCHEDULED WINDOW
+                </div>
+                <p className="text-[11px]" style={{ color: '#64748B' }}>
+                  Job goes live immediately. It expires at the end of your window if still unmatched.
+                </p>
+                <div>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>Window start</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledWindowStart}
+                    onChange={e => {
+                      setScheduledWindowStart(e.target.value);
+                      setErrors(p => ({ ...p, scheduling: '' }));
+                    }}
+                    className="w-full px-3 py-2.5 rounded-lg text-sm text-white outline-none"
+                    style={{
+                      ...datetimeInputStyle,
+                      border: `1px solid ${schedulingError && !scheduledWindowStart ? '#EF4444' : '#1E2D45'}`,
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>Window end</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledWindowEnd}
+                    onChange={e => {
+                      setScheduledWindowEnd(e.target.value);
+                      setErrors(p => ({ ...p, scheduling: '' }));
+                    }}
+                    className="w-full px-3 py-2.5 rounded-lg text-sm text-white outline-none"
+                    style={{
+                      ...datetimeInputStyle,
+                      border: `1px solid ${schedulingError ? '#EF4444' : '#1E2D45'}`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {jobType === 'intercity' && (
+              <div className="rounded-xl p-4 mb-4 space-y-3" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+                <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                  TRAVEL DATE &amp; TIME
+                </div>
+                <p className="text-[11px]" style={{ color: '#64748B' }}>
+                  Required for intercity jobs. The listing expires 2 hours before your travel time.
+                </p>
+                <div>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>When are you travelling?</label>
+                  <input
+                    type="datetime-local"
+                    value={travelDateTime}
+                    onChange={e => {
+                      setTravelDateTime(e.target.value);
+                      setErrors(p => ({ ...p, scheduling: '' }));
+                    }}
+                    className="w-full px-3 py-2.5 rounded-lg text-sm text-white outline-none"
+                    style={{
+                      ...datetimeInputStyle,
+                      border: `1px solid ${schedulingError ? '#EF4444' : '#1E2D45'}`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {(schedulingError || errors.scheduling) && jobType && jobType !== 'campus_immediate' && (
+              <p className="text-[11px] mb-4 text-red-400 flex items-center gap-1">
+                <AlertCircle size={10} />
+                {errors.scheduling || schedulingError}
+              </p>
+            )}
 
             <button
               onClick={() => canProceedStep1 && setStep(2)}
@@ -665,6 +885,10 @@ export function PostRequestPage() {
               <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
                 {[
                   { label: 'Job Type', value: jobType ? JOB_TYPE_LABELS[jobType] : '—' },
+                  {
+                    label: 'Timing',
+                    value: getTimingReviewValue(jobType, scheduledWindowStart, scheduledWindowEnd, travelDateTime),
+                  },
                   { label: 'Item Type', value: itemType },
                   { label: 'Weight Tier', value: weight },
                   { label: 'Risk Level', value: risk },
