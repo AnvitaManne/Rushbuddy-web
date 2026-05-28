@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import type { Job, User } from '@/domain/types';
-import type { UserRole } from '@/domain/enums';
+import type { UserGender, UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
 
 export type { Job, User } from '@/domain/types';
@@ -17,6 +17,12 @@ interface AppContextType {
   setActiveJob: (job: Job | null) => void;
   pendingEmail: string;
   setPendingEmail: (email: string) => void;
+  pendingName: string;
+  setPendingName: (name: string) => void;
+  pendingHostel: string;
+  setPendingHostel: (hostel: string) => void;
+  pendingGender: UserGender | null;
+  setPendingGender: (gender: UserGender | null) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (v: boolean) => void;
 }
@@ -210,6 +216,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<Job[]>(mockJobs);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingName, setPendingName] = useState('');
+  const [pendingHostel, setPendingHostel] = useState('');
+  const [pendingGender, setPendingGender] = useState<UserGender | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
@@ -237,6 +246,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveJob,
       pendingEmail,
       setPendingEmail,
+      pendingName,
+      setPendingName,
+      pendingHostel,
+      setPendingHostel,
+      pendingGender,
+      setPendingGender,
       isAuthenticated,
       setIsAuthenticated,
     }}>

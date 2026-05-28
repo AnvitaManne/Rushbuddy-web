@@ -128,6 +128,8 @@ export interface Job {
   expires_at: string;
 
   condition_acknowledged: boolean;
+  /** Optional runner note at pickup (e.g. pre-existing damage). Not required for Low risk. */
+  condition_note?: string;
   photo_url?: string;
   dropoff_photo_url?: string;
   no_answer_at?: string;

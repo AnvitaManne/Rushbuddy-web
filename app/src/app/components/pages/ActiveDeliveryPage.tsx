@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
+import { assertTransition } from '@/domain/jobTransitions';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, Phone,
   Clock, ArrowRight, Shield, Star, ChevronDown
@@ -10,27 +11,33 @@ import { motion, AnimatePresence } from 'motion/react';
 type DeliveryPhase = 'going_pickup' | 'condition_ack' | 'in_transit' | 'delivered';
 
 export function ActiveDeliveryPage() {
-  const { jobs, setJobs, user, activeJob: ctxActiveJob } = useApp();
+  const { jobs, setJobs, setActiveJob, user, activeJob: ctxActiveJob } = useApp();
   const navigate = useNavigate();
 
   const activeJob = useMemo(() => {
     if (!user?.id) return undefined;
 
-    if (
-      ctxActiveJob?.runner_id === user.id &&
-      ['MATCHED', 'IN_TRANSIT'].includes(ctxActiveJob.status)
-    ) {
-      return jobs.find(j => j.id === ctxActiveJob.id) ?? ctxActiveJob;
-    }
-
-    const active = jobs.filter(
+    const runnerActive = jobs.filter(
       j =>
         j.runner_id === user.id && ['MATCHED', 'IN_TRANSIT'].includes(j.status),
     );
-    return active.sort((a, b) =>
+    if (runnerActive.length === 0) return undefined;
+
+    const pinnedId =
+      ctxActiveJob?.runner_id === user.id &&
+      ['MATCHED', 'IN_TRANSIT'].includes(ctxActiveJob.status)
+        ? ctxActiveJob.id
+        : undefined;
+
+    if (pinnedId) {
+      const pinned = runnerActive.find(j => j.id === pinnedId);
+      if (pinned) return pinned;
+    }
+
+    return runnerActive.sort((a, b) =>
       (b.matched_at ?? '').localeCompare(a.matched_at ?? ''),
     )[0];
-  }, [jobs, user?.id, ctxActiveJob]);
+  }, [jobs, user?.id, ctxActiveJob?.id, ctxActiveJob?.status, ctxActiveJob?.runner_id]);
 
   const [phase, setPhase] = useState<DeliveryPhase>('going_pickup');
   const [condAckLoading, setCondAckLoading] = useState(false);
@@ -39,6 +46,21 @@ export function ActiveDeliveryPage() {
   const [issueText, setIssueText] = useState('');
   const [elapsedSec, setElapsedSec] = useState(0);
   const [photoCaptured, setPhotoCaptured] = useState(false);
+  const [conditionNote, setConditionNote] = useState('');
+
+  useEffect(() => {
+    setConditionNote('');
+    setPhotoCaptured(false);
+    if (!activeJob) {
+      setPhase('going_pickup');
+      return;
+    }
+    if (activeJob.status === 'IN_TRANSIT') {
+      setPhase('in_transit');
+    } else if (activeJob.status === 'MATCHED') {
+      setPhase('going_pickup');
+    }
+  }, [activeJob?.id, activeJob?.status]);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -48,26 +70,57 @@ export function ActiveDeliveryPage() {
   const elapsed = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
   const handleConditionAck = async () => {
+    if (!activeJob) return;
+
+    const transition = assertTransition(activeJob.status, 'IN_TRANSIT');
+    if (!transition.ok) {
+      console.warn('[ActiveDelivery] Condition ack failed:', transition.error);
+      return;
+    }
+
+    const trimmedNote = conditionNote.trim();
+    const pickup_confirmed_at = new Date().toISOString();
+
     setCondAckLoading(true);
     await new Promise(r => setTimeout(r, 1000));
     setPhase('in_transit');
-    if (activeJob) {
-      setJobs(prev => prev.map(j => j.id === activeJob.id ? {
-        ...j, status: 'IN_TRANSIT', pickup_confirmed_at: new Date().toISOString()
-      } : j));
-    }
+    setJobs(prev =>
+      prev.map(j =>
+        j.id === activeJob.id
+          ? {
+              ...j,
+              status: 'IN_TRANSIT',
+              condition_acknowledged: true,
+              condition_note: trimmedNote || undefined,
+              pickup_confirmed_at,
+            }
+          : j,
+      ),
+    );
     setCondAckLoading(false);
   };
 
   const handleConfirmDelivery = async () => {
+    if (!activeJob) return;
+
+    const transition = assertTransition(activeJob.status, 'DELIVERED');
+    if (!transition.ok) {
+      console.warn('[ActiveDelivery] Delivery confirm failed:', transition.error);
+      return;
+    }
+
+    const delivered_at = new Date().toISOString();
+    const jobId = activeJob.id;
+
     setDeliverLoading(true);
     await new Promise(r => setTimeout(r, 1200));
     setPhase('delivered');
-    if (activeJob) {
-      setJobs(prev => prev.map(j => j.id === activeJob.id ? {
-        ...j, status: 'DELIVERED', delivered_at: new Date().toISOString()
-      } : j));
-    }
+    setJobs(prev =>
+      prev.map(j =>
+        j.id === jobId ? { ...j, status: 'DELIVERED', delivered_at } : j,
+      ),
+    );
+    setActiveJob(null);
     setDeliverLoading(false);
     await new Promise(r => setTimeout(r, 800));
     navigate('/home');
@@ -217,8 +270,9 @@ export function ActiveDeliveryPage() {
                   <div>
                     <p className="text-sm font-medium text-amber-300 mb-1">Mandatory Condition Check</p>
                     <p className="text-xs" style={{ color: '#92400E' }}>
-                      By tapping "Condition Acknowledged", you confirm the item was received in acceptable condition.
-                      This is a <strong>timestamped legal record</strong>. The job cannot proceed without this step.
+                      By tapping &quot;Condition Acknowledged&quot;, you record the item&apos;s condition at pickup.
+                      This is a <strong>timestamped record</strong> — not delivery completion. Note any pre-existing
+                      damage below if you see it.
                     </p>
                   </div>
                 </div>
@@ -238,6 +292,27 @@ export function ActiveDeliveryPage() {
                     <span style={{ color: '#E2E8F0' }}>{value}</span>
                   </div>
                 ))}
+              </div>
+
+              <div className="rounded-lg p-3 mb-4" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+                <label className="text-xs font-medium text-white mb-1 block">
+                  Condition note <span style={{ color: '#64748B', fontWeight: 400 }}>(optional)</span>
+                </label>
+                <p className="text-[11px] mb-2" style={{ color: '#64748B' }}>
+                  Describe pre-existing damage if any — e.g. &quot;box dented&quot;, &quot;screen cracked&quot;,
+                  &quot;seal broken&quot;. Leave blank if the item looks fine.
+                  {activeJob.risk === 'Low' && (
+                    <span> Not required for Low risk items.</span>
+                  )}
+                </p>
+                <textarea
+                  value={conditionNote}
+                  onChange={e => setConditionNote(e.target.value)}
+                  rows={3}
+                  placeholder="Pre-existing condition at pickup (optional)"
+                  className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none resize-none"
+                  style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                />
               </div>
 
               {/* Photo option for fragile/valuable */}
