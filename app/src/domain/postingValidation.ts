@@ -139,7 +139,15 @@ export function getSenderActiveJobError(
 ): string | undefined {
   const active = getSenderActiveJob(jobs, senderId);
   if (!active) return undefined;
-  return `You already have an active request (${active.id}). Cancel it before posting a new one.`;
+  if (active.status === 'OPEN') {
+    return `You already have a request waiting for a runner (${active.id}). Cancel it before posting a new one.`;
+  }
+  return `You already have an active delivery (${active.id}). Finish or resolve it before posting a new one.`;
+}
+
+/** Sender may cancel only while the job is still OPEN (no runner accepted). */
+export function canSenderCancelJob(job: Job, senderId: string): boolean {
+  return job.sender_id === senderId && job.status === 'OPEN';
 }
 
 /** Validates job-type timing fields from datetime-local inputs. */

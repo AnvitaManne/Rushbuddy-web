@@ -22,25 +22,38 @@ function getStepIndex(status: string) {
 }
 
 export function TrackingPage() {
-  const { jobs, setJobs, activeJob: ctxActiveJob } = useApp();
+  const { jobs, setJobs, activeJob: ctxActiveJob, setActiveJob, user } = useApp();
   const navigate = useNavigate();
 
+  const senderId = user?.id ?? 'u1';
   const [localJobId, setLocalJobId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ctxActiveJob) setLocalJobId(ctxActiveJob.id);
-    else {
-      const j = jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status));
+    if (ctxActiveJob && ctxActiveJob.sender_id === senderId) {
+      setLocalJobId(ctxActiveJob.id);
+    } else {
+      const j = jobs.find(
+        j =>
+          j.sender_id === senderId &&
+          ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status),
+      );
       if (j) setLocalJobId(j.id);
       else {
-        const last = [...jobs].filter(j => j.sender_id === 'u1').sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        const last = [...jobs]
+          .filter(j => j.sender_id === senderId)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
         if (last) setLocalJobId(last.id);
       }
     }
-  }, [ctxActiveJob, jobs]);
+  }, [ctxActiveJob, jobs, senderId]);
 
-  const job = jobs.find(j => j.id === localJobId) || jobs.find(j => j.sender_id === 'u1');
+  const job =
+    jobs.find(j => j.id === localJobId) ||
+    jobs.find(
+      j =>
+        j.sender_id === senderId &&
+        ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status),
+    );
 
   const [simStep, setSimStep] = useState<number | null>(null);
   const [simulating, setSimulating] = useState(false);
@@ -93,10 +106,17 @@ export function TrackingPage() {
   };
 
   const handleCancel = () => {
-    if (job && job.status === 'OPEN') {
-      setJobs(prev => prev.filter(j => j.id !== job.id));
-      navigate('/home');
+    if (!job || job.status !== 'OPEN' || job.sender_id !== senderId) return;
+    const check = assertTransition(job.status, 'CLOSED');
+    if (!check.ok) {
+      if (import.meta.env.DEV) console.warn(`[RushBuddy] Job ${job.id}:`, check.error);
+      return;
     }
+    setJobs(prev =>
+      prev.map(j => (j.id === job.id ? { ...j, status: 'CLOSED' } : j)),
+    );
+    setActiveJob(prev => (prev?.id === job.id ? null : prev));
+    navigate('/home');
   };
 
   if (!job) {

@@ -12,8 +12,10 @@ import {
 } from '@/domain/jobHelpers';
 import {
   buildScheduledWindowFromLocal,
+  canSenderCancelJob,
   getDeclaredValueError,
   getLocationTypeConflictError,
+  getSenderActiveJob,
   getSenderActiveJobError,
   parseDatetimeLocalToIso,
   toTravelDateFromLocal,
@@ -22,6 +24,7 @@ import {
   validatePostRequestMode2,
   validatePostRequestTiming,
 } from '@/domain/postingValidation';
+import { assertTransition } from '@/domain/jobTransitions';
 import {
   FileText, Coffee, Pill, Box, ChevronRight, AlertTriangle,
   MapPin, AlertCircle, Info, Package, Zap, Calendar, Train
@@ -198,6 +201,7 @@ export function PostRequestPage() {
   const declaredValueError = getDeclaredValueError(parsedDeclaredValue);
 
   const locationTypeConflict = getLocationTypeConflictError(pickupLocationType, dropLocationType);
+  const senderActiveJob = user ? getSenderActiveJob(jobs, user.id) : undefined;
   const senderActiveJobError = user ? getSenderActiveJobError(jobs, user.id) : undefined;
 
   const schedulingError = jobType
@@ -350,6 +354,16 @@ export function PostRequestPage() {
     navigate('/sender/tracking');
   };
 
+  const handleCancelActiveJob = () => {
+    if (!user || !senderActiveJob || !canSenderCancelJob(senderActiveJob, user.id)) return;
+    const check = assertTransition(senderActiveJob.status, 'CLOSED');
+    if (!check.ok) return;
+    setJobs(prev =>
+      prev.map(j => (j.id === senderActiveJob.id ? { ...j, status: 'CLOSED' } : j)),
+    );
+    setActiveJob(prev => (prev?.id === senderActiveJob.id ? null : prev));
+  };
+
   return (
     <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl" style={{ fontFamily: 'Inter, sans-serif' }}>
 
@@ -359,7 +373,29 @@ export function PostRequestPage() {
           <div className="rounded-xl p-3 mb-4 flex items-start gap-2"
             style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
             <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-red-300">{errors.activeJob || senderActiveJobError}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-red-300">{errors.activeJob || senderActiveJobError}</p>
+              {senderActiveJob && canSenderCancelJob(senderActiveJob, user!.id) && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/sender/tracking')}
+                    className="px-3 py-1.5 rounded-lg text-xs border transition-all"
+                    style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#94A3B8' }}
+                  >
+                    View waiting job
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelActiveJob}
+                    className="px-3 py-1.5 rounded-lg text-xs border transition-all"
+                    style={{ background: '#1C0A0A', border: '1px solid #3B1111', color: '#F87171' }}
+                  >
+                    Cancel request
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
         <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>

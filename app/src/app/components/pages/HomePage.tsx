@@ -34,9 +34,18 @@ export function HomePage() {
   const { user, setCurrentRole, currentRole, jobs } = useApp();
   const navigate = useNavigate();
 
-  const myJobs = jobs.filter(j => j.sender_id === 'u1' || j.runner_id === 'u1');
+  const userId = user?.id ?? 'u1';
+  const myJobs = jobs.filter(j => j.sender_id === userId || j.runner_id === userId);
   const recentJobs = myJobs.slice(0, 4);
-  const activeJob = jobs.find(j => (j.runner_id === 'u1' || j.sender_id === 'u1') && ['MATCHED', 'IN_TRANSIT'].includes(j.status));
+  const runnerActiveJob = jobs.find(
+    j => j.runner_id === userId && ['MATCHED', 'IN_TRANSIT'].includes(j.status),
+  );
+  const senderActiveJob = jobs.find(
+    j =>
+      j.sender_id === userId &&
+      ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status),
+  );
+  const activeJob = runnerActiveJob ?? senderActiveJob;
 
   const displayUser = user || {
     name: 'Aditi Krishnan',
@@ -105,7 +114,11 @@ export function HomePage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate(activeJob.runner_id === 'u1' ? '/runner/active' : '/sender/tracking')}
+          onClick={() =>
+            navigate(
+              runnerActiveJob ? '/runner/active' : '/sender/tracking',
+            )
+          }
           className="rounded-xl p-4 cursor-pointer transition-all hover:brightness-110"
           style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
         >
@@ -117,7 +130,9 @@ export function HomePage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>ACTIVE JOB</span>
+                <span className="text-xs text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {activeJob.status === 'OPEN' ? 'WAITING FOR RUNNER' : 'ACTIVE JOB'}
+                </span>
               </div>
               <p className="text-sm text-white truncate">{activeJob.pickup_location} → {activeJob.drop_location}</p>
               <p className="text-xs mt-0.5" style={{ color: '#64748B' }}>

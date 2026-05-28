@@ -7,7 +7,7 @@ import type { JobStatus } from './enums';
  * Branches: DISPUTED (post-delivery), ISSUE_REPORTED (active delivery), MATCHED → OPEN (no-show re-pool)
  */
 export const ALLOWED_TRANSITIONS: Readonly<Record<JobStatus, readonly JobStatus[]>> = {
-  OPEN: ['MATCHED'],
+  OPEN: ['MATCHED', 'CLOSED'],
   MATCHED: ['IN_TRANSIT', 'OPEN', 'ISSUE_REPORTED'],
   IN_TRANSIT: ['DELIVERED', 'ISSUE_REPORTED'],
   DELIVERED: ['PENDING_RATING', 'CLOSED', 'DISPUTED'],
@@ -58,6 +58,7 @@ export function assertTransition(
  * --- Examples (no test runner) ---
  *
  * canTransition('OPEN', 'MATCHED')              // true  — runner accept (Flow 3)
+ * canTransition('OPEN', 'CLOSED')               // true  — sender cancel before match
  * canTransition('MATCHED', 'IN_TRANSIT')        // true  — pickup confirmed (Flow 4)
  * canTransition('MATCHED', 'OPEN')            // true  — runner no-show re-pool (Flow 3)
  * canTransition('IN_TRANSIT', 'DELIVERED')    // true  — delivery / handoff complete (Flow 4)
