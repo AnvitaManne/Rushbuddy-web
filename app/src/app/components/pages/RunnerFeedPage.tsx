@@ -193,10 +193,11 @@ export function RunnerFeedPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('All');
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
+  const authRequired = !user;
 
-  const openJobs = jobs.filter(
-    j => j.status === 'OPEN' && user && canRunnerSeeJob(user, j),
-  );
+  const openJobs = user
+    ? jobs.filter(j => j.status === 'OPEN' && canRunnerSeeJob(user, j))
+    : [];
   const filters = ['All', 'Document', 'Food', 'Medicine', 'Object'];
   const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);
 
@@ -237,7 +238,9 @@ export function RunnerFeedPage() {
           </div>
           <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>Job Listings</h1>
           <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
-            Pick up jobs that match your route
+            {authRequired
+              ? 'Log in and verify your account to view eligible jobs'
+              : 'Pick up jobs that match your route'}
           </p>
         </div>
         <button
@@ -294,7 +297,21 @@ export function RunnerFeedPage() {
 
       {/* Job cards */}
       <AnimatePresence>
-        {filteredJobs.length === 0 ? (
+        {authRequired ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12"
+          >
+            <Zap size={28} className="text-slate-600 mx-auto mb-3" />
+            <p className="text-sm" style={{ color: '#94A3B8' }}>
+              Sign in to see jobs matched to your access and hostel rules.
+            </p>
+            <p className="text-xs mt-1" style={{ color: '#475569' }}>
+              Complete registration and OTP verification to unlock your runner feed.
+            </p>
+          </motion.div>
+        ) : filteredJobs.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
