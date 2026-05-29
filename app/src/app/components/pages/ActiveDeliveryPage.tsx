@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../../context/AppContext';
+import { useApp, type Job } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
 import {
-  MapPin, Package, CheckCircle2, AlertTriangle, Phone,
-  Clock, ArrowRight, Shield, Star, ChevronDown
+  MapPin, Package, CheckCircle2, AlertTriangle, AlertCircle, Phone,
+  Clock, ArrowRight, Shield, KeyRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -47,14 +47,26 @@ export function ActiveDeliveryPage() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [pickupPhotoUrl, setPickupPhotoUrl] = useState<string | null>(null);
   const [conditionNote, setConditionNote] = useState('');
+  const [handoffCode, setHandoffCode] = useState(['', '', '', '']);
+  const [codeError, setCodeError] = useState('');
+  const [codeAttempts, setCodeAttempts] = useState(0);
+  const [deliveredJob, setDeliveredJob] = useState<Job | null>(null);
+  const handoffInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  /** In-progress job or brief completion snapshot so UI does not flash empty. */
+  const displayJob = deliveredJob ?? activeJob;
 
   const requiresPickupPhoto =
-    activeJob?.risk === 'Fragile' || activeJob?.risk === 'Valuable';
+    displayJob?.risk === 'Fragile' || displayJob?.risk === 'Valuable';
   const canAcknowledgeCondition = !requiresPickupPhoto || pickupPhotoUrl !== null;
 
   useEffect(() => {
+    if (deliveredJob) return;
     setConditionNote('');
     setPickupPhotoUrl(null);
+    setHandoffCode(['', '', '', '']);
+    setCodeError('');
+    setCodeAttempts(0);
     if (!activeJob) {
       setPhase('going_pickup');
       return;
@@ -64,7 +76,7 @@ export function ActiveDeliveryPage() {
     } else if (activeJob.status === 'MATCHED') {
       setPhase('going_pickup');
     }
-  }, [activeJob?.id, activeJob?.status]);
+  }, [activeJob?.id, activeJob?.status, deliveredJob]);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -111,40 +123,91 @@ export function ActiveDeliveryPage() {
     setCondAckLoading(false);
   };
 
-  const handleConfirmDelivery = async () => {
+  const handleHandoffCodeChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const next = [...handoffCode];
+    next[index] = value.slice(-1);
+    setHandoffCode(next);
+    setCodeError('');
+    if (value && index < 3) handoffInputRefs.current[index + 1]?.focus();
+  };
+
+  const handleHandoffCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !handoffCode[index] && index > 0) {
+      handoffInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleHandoffCodePaste = (e: React.ClipboardEvent) => {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+    if (pasted.length === 4) {
+      setHandoffCode(pasted.split(''));
+      handoffInputRefs.current[3]?.focus();
+      setCodeError('');
+    }
+  };
+
+  const handleSubmitHandoffCode = async () => {
     if (!activeJob) return;
+
+    const entered = handoffCode.join('');
+    if (entered.length < 4) {
+      setCodeError('Enter all 4 digits from the receiver.');
+      return;
+    }
+
+    const expectedCode = activeJob.confirmation_code.padStart(4, '0');
+    const normalizedEntered = entered.padStart(4, '0');
+
+    if (normalizedEntered !== expectedCode) {
+      setCodeAttempts(prev => prev + 1);
+      setCodeError('Incorrect code. Ask the receiver to repeat it. Job stays in transit.');
+      setHandoffCode(['', '', '', '']);
+      handoffInputRefs.current[0]?.focus();
+      console.warn('[ActiveDelivery] Handoff code mismatch', { jobId: activeJob.id });
+      return;
+    }
 
     const transition = assertTransition(activeJob.status, 'DELIVERED');
     if (!transition.ok) {
       console.warn('[ActiveDelivery] Delivery confirm failed:', transition.error);
+      setCodeError(transition.error);
       return;
     }
 
     const delivered_at = new Date().toISOString();
     const jobId = activeJob.id;
+    const completedJob: Job = { ...activeJob, status: 'DELIVERED', delivered_at };
 
+    setCodeError('');
     setDeliverLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
+    await new Promise(r => setTimeout(r, 800));
+    setDeliveredJob(completedJob);
     setPhase('delivered');
     setJobs(prev =>
       prev.map(j =>
-        j.id === jobId ? { ...j, status: 'DELIVERED', delivered_at } : j,
+        j.id === jobId ? completedJob : j,
       ),
     );
-    setActiveJob(null);
     setDeliverLoading(false);
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 2200));
+    setActiveJob(null);
+    setDeliveredJob(null);
     navigate('/home');
   };
 
+  const handoffCodeComplete = handoffCode.join('').length === 4;
+  const isMode2Landmark = displayJob?.handoff_mode === 'mode_2_landmark';
+
   const handleIssue = () => {
-    if (activeJob) {
-      setJobs(prev => prev.map(j => j.id === activeJob.id ? { ...j, status: 'ISSUE_REPORTED' } : j));
+    const job = activeJob ?? deliveredJob;
+    if (job) {
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'ISSUE_REPORTED' } : j));
     }
     setShowIssuePanel(false);
   };
 
-  if (!activeJob) {
+  if (!displayJob) {
     return (
       <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
         <Package size={32} className="text-slate-600 mx-auto mb-3" />
@@ -175,7 +238,7 @@ export function ActiveDeliveryPage() {
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-            ACTIVE DELIVERY · {activeJob.id}
+            ACTIVE DELIVERY · {displayJob.id}
           </div>
           <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
             {phaseLabels[phase].title}
@@ -233,15 +296,15 @@ export function ActiveDeliveryPage() {
                   <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
                   <span className="text-xs text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>PICKUP LOCATION</span>
                 </div>
-                <p className="text-sm text-white">{activeJob.pickup_location}</p>
+                <p className="text-sm text-white">{displayJob.pickup_location}</p>
                 <div className="flex items-center gap-3 mt-2">
                   <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
                     <MapPin size={11} />
-                    {activeJob.distance || '0.8 km'}
+                    {displayJob.distance || '0.8 km'}
                   </div>
                   <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
                     <Clock size={11} />
-                    ~{activeJob.eta || '8 min'}
+                    ~{displayJob.eta || '8 min'}
                   </div>
                 </div>
               </div>
@@ -250,11 +313,11 @@ export function ActiveDeliveryPage() {
                 style={{ background: '#0B1525', border: '1px solid #1E2D45' }}>
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0"
                   style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', fontSize: '0.9rem' }}>
-                  {activeJob.sender_name.charAt(0)}
+                  {displayJob.sender_name.charAt(0)}
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs text-white">{activeJob.sender_name}</div>
-                  <div className="text-[10px]" style={{ color: '#64748B' }}>Sender · {activeJob.sender_hostel}</div>
+                  <div className="text-xs text-white">{displayJob.sender_name}</div>
+                  <div className="text-[10px]" style={{ color: '#64748B' }}>Sender · {displayJob.sender_hostel}</div>
                 </div>
                 <button className="w-8 h-8 rounded-lg flex items-center justify-center"
                   style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
@@ -293,10 +356,10 @@ export function ActiveDeliveryPage() {
               <div className="rounded-lg p-3 mb-4 space-y-2" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
                 <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>ITEM TO PICK UP</div>
                 {[
-                  { label: 'Type', value: activeJob.item_type },
-                  { label: 'Weight', value: activeJob.weight },
-                  { label: 'Risk', value: activeJob.risk },
-                  { label: 'Description', value: activeJob.description || 'None provided' },
+                  { label: 'Type', value: displayJob.item_type },
+                  { label: 'Weight', value: displayJob.weight },
+                  { label: 'Risk', value: displayJob.risk },
+                  { label: 'Description', value: displayJob.description || 'None provided' },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between text-xs">
                     <span style={{ color: '#475569' }}>{label}</span>
@@ -312,7 +375,7 @@ export function ActiveDeliveryPage() {
                 <p className="text-[11px] mb-2" style={{ color: '#64748B' }}>
                   Describe pre-existing damage if any — e.g. &quot;box dented&quot;, &quot;screen cracked&quot;,
                   &quot;seal broken&quot;. Leave blank if the item looks fine.
-                  {activeJob.risk === 'Low' && (
+                  {displayJob.risk === 'Low' && (
                     <span> Not required for Low risk items.</span>
                   )}
                 </p>
@@ -333,7 +396,7 @@ export function ActiveDeliveryPage() {
                     📸 Mandatory: Photograph item at pickup
                   </p>
                   <p className="text-[11px] mb-3" style={{ color: '#92400E' }}>
-                    Risk level is <span className="text-amber-400">{activeJob.risk}</span>. You must capture a
+                    Risk level is <span className="text-amber-400">{displayJob.risk}</span>. You must capture a
                     pickup photo before condition acknowledgement.
                   </p>
                   <button
@@ -356,7 +419,7 @@ export function ActiveDeliveryPage() {
                 </div>
               )}
 
-              {activeJob.risk === 'Low' && (
+              {displayJob.risk === 'Low' && (
                 <div className="rounded-lg p-3 mb-4" style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
                   <p className="text-xs font-medium text-white mb-2">
                     📸 Suggested: Photograph item at pickup
@@ -426,11 +489,11 @@ export function ActiveDeliveryPage() {
                   </div>
                   <div className="space-y-2">
                     <div>
-                      <p className="text-xs text-white">{activeJob.pickup_location}</p>
+                      <p className="text-xs text-white">{displayJob.pickup_location}</p>
                       <p className="text-[10px] text-emerald-400">✓ Picked up</p>
                     </div>
                     <div>
-                      <p className="text-xs text-white">{activeJob.drop_location}</p>
+                      <p className="text-xs text-white">{displayJob.drop_location}</p>
                       <p className="text-[10px]" style={{ color: '#64748B' }}>Heading here</p>
                     </div>
                   </div>
@@ -448,24 +511,88 @@ export function ActiveDeliveryPage() {
                 </span>
               </div>
 
-              <button
-                onClick={handleConfirmDelivery}
-                disabled={deliverLoading}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-3"
-                style={{ background: deliverLoading ? '#0A2010' : 'linear-gradient(135deg, #10B981, #059669)', opacity: deliverLoading ? 0.8 : 1 }}
+              <div
+                className="rounded-lg p-4 mb-4"
+                style={{ background: '#0D1525', border: '1px solid #1E2D45' }}
               >
-                {deliverLoading ? (
-                  <>
-                    <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                    Confirming...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 size={15} />
-                    Confirm Delivery — Job Done
-                  </>
+                <div className="flex items-center gap-2 mb-2">
+                  <KeyRound size={14} className="text-cyan-400" />
+                  <p className="text-xs font-medium text-white">Handoff code</p>
+                </div>
+                <p className="text-[11px] mb-3" style={{ color: '#64748B' }}>
+                  {isMode2Landmark ? (
+                    <>
+                      The receiver meets you at the landmark and tells you the 4-digit code verbally.
+                      Enter it here to complete delivery. They do not need the RushBuddy app.
+                      {displayJob.corridor_landmark ? (
+                        <>
+                          {' '}
+                          Landmark: <span className="text-white">{displayJob.corridor_landmark}</span>.
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      The person receiving the package will tell you the 4-digit code verbally.
+                      Enter it here to complete delivery. They do not need the RushBuddy app.
+                    </>
+                  )}
+                </p>
+                <div className="flex gap-2 justify-center mb-3" onPaste={handleHandoffCodePaste}>
+                  {handoffCode.map((digit, i) => (
+                    <input
+                      key={i}
+                      ref={el => { handoffInputRefs.current[i] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={e => handleHandoffCodeChange(i, e.target.value)}
+                      onKeyDown={e => handleHandoffCodeKeyDown(i, e)}
+                      className="w-11 h-12 text-center rounded-lg text-white text-lg outline-none"
+                      style={{
+                        background: '#060A14',
+                        border: `1px solid ${codeError ? '#3B1111' : digit ? '#06B6D4' : '#1E2D45'}`,
+                        fontFamily: 'JetBrains Mono, monospace',
+                      }}
+                    />
+                  ))}
+                </div>
+                {codeError && (
+                  <div className="text-[11px] mb-2 flex items-start gap-1.5" style={{ color: '#F87171' }}>
+                    <AlertCircle size={11} className="flex-shrink-0 mt-0.5" />
+                    <span>
+                      {codeError}
+                      {codeAttempts > 0 ? ` (attempt ${codeAttempts})` : ''}
+                    </span>
+                  </div>
                 )}
-              </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitHandoffCode}
+                  disabled={deliverLoading || !handoffCodeComplete}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white"
+                  style={{
+                    background: deliverLoading || !handoffCodeComplete
+                      ? '#0A2010'
+                      : 'linear-gradient(135deg, #10B981, #059669)',
+                    opacity: deliverLoading || !handoffCodeComplete ? 0.5 : 1,
+                    cursor: deliverLoading || !handoffCodeComplete ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {deliverLoading ? (
+                    <>
+                      <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={15} />
+                      Verify Code & Complete Delivery
+                    </>
+                  )}
+                </button>
+              </div>
 
               <button
                 onClick={() => setShowIssuePanel(true)}
@@ -485,7 +612,7 @@ export function ActiveDeliveryPage() {
               <div className="mt-4 px-4 py-3 rounded-lg inline-block"
                 style={{ background: '#0A2010', border: '1px solid #1A4020' }}>
                 <div className="text-emerald-400 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.3rem' }}>
-                  +₹{activeJob.agreed_price ?? activeJob.posted_price}
+                  +₹{displayJob.agreed_price ?? displayJob.posted_price}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: '#64748B' }}>Base earnings</div>
               </div>
@@ -500,7 +627,7 @@ export function ActiveDeliveryPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-white font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.2rem' }}>
-              ₹{activeJob.agreed_price ?? activeJob.posted_price}
+              ₹{displayJob.agreed_price ?? displayJob.posted_price}
             </div>
             <div className="text-[10px] mt-0.5" style={{ color: '#64748B' }}>Agreed base fee</div>
           </div>
