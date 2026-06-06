@@ -7,6 +7,14 @@ import {
   generateConfirmationCode,
   resolveHandoffMode,
 } from './jobHelpers';
+import {
+  _devFlags as _failureDevFlags,
+  canMarkSenderUnreachable,
+  canUseSecureDrop,
+  createMockDropoffEvidence,
+  markRunnerPayoutEarnedPatch,
+  requiresOpsHold,
+} from './failureHandling';
 
 /** Fields you may override when synthesizing mock / test jobs. */
 export type SampleJobOverrides = Partial<
@@ -110,8 +118,15 @@ export function createSampleJob(overrides: SampleJobOverrides = {}): Job {
     travel_date,
     photo_url: overrides.photo_url,
     dropoff_photo_url: overrides.dropoff_photo_url,
+    dropoff_geotag: overrides.dropoff_geotag,
+    dropoff_secure_location: overrides.dropoff_secure_location,
     no_answer_at: overrides.no_answer_at,
+    no_answer_contact_attempts: overrides.no_answer_contact_attempts,
+    sender_response_at: overrides.sender_response_at,
+    sender_unreachable_at: overrides.sender_unreachable_at,
+    no_answer_resolution: overrides.no_answer_resolution,
     ops_notified: overrides.ops_notified,
+    runner_payout_status: overrides.runner_payout_status,
     created_at,
     matched_at: overrides.matched_at,
     pickup_confirmed_at: overrides.pickup_confirmed_at,
@@ -135,6 +150,15 @@ export type RushBuddyDevGlobal = {
   addJob: (overrides?: SampleJobOverrides) => Job;
   /** Updates status with transition logging. */
   transitionJob: (jobId: string, to: JobStatus) => void;
+
+  // ── Phase 5 failure-handling helpers ──────────────────────────────────────
+  /** Toggle the 20-minute wall-clock bypass for canMarkSenderUnreachable. */
+  bypassNoAnswerWait: (enabled: boolean) => void;
+  canUseSecureDrop: typeof canUseSecureDrop;
+  requiresOpsHold: typeof requiresOpsHold;
+  canMarkSenderUnreachable: typeof canMarkSenderUnreachable;
+  createMockDropoffEvidence: typeof createMockDropoffEvidence;
+  markRunnerPayoutEarnedPatch: typeof markRunnerPayoutEarnedPatch;
 };
 
 declare global {
@@ -171,11 +195,25 @@ export function attachDevJobDebug(handlers: DevJobDebugHandlers): () => void {
         }),
       );
     },
+
+    // Phase 5 failure-handling helpers
+    bypassNoAnswerWait(enabled) {
+      _failureDevFlags.bypassNoAnswerWait = enabled;
+      console.info(`[RushBuddy dev] bypassNoAnswerWait = ${enabled}`);
+    },
+    canUseSecureDrop,
+    requiresOpsHold,
+    canMarkSenderUnreachable,
+    createMockDropoffEvidence,
+    markRunnerPayoutEarnedPatch,
   };
 
   window.__rushbuddyDev = api;
   console.info(
-    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), logJobTransition(), createSampleJob()',
+    '[RushBuddy dev] Helpers on window.__rushbuddyDev:\n' +
+    '  Job:     addJob(), transitionJob(), logJobTransition(), createSampleJob()\n' +
+    '  Phase 5: bypassNoAnswerWait(bool), canUseSecureDrop(job), requiresOpsHold(job),\n' +
+    '           canMarkSenderUnreachable(job), createMockDropoffEvidence(job, loc), markRunnerPayoutEarnedPatch()',
   );
 
   return () => {

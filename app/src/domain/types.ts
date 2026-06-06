@@ -35,6 +35,24 @@ export interface ScheduledWindow {
 }
 
 /**
+ * How the no-answer-at-dropoff path was resolved.
+ * - `secure_drop`: Low-risk only — item left at a secure nearby spot with photo evidence.
+ * - `hold_for_ops`: Fragile/Valuable — runner holds item and awaits ops instruction.
+ */
+export type NoAnswerResolution = 'secure_drop' | 'hold_for_ops';
+
+/** Runner payout lifecycle for failure/no-answer paths. */
+export type RunnerPayoutStatus = 'pending' | 'earned' | 'withheld';
+
+/** Mock geotagged location attached to an unattended secure drop. */
+export interface DropoffGeotag {
+  lat: number;
+  lng: number;
+  /** Human-readable label for the secure spot (e.g. "MH-B Gate Security Desk"). */
+  label: string;
+}
+
+/**
  * Authenticated RushBuddy user.
  * `gender` is matching-only and must not be surfaced in UI.
  */
@@ -129,9 +147,36 @@ export interface Job {
 
   condition_acknowledged: boolean;
   photo_url?: string;
-  dropoff_photo_url?: string;
+
+  // ── No-answer / failure-handling fields (Phase 5) ──────────────────────────
+
+  /** ISO timestamp when runner first tapped "No Answer at Door". */
   no_answer_at?: string;
+  /** Number of contact attempts made during the 20-minute wait (max = REQUIRED_CONTACT_ATTEMPTS). */
+  no_answer_contact_attempts?: number;
+  /** ISO timestamp when the sender responded during the wait window (clears no-answer path). */
+  sender_response_at?: string;
+  /** ISO timestamp when runner tapped "Sender Unreachable" after exhausting wait + attempts. */
+  sender_unreachable_at?: string;
+  /** Which branch the no-answer path resolved to. Set when runner taps "Sender Unreachable". */
+  no_answer_resolution?: NoAnswerResolution;
+
+  /** URL of mock geotagged photo for a secure-drop (Low risk path only). */
+  dropoff_photo_url?: string;
+  /** Mock geotag attached to the dropoff photo (Low risk path only). */
+  dropoff_geotag?: DropoffGeotag;
+  /** Text description of the secure spot chosen by the runner (Low risk path only). */
+  dropoff_secure_location?: string;
+
+  /** Whether ops has been notified of the no-answer event. */
   ops_notified?: boolean;
+  /**
+   * Runner payout lifecycle for failure paths.
+   * - `pending`: default while job is active / under review.
+   * - `earned`: full agreed fee confirmed (normal delivery or no-answer).
+   * - `withheld`: ops review pending (ghosting / dispute).
+   */
+  runner_payout_status?: RunnerPayoutStatus;
 
   created_at: string;
   matched_at?: string;
