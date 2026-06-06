@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
+import { REQUIRED_CONTACT_ATTEMPTS } from '@/domain/failureHandling';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, Phone,
-  Clock, ArrowRight, Shield, Star, ChevronDown
+  Clock, ArrowRight, Shield, Star, ChevronDown, PhoneOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -25,11 +26,18 @@ export function ActiveDeliveryPage() {
   const [issueText, setIssueText] = useState('');
   const [elapsedSec, setElapsedSec] = useState(0);
   const [photoCaptured, setPhotoCaptured] = useState(false);
+  // true once runner taps "No Answer at Door"; panel stays until resolved or delivery confirmed
+  const [showNoAnswerPanel, setShowNoAnswerPanel] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Sync panel visibility if job already has no_answer_at (e.g. seeded via dev console)
+  useEffect(() => {
+    if (activeJob?.no_answer_at) setShowNoAnswerPanel(true);
+  }, [activeJob?.no_answer_at]);
 
   const elapsed = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
@@ -73,6 +81,29 @@ export function ActiveDeliveryPage() {
     navigate('/home');
   };
 
+  /** Runner taps "No Answer at Door" at the dropoff location.
+   *  Records no_answer_at + resets contact attempts. Status stays IN_TRANSIT. */
+  const handleNoAnswer = () => {
+    if (!activeJob) return;
+    setJobs(prev => prev.map(j => j.id === activeJob.id ? {
+      ...j,
+      no_answer_at: j.no_answer_at ?? new Date().toISOString(),
+      no_answer_contact_attempts: j.no_answer_contact_attempts ?? 0,
+    } : j));
+    setShowNoAnswerPanel(true);
+  };
+
+  /** Increments contact attempt counter up to REQUIRED_CONTACT_ATTEMPTS. */
+  const handleLogContactAttempt = () => {
+    if (!activeJob) return;
+    setJobs(prev => prev.map(j => {
+      if (j.id !== activeJob.id) return j;
+      const current = j.no_answer_contact_attempts ?? 0;
+      if (current >= REQUIRED_CONTACT_ATTEMPTS) return j;
+      return { ...j, no_answer_contact_attempts: current + 1 };
+    }));
+  };
+
   if (!activeJob) {
     return (
       <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -90,7 +121,9 @@ export function ActiveDeliveryPage() {
   const phaseLabels: Record<DeliveryPhase, { title: string; sub: string }> = {
     going_pickup: { title: 'Go to Pickup', sub: 'Head to the sender\'s pickup point' },
     condition_ack: { title: 'Condition Check', sub: 'Acknowledge item condition at pickup' },
-    in_transit: { title: 'In Transit', sub: 'Deliver to the drop location' },
+    in_transit: showNoAnswerPanel
+      ? { title: 'No Answer at Door', sub: 'Sender notified — wait 20 min, make 2 contact attempts' }
+      : { title: 'In Transit', sub: 'Deliver to the drop location' },
     delivered: { title: 'Delivered!', sub: 'Job complete. Earnings updated.' },
   };
 
@@ -287,7 +320,7 @@ export function ActiveDeliveryPage() {
 
           {phase === 'in_transit' && (
             <motion.div key="phase3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              {/* Route */}
+              {/* Route — always visible */}
               <div className="rounded-lg p-3 mb-4 space-y-3" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col items-center gap-1">
@@ -302,49 +335,168 @@ export function ActiveDeliveryPage() {
                     </div>
                     <div>
                       <p className="text-xs text-white">{activeJob.drop_location}</p>
-                      <p className="text-[10px]" style={{ color: '#64748B' }}>Heading here</p>
+                      <p className="text-[10px]" style={{ color: '#64748B' }}>
+                        {showNoAnswerPanel ? 'No answer — waiting' : 'Heading here'}
+                      </p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between px-3 py-2 rounded-lg mb-4"
-                style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
-                <div className="flex items-center gap-2 text-xs text-emerald-400">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  IN TRANSIT
-                </div>
-                <span className="text-xs" style={{ color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
-                  {new Date().toLocaleTimeString()}
-                </span>
-              </div>
+              {!showNoAnswerPanel ? (
+                /* ── Normal happy-path view ─────────────────────────────── */
+                <>
+                  <div className="flex items-center justify-between px-3 py-2 rounded-lg mb-4"
+                    style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
+                    <div className="flex items-center gap-2 text-xs text-emerald-400">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      IN TRANSIT
+                    </div>
+                    <span className="text-xs" style={{ color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
+                      {new Date().toLocaleTimeString()}
+                    </span>
+                  </div>
 
-              <button
-                onClick={handleConfirmDelivery}
-                disabled={deliverLoading}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-3"
-                style={{ background: deliverLoading ? '#0A2010' : 'linear-gradient(135deg, #10B981, #059669)', opacity: deliverLoading ? 0.8 : 1 }}
-              >
-                {deliverLoading ? (
-                  <>
-                    <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                    Confirming...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 size={15} />
-                    Confirm Delivery — Job Done
-                  </>
-                )}
-              </button>
+                  <button
+                    onClick={handleConfirmDelivery}
+                    disabled={deliverLoading}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-3"
+                    style={{ background: deliverLoading ? '#0A2010' : 'linear-gradient(135deg, #10B981, #059669)', opacity: deliverLoading ? 0.8 : 1 }}
+                  >
+                    {deliverLoading ? (
+                      <>
+                        <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                        Confirming...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={15} />
+                        Confirm Delivery — Job Done
+                      </>
+                    )}
+                  </button>
 
-              <button
-                onClick={() => setShowIssuePanel(true)}
-                className="w-full py-2 rounded-lg text-sm border"
-                style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
-              >
-                Report an Issue
-              </button>
+                  {/* No Answer at Door — separate from generic issue reporting */}
+                  <button
+                    onClick={handleNoAnswer}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm border mb-2 transition-all"
+                    style={{ background: '#1A0F05', border: '1px solid #3B2A0A', color: '#F59E0B' }}
+                  >
+                    <PhoneOff size={13} />
+                    No Answer at Door
+                  </button>
+
+                  <button
+                    onClick={() => setShowIssuePanel(true)}
+                    className="w-full py-2 rounded-lg text-sm border"
+                    style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                  >
+                    Report an Issue
+                  </button>
+                </>
+              ) : (
+                /* ── No-answer protocol view ────────────────────────────── */
+                <>
+                  {/* Status banner */}
+                  <div className="rounded-lg p-3 mb-4 flex items-center justify-between"
+                    style={{ background: '#1A1100', border: '1px solid #3B2700' }}>
+                    <div className="flex items-center gap-2 text-xs text-amber-400">
+                      <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      NO ANSWER — WAITING
+                    </div>
+                    <span className="text-xs" style={{ color: '#78350F', fontFamily: 'JetBrains Mono, monospace' }}>
+                      {activeJob.no_answer_at
+                        ? new Date(activeJob.no_answer_at).toLocaleTimeString()
+                        : '—'}
+                    </span>
+                  </div>
+
+                  {/* Protocol instructions card */}
+                  <div className="rounded-lg p-4 mb-4" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
+                    <div className="flex items-start gap-3 mb-4">
+                      <PhoneOff size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-300 mb-1">Sender has been notified</p>
+                        <p className="text-xs" style={{ color: '#92400E' }}>
+                          Wait <strong>20 minutes</strong> at or near the drop location and make{' '}
+                          <strong>2 contact attempts</strong> before marking the sender unreachable.
+                          Your payout is secured regardless of outcome.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Contact attempt tracker */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs" style={{ color: '#92400E' }}>Contact attempts</span>
+                      <div className="flex gap-2">
+                        {Array.from({ length: REQUIRED_CONTACT_ATTEMPTS }).map((_, i) => {
+                          const logged = (activeJob.no_answer_contact_attempts ?? 0) > i;
+                          return (
+                            <div
+                              key={i}
+                              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all"
+                              style={{
+                                background: logged ? '#3B2A0A' : '#1A0F05',
+                                border: `1px solid ${logged ? '#F59E0B' : '#3B2A0A'}`,
+                                color: logged ? '#FCD34D' : '#475569',
+                              }}
+                            >
+                              {logged ? '✓' : i + 1}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleLogContactAttempt}
+                      disabled={(activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all"
+                      style={{
+                        background: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
+                          ? '#1A1505' : '#2A1A05',
+                        border: '1px solid #3B2A0A',
+                        color: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
+                          ? '#475569' : '#F59E0B',
+                        opacity: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS ? 0.6 : 1,
+                      }}
+                    >
+                      <Phone size={13} />
+                      {(activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
+                        ? '2 / 2 attempts logged'
+                        : `Log contact attempt (${activeJob.no_answer_contact_attempts ?? 0} / ${REQUIRED_CONTACT_ATTEMPTS})`}
+                    </button>
+                  </div>
+
+                  {/* Confirm delivery — still available if sender responds and runner delivers */}
+                  <button
+                    onClick={handleConfirmDelivery}
+                    disabled={deliverLoading}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-2"
+                    style={{ background: deliverLoading ? '#0A2010' : 'linear-gradient(135deg, #10B981, #059669)', opacity: deliverLoading ? 0.8 : 1 }}
+                  >
+                    {deliverLoading ? (
+                      <>
+                        <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                        Confirming...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={15} />
+                        Confirm Delivery — Sender Responded
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setShowIssuePanel(true)}
+                    className="w-full py-2 rounded-lg text-sm border"
+                    style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                  >
+                    Report an Issue
+                  </button>
+                </>
+              )}
             </motion.div>
           )}
 
