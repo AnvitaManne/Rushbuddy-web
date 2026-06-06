@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp, type Job } from '../../context/AppContext';
+import { useApp } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, AlertCircle, Phone,
@@ -50,18 +50,15 @@ export function ActiveDeliveryPage() {
   const [handoffCode, setHandoffCode] = useState(['', '', '', '']);
   const [codeError, setCodeError] = useState('');
   const [codeAttempts, setCodeAttempts] = useState(0);
-  const [deliveredJob, setDeliveredJob] = useState<Job | null>(null);
   const handoffInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  /** In-progress job or brief completion snapshot so UI does not flash empty. */
-  const displayJob = deliveredJob ?? activeJob;
+  const displayJob = activeJob;
 
   const requiresPickupPhoto =
     displayJob?.risk === 'Fragile' || displayJob?.risk === 'Valuable';
   const canAcknowledgeCondition = !requiresPickupPhoto || pickupPhotoUrl !== null;
 
   useEffect(() => {
-    if (deliveredJob) return;
     setConditionNote('');
     setPickupPhotoUrl(null);
     setHandoffCode(['', '', '', '']);
@@ -76,7 +73,7 @@ export function ActiveDeliveryPage() {
     } else if (activeJob.status === 'MATCHED') {
       setPhase('going_pickup');
     }
-  }, [activeJob?.id, activeJob?.status, deliveredJob]);
+  }, [activeJob?.id, activeJob?.status]);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -168,39 +165,30 @@ export function ActiveDeliveryPage() {
       return;
     }
 
-    const transition = assertTransition(activeJob.status, 'DELIVERED');
+    const transition = assertTransition(activeJob.status, 'PENDING_RATING');
     if (!transition.ok) {
       console.warn('[ActiveDelivery] Delivery confirm failed:', transition.error);
       setCodeError(transition.error);
       return;
     }
 
-    const delivered_at = new Date().toISOString();
     const jobId = activeJob.id;
-    const completedJob: Job = { ...activeJob, status: 'DELIVERED', delivered_at };
+    const pendingJob: Job = { ...activeJob, status: 'PENDING_RATING' };
 
     setCodeError('');
     setDeliverLoading(true);
     await new Promise(r => setTimeout(r, 800));
-    setDeliveredJob(completedJob);
-    setPhase('delivered');
-    setJobs(prev =>
-      prev.map(j =>
-        j.id === jobId ? completedJob : j,
-      ),
-    );
+    setJobs(prev => prev.map(j => (j.id === jobId ? pendingJob : j)));
     setDeliverLoading(false);
-    await new Promise(r => setTimeout(r, 2200));
     setActiveJob(null);
-    setDeliveredJob(null);
-    navigate('/home');
+    navigate('/rate');
   };
 
   const handoffCodeComplete = handoffCode.join('').length === 4;
   const isMode2Landmark = displayJob?.handoff_mode === 'mode_2_landmark';
 
   const handleIssue = () => {
-    const job = activeJob ?? deliveredJob;
+    const job = activeJob;
     if (job) {
       setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'ISSUE_REPORTED' } : j));
     }

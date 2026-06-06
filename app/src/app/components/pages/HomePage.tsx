@@ -34,9 +34,24 @@ export function HomePage() {
   const { user, setCurrentRole, currentRole, jobs } = useApp();
   const navigate = useNavigate();
 
-  const myJobs = jobs.filter(j => j.sender_id === 'u1' || j.runner_id === 'u1');
+  const userId = user?.id ?? 'u1';
+  const myJobs = jobs.filter(j => j.sender_id === userId || j.runner_id === userId);
   const recentJobs = myJobs.slice(0, 4);
-  const activeJob = jobs.find(j => (j.runner_id === 'u1' || j.sender_id === 'u1') && ['MATCHED', 'IN_TRANSIT'].includes(j.status));
+  /**
+   * Only MATCHED / IN_TRANSIT count as active — DELIVERED and CLOSED must not
+   * keep appearing as an action item on home.
+   */
+  const activeJob = jobs.find(
+    j =>
+      (j.runner_id === userId || j.sender_id === userId) &&
+      ['MATCHED', 'IN_TRANSIT'].includes(j.status),
+  );
+  const isActiveAsRunner = activeJob?.runner_id === userId;
+
+  /** Sender-side job awaiting payment after runner confirmed handoff. */
+  const pendingPaymentJob = jobs.find(
+    j => j.sender_id === userId && j.status === 'PENDING_RATING',
+  );
 
   const displayUser = user || {
     name: 'Aditi Krishnan',
@@ -105,7 +120,7 @@ export function HomePage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate(activeJob.runner_id === 'u1' ? '/runner/active' : '/sender/tracking')}
+          onClick={() => navigate(isActiveAsRunner ? '/runner/active' : '/sender/tracking')}
           className="rounded-xl p-4 cursor-pointer transition-all hover:brightness-110"
           style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
         >
@@ -125,6 +140,39 @@ export function HomePage() {
               </p>
             </div>
             <ChevronRight size={16} className="text-emerald-400 flex-shrink-0" />
+          </div>
+        </motion.div>
+      )}
+
+      {/* Payment pending banner — sender owes payment after runner confirmed handoff */}
+      {pendingPaymentJob && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => navigate('/rate')}
+          className="rounded-xl p-4 cursor-pointer transition-all hover:brightness-110"
+          style={{ background: '#1A1005', border: '1px solid #D97706' }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: '#2D1A00', border: '1px solid #B45309' }}
+            >
+              <AlertCircle size={18} className="text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-xs text-amber-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>PAYMENT PENDING</span>
+              </div>
+              <p className="text-sm text-white truncate">
+                {pendingPaymentJob.pickup_location} → {pendingPaymentJob.drop_location}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: '#92400E' }}>
+                Tap to pay ₹{pendingPaymentJob.agreed_price ?? pendingPaymentJob.posted_price} and rate your runner
+              </p>
+            </div>
+            <ChevronRight size={16} className="text-amber-400 flex-shrink-0" />
           </div>
         </motion.div>
       )}
@@ -286,6 +334,15 @@ export function HomePage() {
             {recentJobs.map((job, i) => (
               <div
                 key={job.id}
+                onClick={() => {
+                  if (job.runner_id === userId && ['MATCHED', 'IN_TRANSIT'].includes(job.status)) {
+                    navigate('/runner/active');
+                  } else if (job.sender_id === userId && job.status === 'PENDING_RATING') {
+                    navigate('/rate');
+                  } else if (job.sender_id === userId) {
+                    navigate('/sender/tracking');
+                  }
+                }}
                 className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer"
                 style={{ borderBottom: i < recentJobs.length - 1 ? '1px solid #111E35' : 'none' }}
               >
@@ -305,7 +362,7 @@ export function HomePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={job.status} />
-                    {job.runner_id === 'u1' ? (
+                    {job.runner_id === userId ? (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Runner</span>
                     ) : (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Sender</span>
@@ -317,9 +374,6 @@ export function HomePage() {
                   <div className="text-sm font-medium text-white" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
                     ₹{job.agreed_price ?? job.posted_price}
                   </div>
-                  {job.tip_amount && job.tip_amount > 0 ? (
-                    <div className="text-[10px] text-amber-400">+₹{job.tip_amount} tip</div>
-                  ) : null}
                 </div>
               </div>
             ))}

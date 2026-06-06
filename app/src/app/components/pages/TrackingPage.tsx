@@ -34,7 +34,7 @@ export function TrackingPage() {
       const j = jobs.find(
         j =>
           j.sender_id === senderId &&
-          ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status),
+          ['OPEN', 'MATCHED', 'IN_TRANSIT', 'PENDING_RATING'].includes(j.status),
       );
       if (j) setLocalJobId(j.id);
       else {
@@ -49,9 +49,29 @@ export function TrackingPage() {
     }
   }, [ctxActiveJob, jobs, senderId]);
 
-  const job =
-    jobs.find(j => j.id === localJobId && j.sender_id === senderId) ||
-    jobs.find(j => j.sender_id === senderId);
+  /**
+   * Priority: pinned localJobId → most recent active → most recently created.
+   * Never filters by status so DELIVERED jobs remain visible for rating.
+   */
+  const job = (() => {
+    const senderJobs = jobs.filter(j => j.sender_id === senderId);
+    if (!senderJobs.length) return undefined;
+
+    if (localJobId) {
+      const pinned = senderJobs.find(j => j.id === localJobId);
+      if (pinned) return pinned;
+    }
+
+    const active = senderJobs.find(j =>
+      ['OPEN', 'MATCHED', 'IN_TRANSIT', 'PENDING_RATING'].includes(j.status),
+    );
+    if (active) return active;
+
+    return [...senderJobs].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )[0];
+  })();
 
   const isMode2Landmark = job?.handoff_mode === 'mode_2_landmark';
 
@@ -212,12 +232,21 @@ export function TrackingPage() {
                 </p>
               </>
             )}
-            {displayStep === 3 && (
+            {displayStep === 3 && job?.status === 'PENDING_RATING' && (
+              <>
+                <div className="text-3xl mb-2">🔒</div>
+                <p className="text-white font-medium">Code Verified — Payment Pending</p>
+                <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+                  Runner confirmed handoff. Pay and rate to mark job delivered.
+                </p>
+              </>
+            )}
+            {displayStep === 3 && job?.status !== 'PENDING_RATING' && (
               <>
                 <div className="text-3xl mb-2">✅</div>
                 <p className="text-white font-medium">Delivered!</p>
                 <p className="text-sm mt-1" style={{ color: '#64748B' }}>
-                  Please rate your Buddy and confirm payment
+                  Payment received · Rated & closed
                 </p>
               </>
             )}
@@ -226,7 +255,7 @@ export function TrackingPage() {
       </div>
 
       {/* Sender-only handoff code — receiver uses app-less verbal handoff */}
-      {job.confirmation_code && job.status !== 'CLOSED' && (
+      {job.confirmation_code && !['CLOSED', 'DELIVERED', 'PENDING_RATING'].includes(job.status) && (
         <div
           className="rounded-xl p-4"
           style={{ background: '#0D1525', border: '1px solid #2D3A5C' }}
@@ -380,17 +409,19 @@ export function TrackingPage() {
         </button>
       )}
 
-      {displayStep === 3 && (
+      {displayStep === 3 && job?.status === 'PENDING_RATING' && (
         <motion.button
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={() => navigate('/rate')}
-          className="w-full py-3 rounded-lg text-sm font-semibold text-white"
-          style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
+          className="w-full py-3.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
+          style={{ background: 'linear-gradient(135deg, #F59E0B, #EF4444)' }}
         >
-          Rate & Confirm Payment →
+          <span>Pay & Rate Now</span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>→</span>
         </motion.button>
       )}
+
     </div>
   );
 }
