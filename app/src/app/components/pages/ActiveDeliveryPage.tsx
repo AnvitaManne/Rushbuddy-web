@@ -34,10 +34,15 @@ export function ActiveDeliveryPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Sync panel visibility if job already has no_answer_at (e.g. seeded via dev console)
+  // Open no-answer panel if job has no_answer_at; close it if sender already responded.
+  // Handles page refreshes and dev-console job seeding.
   useEffect(() => {
-    if (activeJob?.no_answer_at) setShowNoAnswerPanel(true);
-  }, [activeJob?.no_answer_at]);
+    if (activeJob?.sender_response_at) {
+      setShowNoAnswerPanel(false);
+    } else if (activeJob?.no_answer_at) {
+      setShowNoAnswerPanel(true);
+    }
+  }, [activeJob?.no_answer_at, activeJob?.sender_response_at]);
 
   const elapsed = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
@@ -82,13 +87,14 @@ export function ActiveDeliveryPage() {
   };
 
   /** Runner taps "No Answer at Door" at the dropoff location.
-   *  Records no_answer_at + resets contact attempts. Status stays IN_TRANSIT. */
+   *  Always starts fresh: resets contact attempts to 0 and stamps a new no_answer_at.
+   *  This button is only reachable when !showNoAnswerPanel, so it is always a fresh start. */
   const handleNoAnswer = () => {
     if (!activeJob) return;
     setJobs(prev => prev.map(j => j.id === activeJob.id ? {
       ...j,
-      no_answer_at: j.no_answer_at ?? new Date().toISOString(),
-      no_answer_contact_attempts: j.no_answer_contact_attempts ?? 0,
+      no_answer_at: new Date().toISOString(),
+      no_answer_contact_attempts: 0,
     } : j));
     setShowNoAnswerPanel(true);
   };
@@ -102,6 +108,21 @@ export function ActiveDeliveryPage() {
       if (current >= REQUIRED_CONTACT_ATTEMPTS) return j;
       return { ...j, no_answer_contact_attempts: current + 1 };
     }));
+  };
+
+  /**
+   * Sender responded during the 20-minute wait window.
+   * Records sender_response_at, collapses the no-answer panel, and
+   * returns the runner to the normal in-transit delivery view.
+   * Job status stays IN_TRANSIT; runner proceeds to Confirm Delivery normally.
+   */
+  const handleSenderResponded = () => {
+    if (!activeJob) return;
+    setJobs(prev => prev.map(j => j.id === activeJob.id ? {
+      ...j,
+      sender_response_at: new Date().toISOString(),
+    } : j));
+    setShowNoAnswerPanel(false);
   };
 
   if (!activeJob) {
@@ -468,24 +489,14 @@ export function ActiveDeliveryPage() {
                     </button>
                   </div>
 
-                  {/* Confirm delivery — still available if sender responds and runner delivers */}
+                  {/* Sender responded: record timestamp, collapse panel, resume normal delivery */}
                   <button
-                    onClick={handleConfirmDelivery}
-                    disabled={deliverLoading}
+                    onClick={handleSenderResponded}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-2"
-                    style={{ background: deliverLoading ? '#0A2010' : 'linear-gradient(135deg, #10B981, #059669)', opacity: deliverLoading ? 0.8 : 1 }}
+                    style={{ background: 'linear-gradient(135deg, #06B6D4, #0EA5E9)' }}
                   >
-                    {deliverLoading ? (
-                      <>
-                        <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                        Confirming...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={15} />
-                        Confirm Delivery — Sender Responded
-                      </>
-                    )}
+                    <CheckCircle2 size={15} />
+                    Sender Responded — Continue Delivery
                   </button>
 
                   <button
