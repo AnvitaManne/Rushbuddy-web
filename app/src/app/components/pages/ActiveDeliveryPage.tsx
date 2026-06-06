@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
+import { assertTransition } from '@/domain/jobTransitions';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, Phone,
   Clock, ArrowRight, Shield, Star, ChevronDown
@@ -60,9 +61,16 @@ export function ActiveDeliveryPage() {
 
   const handleIssue = () => {
     if (activeJob) {
+      const result = assertTransition(activeJob.status, 'ISSUE_REPORTED');
+      if (!result.ok) {
+        console.error('[RushBuddy] Invalid transition in handleIssue:', result.error);
+        setShowIssuePanel(false);
+        return;
+      }
       setJobs(prev => prev.map(j => j.id === activeJob.id ? { ...j, status: 'ISSUE_REPORTED' } : j));
     }
     setShowIssuePanel(false);
+    navigate('/home');
   };
 
   if (!activeJob) {

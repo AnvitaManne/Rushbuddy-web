@@ -49,21 +49,38 @@ export function TrackingPage() {
   const simulateProgress = async () => {
     if (!job || simulating) return;
     setSimulating(true);
-    const nextStatuses = ['MATCHED', 'IN_TRANSIT', 'DELIVERED'] as const;
-    for (let i = 0; i < nextStatuses.length; i++) {
-      const ns = nextStatuses[i];
-      const idx = TIMELINE_STEPS.findIndex(s => s.key === ns);
-      await new Promise(r => setTimeout(r, 1500));
-      setSimStep(idx);
+
+    // Each entry: the status to set and the timeline display index.
+    // PENDING_RATING reuses simIdx 3 (same "Delivered" step) so the UI
+    // doesn't flicker, then we navigate to /rate with the job in the
+    // correct state for RatingPage (PENDING_RATING → CLOSED/DISPUTED).
+    const stages: Array<{ status: 'MATCHED' | 'IN_TRANSIT' | 'DELIVERED' | 'PENDING_RATING'; simIdx: number }> = [
+      { status: 'MATCHED',        simIdx: 1 },
+      { status: 'IN_TRANSIT',     simIdx: 2 },
+      { status: 'DELIVERED',      simIdx: 3 },
+      { status: 'PENDING_RATING', simIdx: 3 },
+    ];
+
+    for (const { status, simIdx } of stages) {
+      // PENDING_RATING follows DELIVERED immediately (no extra visual pause).
+      if (status !== 'PENDING_RATING') {
+        await new Promise<void>(r => setTimeout(r, 1500));
+      }
+      setSimStep(simIdx);
       setJobs(prev => prev.map(j => j.id === job.id ? {
-        ...j, status: ns,
-        runner_name: ns === 'MATCHED' ? 'Karthik R' : j.runner_name,
-        runner_rating: ns === 'MATCHED' ? 4.9 : j.runner_rating,
-        matched_at: ns === 'MATCHED' ? new Date().toISOString() : j.matched_at,
-        pickup_confirmed_at: ns === 'IN_TRANSIT' ? new Date().toISOString() : j.pickup_confirmed_at,
-        delivered_at: ns === 'DELIVERED' ? new Date().toISOString() : j.delivered_at,
+        ...j,
+        status,
+        runner_name:         status === 'MATCHED'    ? 'Karthik R'              : j.runner_name,
+        runner_rating:       status === 'MATCHED'    ? 4.9                      : j.runner_rating,
+        matched_at:          status === 'MATCHED'    ? new Date().toISOString() : j.matched_at,
+        pickup_confirmed_at: status === 'IN_TRANSIT' ? new Date().toISOString() : j.pickup_confirmed_at,
+        delivered_at:        status === 'DELIVERED'  ? new Date().toISOString() : j.delivered_at,
       } : j));
-      if (ns === 'DELIVERED') { await new Promise(r => setTimeout(r, 800)); navigate('/rate'); break; }
+      if (status === 'PENDING_RATING') {
+        await new Promise<void>(r => setTimeout(r, 800));
+        navigate('/rate');
+        break;
+      }
     }
     setSimulating(false);
   };
