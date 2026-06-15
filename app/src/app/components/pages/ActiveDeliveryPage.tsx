@@ -2,10 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
-import { REQUIRED_CONTACT_ATTEMPTS } from '@/domain/failureHandling';
+import {
+  REQUIRED_CONTACT_ATTEMPTS,
+  canMarkSenderUnreachable,
+  canUseSecureDrop,
+  requiresOpsHold,
+  _devFlags as _failureDevFlags,
+} from '@/domain/failureHandling';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, Phone,
-  Clock, ArrowRight, Shield, Star, ChevronDown, PhoneOff
+  Clock, ArrowRight, Shield, Star, ChevronDown, PhoneOff, UserX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -28,6 +34,8 @@ export function ActiveDeliveryPage() {
   const [photoCaptured, setPhotoCaptured] = useState(false);
   // true once runner taps "No Answer at Door"; panel stays until resolved or delivery confirmed
   const [showNoAnswerPanel, setShowNoAnswerPanel] = useState(false);
+  // dev-only: simulates the 20-minute wait having elapsed for the current no-answer session
+  const [waitBypassed, setWaitBypassed] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -50,9 +58,21 @@ export function ActiveDeliveryPage() {
     setCondAckLoading(true);
     await new Promise(r => setTimeout(r, 1000));
     setPhase('in_transit');
+    // Reset all no-answer UI state — this is a fresh transit leg.
+    setShowNoAnswerPanel(false);
+    setWaitBypassed(false);
+    _failureDevFlags.bypassNoAnswerWait = false;
     if (activeJob) {
       setJobs(prev => prev.map(j => j.id === activeJob.id ? {
-        ...j, status: 'IN_TRANSIT', pickup_confirmed_at: new Date().toISOString()
+        ...j,
+        status: 'IN_TRANSIT',
+        pickup_confirmed_at: new Date().toISOString(),
+        // Clear stale no-answer fields from any prior delivery attempt on this job.
+        no_answer_at: undefined,
+        no_answer_contact_attempts: undefined,
+        sender_response_at: undefined,
+        sender_unreachable_at: undefined,
+        no_answer_resolution: undefined,
       } : j));
     }
     setCondAckLoading(false);
@@ -91,10 +111,15 @@ export function ActiveDeliveryPage() {
    *  This button is only reachable when !showNoAnswerPanel, so it is always a fresh start. */
   const handleNoAnswer = () => {
     if (!activeJob) return;
+    setWaitBypassed(false);
+    _failureDevFlags.bypassNoAnswerWait = false;
     setJobs(prev => prev.map(j => j.id === activeJob.id ? {
       ...j,
       no_answer_at: new Date().toISOString(),
       no_answer_contact_attempts: 0,
+      // clear any stale unreachable / resolution state from a prior session
+      sender_unreachable_at: undefined,
+      no_answer_resolution: undefined,
     } : j));
     setShowNoAnswerPanel(true);
   };
@@ -125,6 +150,19 @@ export function ActiveDeliveryPage() {
     setShowNoAnswerPanel(false);
   };
 
+  /**
+   * Runner taps "Sender Unreachable" after 20 min + 2 attempts with no response.
+   * Records sender_unreachable_at. Status stays IN_TRANSIT.
+   * Risk-branch resolution UI (secure drop / hold for ops) is revealed next.
+   */
+  const handleSenderUnreachable = () => {
+    if (!activeJob) return;
+    setJobs(prev => prev.map(j => j.id === activeJob.id ? {
+      ...j,
+      sender_unreachable_at: new Date().toISOString(),
+    } : j));
+  };
+
   if (!activeJob) {
     return (
       <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -139,11 +177,15 @@ export function ActiveDeliveryPage() {
     );
   }
 
+  const isSenderUnreachable = !!activeJob?.sender_unreachable_at;
+
   const phaseLabels: Record<DeliveryPhase, { title: string; sub: string }> = {
     going_pickup: { title: 'Go to Pickup', sub: 'Head to the sender\'s pickup point' },
     condition_ack: { title: 'Condition Check', sub: 'Acknowledge item condition at pickup' },
     in_transit: showNoAnswerPanel
-      ? { title: 'No Answer at Door', sub: 'Sender notified — wait 20 min, make 2 contact attempts' }
+      ? isSenderUnreachable
+        ? { title: 'Sender Unreachable', sub: 'Select resolution — your payout is secured' }
+        : { title: 'No Answer at Door', sub: 'Sender notified — wait 20 min, make 2 contact attempts' }
       : { title: 'In Transit', sub: 'Deliver to the drop location' },
     delivered: { title: 'Delivered!', sub: 'Job complete. Earnings updated.' },
   };
@@ -418,94 +460,221 @@ export function ActiveDeliveryPage() {
               ) : (
                 /* ── No-answer protocol view ────────────────────────────── */
                 <>
-                  {/* Status banner */}
-                  <div className="rounded-lg p-3 mb-4 flex items-center justify-between"
-                    style={{ background: '#1A1100', border: '1px solid #3B2700' }}>
-                    <div className="flex items-center gap-2 text-xs text-amber-400">
-                      <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                      NO ANSWER — WAITING
-                    </div>
-                    <span className="text-xs" style={{ color: '#78350F', fontFamily: 'JetBrains Mono, monospace' }}>
-                      {activeJob.no_answer_at
-                        ? new Date(activeJob.no_answer_at).toLocaleTimeString()
-                        : '—'}
-                    </span>
-                  </div>
-
-                  {/* Protocol instructions card */}
-                  <div className="rounded-lg p-4 mb-4" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
-                    <div className="flex items-start gap-3 mb-4">
-                      <PhoneOff size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-amber-300 mb-1">Sender has been notified</p>
-                        <p className="text-xs" style={{ color: '#92400E' }}>
-                          Wait <strong>20 minutes</strong> at or near the drop location and make{' '}
-                          <strong>2 contact attempts</strong> before marking the sender unreachable.
-                          Your payout is secured regardless of outcome.
-                        </p>
+                  {!isSenderUnreachable ? (
+                    /* ── Waiting / contact-attempts sub-view ─────────────── */
+                    <>
+                      {/* Status banner */}
+                      <div className="rounded-lg p-3 mb-4 flex items-center justify-between"
+                        style={{ background: '#1A1100', border: '1px solid #3B2700' }}>
+                        <div className="flex items-center gap-2 text-xs text-amber-400">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          NO ANSWER — WAITING
+                        </div>
+                        <span className="text-xs" style={{ color: '#78350F', fontFamily: 'JetBrains Mono, monospace' }}>
+                          {activeJob.no_answer_at
+                            ? new Date(activeJob.no_answer_at).toLocaleTimeString()
+                            : '—'}
+                        </span>
                       </div>
-                    </div>
 
-                    {/* Contact attempt tracker */}
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs" style={{ color: '#92400E' }}>Contact attempts</span>
-                      <div className="flex gap-2">
-                        {Array.from({ length: REQUIRED_CONTACT_ATTEMPTS }).map((_, i) => {
-                          const logged = (activeJob.no_answer_contact_attempts ?? 0) > i;
-                          return (
-                            <div
-                              key={i}
-                              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all"
+                      {/* Protocol instructions + contact attempt tracker */}
+                      <div className="rounded-lg p-4 mb-3" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
+                        <div className="flex items-start gap-3 mb-4">
+                          <PhoneOff size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-amber-300 mb-1">Sender has been notified</p>
+                            <p className="text-xs" style={{ color: '#92400E' }}>
+                              Wait <strong>20 minutes</strong> at or near the drop location and make{' '}
+                              <strong>2 contact attempts</strong> before marking the sender unreachable.
+                              Your payout is secured regardless of outcome.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Contact attempt tracker */}
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs" style={{ color: '#92400E' }}>Contact attempts</span>
+                          <div className="flex gap-2">
+                            {Array.from({ length: REQUIRED_CONTACT_ATTEMPTS }).map((_, i) => {
+                              const logged = (activeJob.no_answer_contact_attempts ?? 0) > i;
+                              return (
+                                <div
+                                  key={i}
+                                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all"
+                                  style={{
+                                    background: logged ? '#3B2A0A' : '#1A0F05',
+                                    border: `1px solid ${logged ? '#F59E0B' : '#3B2A0A'}`,
+                                    color: logged ? '#FCD34D' : '#475569',
+                                  }}
+                                >
+                                  {logged ? '✓' : i + 1}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={handleLogContactAttempt}
+                          disabled={(activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all"
+                          style={{
+                            background: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
+                              ? '#1A1505' : '#2A1A05',
+                            border: '1px solid #3B2A0A',
+                            color: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
+                              ? '#475569' : '#F59E0B',
+                            opacity: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS ? 0.6 : 1,
+                          }}
+                        >
+                          <Phone size={13} />
+                          {(activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
+                            ? '2 / 2 attempts logged'
+                            : `Log contact attempt (${activeJob.no_answer_contact_attempts ?? 0} / ${REQUIRED_CONTACT_ATTEMPTS})`}
+                        </button>
+                      </div>
+
+                      {/* Dev bypass: simulate 20-min elapsed */}
+                      {!waitBypassed && (
+                        <button
+                          onClick={() => setWaitBypassed(true)}
+                          className="w-full py-2 rounded-lg text-xs border mb-3 transition-all"
+                          style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#475569' }}
+                        >
+                          Dev: Simulate 20 min elapsed
+                        </button>
+                      )}
+                      {waitBypassed && (
+                        <div className="rounded-lg px-3 py-2 mb-3 text-xs text-center"
+                          style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#475569' }}>
+                          20-min wait simulated ✓
+                        </div>
+                      )}
+
+                      {/* Sender Unreachable — gated */}
+                      {(() => {
+                        const canUnreachable = canMarkSenderUnreachable(activeJob, new Date(), { bypassWait: waitBypassed });
+                        const hint = !activeJob.no_answer_at
+                          ? 'Tap "No Answer at Door" first'
+                          : (activeJob.no_answer_contact_attempts ?? 0) < REQUIRED_CONTACT_ATTEMPTS
+                            ? `Log ${REQUIRED_CONTACT_ATTEMPTS} contact attempts first`
+                            : !canUnreachable
+                              ? 'Use "Simulate 20 min elapsed" to unlock in dev'
+                              : null;
+                        return (
+                          <div className="mb-2">
+                            <button
+                              onClick={handleSenderUnreachable}
+                              disabled={!canUnreachable}
+                              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all"
                               style={{
-                                background: logged ? '#3B2A0A' : '#1A0F05',
-                                border: `1px solid ${logged ? '#F59E0B' : '#3B2A0A'}`,
-                                color: logged ? '#FCD34D' : '#475569',
+                                background: canUnreachable ? '#2D0A0A' : '#1A1120',
+                                border: `1px solid ${canUnreachable ? '#7F1D1D' : '#1E2D45'}`,
+                                color: canUnreachable ? '#FCA5A5' : '#475569',
+                                opacity: canUnreachable ? 1 : 0.7,
                               }}
                             >
-                              {logged ? '✓' : i + 1}
-                            </div>
-                          );
-                        })}
+                              <UserX size={14} />
+                              Sender Unreachable
+                            </button>
+                            {hint && (
+                              <p className="text-[10px] text-center mt-1" style={{ color: '#475569' }}>{hint}</p>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Sender responded: collapse panel, resume delivery */}
+                      <button
+                        onClick={handleSenderResponded}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-2"
+                        style={{ background: 'linear-gradient(135deg, #06B6D4, #0EA5E9)' }}
+                      >
+                        <CheckCircle2 size={15} />
+                        Sender Responded — Continue Delivery
+                      </button>
+
+                      <button
+                        onClick={() => setShowIssuePanel(true)}
+                        className="w-full py-2 rounded-lg text-sm border"
+                        style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                      >
+                        Report an Issue
+                      </button>
+                    </>
+                  ) : (
+                    /* ── Sender unreachable — risk-branch resolution view ─── */
+                    <>
+                      {/* Status banner */}
+                      <div className="rounded-lg p-3 mb-4 flex items-center justify-between"
+                        style={{ background: '#2D0A0A', border: '1px solid #7F1D1D' }}>
+                        <div className="flex items-center gap-2 text-xs text-red-400">
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                          SENDER UNREACHABLE
+                        </div>
+                        <span className="text-xs" style={{ color: '#7F1D1D', fontFamily: 'JetBrains Mono, monospace' }}>
+                          {activeJob.sender_unreachable_at
+                            ? new Date(activeJob.sender_unreachable_at).toLocaleTimeString()
+                            : '—'}
+                        </span>
                       </div>
-                    </div>
 
-                    <button
-                      onClick={handleLogContactAttempt}
-                      disabled={(activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all"
-                      style={{
-                        background: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
-                          ? '#1A1505' : '#2A1A05',
-                        border: '1px solid #3B2A0A',
-                        color: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
-                          ? '#475569' : '#F59E0B',
-                        opacity: (activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS ? 0.6 : 1,
-                      }}
-                    >
-                      <Phone size={13} />
-                      {(activeJob.no_answer_contact_attempts ?? 0) >= REQUIRED_CONTACT_ATTEMPTS
-                        ? '2 / 2 attempts logged'
-                        : `Log contact attempt (${activeJob.no_answer_contact_attempts ?? 0} / ${REQUIRED_CONTACT_ATTEMPTS})`}
-                    </button>
-                  </div>
+                      {/* Risk-branch placeholder */}
+                      {canUseSecureDrop(activeJob) ? (
+                        /* Low risk → secure drop path */
+                        <div className="rounded-lg p-4 mb-3" style={{ background: '#0A1A10', border: '1px solid #1A4020' }}>
+                          <div className="flex items-start gap-3 mb-3">
+                            <Shield size={16} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-emerald-300 mb-1">Secure Drop Available</p>
+                              <p className="text-xs" style={{ color: '#064E3B' }}>
+                                Risk is <strong>Low</strong>. You may leave the item at the nearest secure spot —
+                                hostel gate, shop counter, or security desk. You will need to photograph it before leaving.
+                                Your payout is confirmed.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            disabled
+                            className="w-full py-2.5 rounded-lg text-sm font-medium"
+                            style={{ background: '#0A2010', border: '1px solid #1A4020', color: '#475569', opacity: 0.6 }}
+                          >
+                            Confirm Secure Drop — coming in next step
+                          </button>
+                        </div>
+                      ) : (
+                        /* Fragile / Valuable → hold for ops */
+                        <div className="rounded-lg p-4 mb-3" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
+                          <div className="flex items-start gap-3 mb-3">
+                            <AlertTriangle size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-amber-300 mb-1">Hold Item — No Unattended Drop</p>
+                              <p className="text-xs" style={{ color: '#92400E' }}>
+                                Risk is <strong>{activeJob.risk}</strong>. You must keep the item with you.
+                                Ops will contact you with return or alternative delivery instructions.
+                                Your payout is confirmed.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            disabled
+                            className="w-full py-2.5 rounded-lg text-sm font-medium"
+                            style={{ background: '#1A1505', border: '1px solid #3B2A0A', color: '#475569', opacity: 0.6 }}
+                          >
+                            Confirm Holding Item — coming in next step
+                          </button>
+                        </div>
+                      )}
 
-                  {/* Sender responded: record timestamp, collapse panel, resume normal delivery */}
-                  <button
-                    onClick={handleSenderResponded}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-2"
-                    style={{ background: 'linear-gradient(135deg, #06B6D4, #0EA5E9)' }}
-                  >
-                    <CheckCircle2 size={15} />
-                    Sender Responded — Continue Delivery
-                  </button>
-
-                  <button
-                    onClick={() => setShowIssuePanel(true)}
-                    className="w-full py-2 rounded-lg text-sm border"
-                    style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
-                  >
-                    Report an Issue
-                  </button>
+                      <button
+                        onClick={() => setShowIssuePanel(true)}
+                        className="w-full py-2 rounded-lg text-sm border"
+                        style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                      >
+                        Report an Issue
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </motion.div>

@@ -10,6 +10,7 @@ export function AuthPage() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [hostel, setHostel] = useState('');
+  const [gender, setGender] = useState<'Male' | 'Female' | 'Prefer not to say' | ''>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -23,6 +24,7 @@ export function AuthPage() {
     }
     if (!name.trim()) { setError('Full name is required.'); return; }
     if (!hostel.trim()) { setError('Hostel block is required.'); return; }
+    if (!gender) { setError('Please select your gender.'); return; }
 
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
@@ -201,6 +203,33 @@ export function AuthPage() {
                   onBlur={e => { e.target.style.borderColor = '#1E2D45'; e.target.style.boxShadow = 'none'; }}
                   required
                 />
+              </div>
+
+              {/* Gender */}
+              <div>
+                <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                  Gender
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Male', 'Female', 'Prefer not to say'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setGender(opt)}
+                      className="py-2 px-2 rounded-lg text-xs transition-all"
+                      style={{
+                        background: gender === opt ? '#061620' : '#060A14',
+                        border: `1px solid ${gender === opt ? '#06B6D4' : '#1E2D45'}`,
+                        color: gender === opt ? '#22D3EE' : '#64748B',
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] mt-1.5" style={{ color: '#334155' }}>
+                  Used for hostel-matching only — never shown publicly. Immutable after verification.
+                </p>
               </div>
 
               {/* Error */}

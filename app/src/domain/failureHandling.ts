@@ -64,18 +64,22 @@ export function requiresOpsHold(job: Pick<Job, 'risk'>): boolean {
  *  1. `no_answer_at` is set (runner already tapped "No Answer at Door").
  *  2. `no_answer_contact_attempts` has reached REQUIRED_CONTACT_ATTEMPTS (2).
  *  3. At least NO_ANSWER_WAIT_MINUTES (20) have elapsed since `no_answer_at`
- *     — OR `__devBypassNoAnswerWait` is enabled for manual testing.
+ *     — OR the 20-minute check is bypassed via `opts.bypassWait` (inline UI bypass)
+ *     — OR `_devFlags.bypassNoAnswerWait` is true (global console bypass).
  *
- * @param job  Job fields needed for the check (subset of Job).
- * @param now  Current time (defaults to `new Date()`). Pass an explicit value in tests.
+ * @param job        Job fields needed for the check (subset of Job).
+ * @param now        Current time (defaults to `new Date()`). Pass an explicit value in tests.
+ * @param opts.bypassWait  When true, skips the 20-minute wall-clock check.
+ *                         Use for the "Simulate 20 min elapsed" dev button in the UI.
  */
 export function canMarkSenderUnreachable(
   job: Pick<Job, 'no_answer_at' | 'no_answer_contact_attempts'>,
   now: Date = new Date(),
+  opts?: { bypassWait?: boolean },
 ): boolean {
   if (!job.no_answer_at) return false;
   if ((job.no_answer_contact_attempts ?? 0) < REQUIRED_CONTACT_ATTEMPTS) return false;
-  if (_devFlags.bypassNoAnswerWait) return true;
+  if (_devFlags.bypassNoAnswerWait || opts?.bypassWait) return true;
   const elapsedMs = now.getTime() - new Date(job.no_answer_at).getTime();
   return elapsedMs >= NO_ANSWER_WAIT_MINUTES * 60 * 1000;
 }
