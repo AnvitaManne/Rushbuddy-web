@@ -7,11 +7,13 @@ import {
   canMarkSenderUnreachable,
   canUseSecureDrop,
   requiresOpsHold,
+  createMockDropoffEvidence,
+  markRunnerPayoutEarnedPatch,
   _devFlags as _failureDevFlags,
 } from '@/domain/failureHandling';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, Phone,
-  Clock, ArrowRight, Shield, Star, ChevronDown, PhoneOff, UserX
+  Clock, ArrowRight, Shield, Star, ChevronDown, PhoneOff, UserX, Camera,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -36,6 +38,11 @@ export function ActiveDeliveryPage() {
   const [showNoAnswerPanel, setShowNoAnswerPanel] = useState(false);
   // dev-only: simulates the 20-minute wait having elapsed for the current no-answer session
   const [waitBypassed, setWaitBypassed] = useState(false);
+  // secure drop sub-flow state (Low-risk branch)
+  const [secureDropLocation, setSecureDropLocation] = useState('');
+  const [secureDropCustom, setSecureDropCustom] = useState('');
+  const [secureDropPhotoCaptured, setSecureDropPhotoCaptured] = useState(false);
+  const [secureDropLoading, setSecureDropLoading] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -62,6 +69,10 @@ export function ActiveDeliveryPage() {
     setShowNoAnswerPanel(false);
     setWaitBypassed(false);
     _failureDevFlags.bypassNoAnswerWait = false;
+    setSecureDropLocation('');
+    setSecureDropCustom('');
+    setSecureDropPhotoCaptured(false);
+    setSecureDropLoading(false);
     if (activeJob) {
       setJobs(prev => prev.map(j => j.id === activeJob.id ? {
         ...j,
@@ -113,6 +124,10 @@ export function ActiveDeliveryPage() {
     if (!activeJob) return;
     setWaitBypassed(false);
     _failureDevFlags.bypassNoAnswerWait = false;
+    setSecureDropLocation('');
+    setSecureDropCustom('');
+    setSecureDropPhotoCaptured(false);
+    setSecureDropLoading(false);
     setJobs(prev => prev.map(j => j.id === activeJob.id ? {
       ...j,
       no_answer_at: new Date().toISOString(),
@@ -161,6 +176,54 @@ export function ActiveDeliveryPage() {
       ...j,
       sender_unreachable_at: new Date().toISOString(),
     } : j));
+  };
+
+  /**
+   * Low-risk secure unattended drop.
+   * Validates IN_TRANSIT → DELIVERED → PENDING_RATING (both assertTransition checks),
+   * writes all evidence fields atomically, and navigates to /home so the sender
+   * can access /rate via TrackingPage (same pattern as the happy-path handoff).
+   */
+  const handleSecureDrop = async () => {
+    if (!activeJob) return;
+    const location = secureDropLocation === 'Other' ? secureDropCustom.trim() : secureDropLocation;
+    if (!location || !secureDropPhotoCaptured) return;
+
+    setSecureDropLoading(true);
+    await new Promise(r => setTimeout(r, 1000));
+
+    const r1 = assertTransition(activeJob.status, 'DELIVERED');
+    if (!r1.ok) {
+      console.error('[RushBuddy] handleSecureDrop — invalid transition:', r1.error);
+      setSecureDropLoading(false);
+      return;
+    }
+    // Validate the subsequent step too; always passes but keeps logic explicit.
+    const r2 = assertTransition('DELIVERED', 'PENDING_RATING');
+    if (!r2.ok) {
+      console.error('[RushBuddy] handleSecureDrop — unexpected:', r2.error);
+      setSecureDropLoading(false);
+      return;
+    }
+
+    const evidence = createMockDropoffEvidence(activeJob, location);
+    const payoutPatch = markRunnerPayoutEarnedPatch();
+
+    setJobs(prev => prev.map(j => j.id === activeJob.id ? {
+      ...j,
+      // Two-step transition (IN_TRANSIT → DELIVERED → PENDING_RATING) applied atomically.
+      status: 'PENDING_RATING',
+      delivered_at: new Date().toISOString(),
+      no_answer_resolution: 'secure_drop',
+      ops_notified: true,
+      ...evidence,
+      ...payoutPatch,
+    } : j));
+
+    setSecureDropLoading(false);
+    setPhase('delivered');
+    await new Promise(r => setTimeout(r, 900));
+    navigate('/home');
   };
 
   if (!activeJob) {
@@ -622,26 +685,129 @@ export function ActiveDeliveryPage() {
                       {/* Risk-branch placeholder */}
                       {canUseSecureDrop(activeJob) ? (
                         /* Low risk → secure drop path */
-                        <div className="rounded-lg p-4 mb-3" style={{ background: '#0A1A10', border: '1px solid #1A4020' }}>
-                          <div className="flex items-start gap-3 mb-3">
-                            <Shield size={16} className="text-emerald-400 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <p className="text-sm font-medium text-emerald-300 mb-1">Secure Drop Available</p>
-                              <p className="text-xs" style={{ color: '#064E3B' }}>
-                                Risk is <strong>Low</strong>. You may leave the item at the nearest secure spot —
-                                hostel gate, shop counter, or security desk. You will need to photograph it before leaving.
-                                Your payout is confirmed.
-                              </p>
+                        (() => {
+                          const effectiveLocation = secureDropLocation === 'Other'
+                            ? secureDropCustom.trim()
+                            : secureDropLocation;
+                          const photoReady = effectiveLocation.length > 0;
+                          const confirmReady = photoReady && secureDropPhotoCaptured && !secureDropLoading;
+                          const LOCATIONS = ['Hostel Gate', 'Shop Counter', 'Security Desk', 'Other'];
+                          return (
+                            <div className="rounded-lg p-4 mb-3" style={{ background: '#0A1A10', border: '1px solid #1A4020' }}>
+                              {/* Header */}
+                              <div className="flex items-start gap-3 mb-4">
+                                <Shield size={16} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-sm font-medium text-emerald-300 mb-0.5">Secure Drop Available</p>
+                                  <p className="text-xs" style={{ color: '#6EE7B7' }}>
+                                    Risk is <strong>Low</strong> — leave at nearest secure spot, photograph it, payout confirmed.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Step 1 — choose location */}
+                              <div className="mb-3">
+                                <p className="text-xs font-medium mb-2" style={{ color: '#6EE7B7' }}>
+                                  1. Choose secure spot
+                                </p>
+                                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                                  {LOCATIONS.map(loc => (
+                                    <button
+                                      key={loc}
+                                      onClick={() => {
+                                        setSecureDropLocation(loc);
+                                        if (loc !== 'Other') setSecureDropCustom('');
+                                        setSecureDropPhotoCaptured(false);
+                                      }}
+                                      className="py-2 px-2 rounded-lg text-xs font-medium transition-all text-left"
+                                      style={{
+                                        background: secureDropLocation === loc ? '#064E3B' : '#0A2010',
+                                        border: `1px solid ${secureDropLocation === loc ? '#10B981' : '#1A4020'}`,
+                                        color: secureDropLocation === loc ? '#6EE7B7' : '#4B5563',
+                                      }}
+                                    >
+                                      {loc}
+                                    </button>
+                                  ))}
+                                </div>
+                                {secureDropLocation === 'Other' && (
+                                  <input
+                                    type="text"
+                                    placeholder="Describe the drop spot…"
+                                    value={secureDropCustom}
+                                    onChange={e => {
+                                      setSecureDropCustom(e.target.value);
+                                      setSecureDropPhotoCaptured(false);
+                                    }}
+                                    className="w-full px-3 py-2 rounded-lg text-xs"
+                                    style={{
+                                      background: '#0A2010',
+                                      border: '1px solid #1A4020',
+                                      color: '#D1FAE5',
+                                      outline: 'none',
+                                    }}
+                                  />
+                                )}
+                              </div>
+
+                              {/* Step 2 — capture mock photo */}
+                              <div className="mb-3">
+                                <p className="text-xs font-medium mb-2" style={{ color: photoReady ? '#6EE7B7' : '#374151' }}>
+                                  2. Capture drop photo
+                                </p>
+                                <button
+                                  onClick={() => setSecureDropPhotoCaptured(true)}
+                                  disabled={!photoReady || secureDropPhotoCaptured}
+                                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all"
+                                  style={{
+                                    background: secureDropPhotoCaptured ? '#064E3B' : photoReady ? '#0A2010' : '#071410',
+                                    border: `1px solid ${secureDropPhotoCaptured ? '#10B981' : photoReady ? '#1A4020' : '#0A1A0F'}`,
+                                    color: secureDropPhotoCaptured ? '#6EE7B7' : photoReady ? '#34D399' : '#374151',
+                                    opacity: !photoReady ? 0.5 : 1,
+                                  }}
+                                >
+                                  <Camera size={13} />
+                                  {secureDropPhotoCaptured ? 'Photo captured ✓' : 'Capture drop photo (mock)'}
+                                </button>
+                              </div>
+
+                              {/* Step 3 — confirm */}
+                              <div>
+                                <p className="text-xs font-medium mb-2" style={{ color: confirmReady ? '#6EE7B7' : '#374151' }}>
+                                  3. Confirm secure drop
+                                </p>
+                                <button
+                                  onClick={handleSecureDrop}
+                                  disabled={!confirmReady}
+                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all"
+                                  style={{
+                                    background: confirmReady ? '#065F46' : '#071410',
+                                    border: `1px solid ${confirmReady ? '#10B981' : '#0A1A0F'}`,
+                                    color: confirmReady ? '#ECFDF5' : '#374151',
+                                    opacity: confirmReady ? 1 : 0.5,
+                                  }}
+                                >
+                                  {secureDropLoading ? (
+                                    <>
+                                      <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-300 border-t-transparent animate-spin" />
+                                      Completing secure drop…
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Shield size={14} />
+                                      Confirm Secure Drop
+                                    </>
+                                  )}
+                                </button>
+                                {!confirmReady && secureDropPhotoCaptured && (
+                                  <p className="text-[10px] text-center mt-1" style={{ color: '#374151' }}>
+                                    Select a secure spot first
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <button
-                            disabled
-                            className="w-full py-2.5 rounded-lg text-sm font-medium"
-                            style={{ background: '#0A2010', border: '1px solid #1A4020', color: '#475569', opacity: 0.6 }}
-                          >
-                            Confirm Secure Drop — coming in next step
-                          </button>
-                        </div>
+                          );
+                        })()
                       ) : (
                         /* Fragile / Valuable → hold for ops */
                         <div className="rounded-lg p-4 mb-3" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>

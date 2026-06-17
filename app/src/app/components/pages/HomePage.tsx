@@ -38,6 +38,15 @@ export function HomePage() {
   const recentJobs = myJobs.slice(0, 4);
   const activeJob = jobs.find(j => (j.runner_id === 'u1' || j.sender_id === 'u1') && ['MATCHED', 'IN_TRANSIT'].includes(j.status));
 
+  const handleJobClick = (job: typeof myJobs[0]) => {
+    if (job.status === 'PENDING_RATING' || job.status === 'DELIVERED') {
+      navigate('/rate');
+    } else if (job.status === 'MATCHED' || job.status === 'IN_TRANSIT') {
+      navigate(job.runner_id === 'u1' ? '/runner/active' : '/sender/tracking');
+    }
+    // CLOSED, DISPUTED, ISSUE_REPORTED, OPEN — no destination yet
+  };
+
   const displayUser = user || {
     name: 'Aditi Krishnan',
     hostel_block: 'MH-C Block',
@@ -286,6 +295,7 @@ export function HomePage() {
             {recentJobs.map((job, i) => (
               <div
                 key={job.id}
+                onClick={() => handleJobClick(job)}
                 className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer"
                 style={{ borderBottom: i < recentJobs.length - 1 ? '1px solid #111E35' : 'none' }}
               >
