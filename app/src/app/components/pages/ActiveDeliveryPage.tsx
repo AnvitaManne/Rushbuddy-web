@@ -43,6 +43,8 @@ export function ActiveDeliveryPage() {
   const [secureDropCustom, setSecureDropCustom] = useState('');
   const [secureDropPhotoCaptured, setSecureDropPhotoCaptured] = useState(false);
   const [secureDropLoading, setSecureDropLoading] = useState(false);
+  // hold-for-ops sub-flow state (Fragile/Valuable branch)
+  const [opsHoldLoading, setOpsHoldLoading] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -73,6 +75,7 @@ export function ActiveDeliveryPage() {
     setSecureDropCustom('');
     setSecureDropPhotoCaptured(false);
     setSecureDropLoading(false);
+    setOpsHoldLoading(false);
     if (activeJob) {
       setJobs(prev => prev.map(j => j.id === activeJob.id ? {
         ...j,
@@ -128,6 +131,7 @@ export function ActiveDeliveryPage() {
     setSecureDropCustom('');
     setSecureDropPhotoCaptured(false);
     setSecureDropLoading(false);
+    setOpsHoldLoading(false);
     setJobs(prev => prev.map(j => j.id === activeJob.id ? {
       ...j,
       no_answer_at: new Date().toISOString(),
@@ -223,6 +227,37 @@ export function ActiveDeliveryPage() {
     setSecureDropLoading(false);
     setPhase('delivered');
     await new Promise(r => setTimeout(r, 900));
+    navigate('/home');
+  };
+
+  /**
+   * Fragile/Valuable hold-for-ops branch.
+   * Validates IN_TRANSIT → ISSUE_REPORTED, writes no_answer_resolution + payout fields,
+   * and navigates to /home. Ops mediates from here; job is never auto-closed.
+   */
+  const handleOpsHold = async () => {
+    if (!activeJob) return;
+    setOpsHoldLoading(true);
+    await new Promise(r => setTimeout(r, 1000));
+
+    const result = assertTransition(activeJob.status, 'ISSUE_REPORTED');
+    if (!result.ok) {
+      console.error('[RushBuddy] handleOpsHold — invalid transition:', result.error);
+      setOpsHoldLoading(false);
+      return;
+    }
+
+    const payoutPatch = markRunnerPayoutEarnedPatch();
+
+    setJobs(prev => prev.map(j => j.id === activeJob.id ? {
+      ...j,
+      status: 'ISSUE_REPORTED',
+      no_answer_resolution: 'hold_for_ops',
+      ops_notified: true,
+      ...payoutPatch,
+    } : j));
+
+    setOpsHoldLoading(false);
     navigate('/home');
   };
 
@@ -810,24 +845,57 @@ export function ActiveDeliveryPage() {
                         })()
                       ) : (
                         /* Fragile / Valuable → hold for ops */
-                        <div className="rounded-lg p-4 mb-3" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
+                        <div className="rounded-lg p-4 mb-3" style={{ background: '#1A0F05', border: '1px solid #7C2D12' }}>
+                          {/* Warning header */}
                           <div className="flex items-start gap-3 mb-3">
                             <AlertTriangle size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
                             <div>
                               <p className="text-sm font-medium text-amber-300 mb-1">Hold Item — No Unattended Drop</p>
-                              <p className="text-xs" style={{ color: '#92400E' }}>
-                                Risk is <strong>{activeJob.risk}</strong>. You must keep the item with you.
-                                Ops will contact you with return or alternative delivery instructions.
-                                Your payout is confirmed.
+                              <p className="text-xs leading-relaxed" style={{ color: '#D97706' }}>
+                                Do not leave this package unattended. Hold item and wait for ops instruction.
                               </p>
                             </div>
                           </div>
+
+                          {/* Risk + payout info */}
+                          <div className="rounded-lg px-3 py-2.5 mb-3 text-xs" style={{ background: '#2D1A00', border: '1px solid #3B2A0A' }}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span style={{ color: '#92400E' }}>Item risk</span>
+                              <span className="font-medium" style={{ color: '#FCD34D', fontFamily: 'JetBrains Mono, monospace' }}>
+                                {activeJob.risk}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span style={{ color: '#92400E' }}>Your payout</span>
+                              <span className="font-medium text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                                ₹{activeJob.agreed_price ?? activeJob.posted_price} — confirmed
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Confirm button */}
                           <button
-                            disabled
-                            className="w-full py-2.5 rounded-lg text-sm font-medium"
-                            style={{ background: '#1A1505', border: '1px solid #3B2A0A', color: '#475569', opacity: 0.6 }}
+                            onClick={handleOpsHold}
+                            disabled={opsHoldLoading}
+                            className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all"
+                            style={{
+                              background: opsHoldLoading ? '#2D1A00' : '#7C2D12',
+                              border: '1px solid #991B1B',
+                              color: opsHoldLoading ? '#92400E' : '#FEF2F2',
+                              opacity: opsHoldLoading ? 0.8 : 1,
+                            }}
                           >
-                            Confirm Holding Item — coming in next step
+                            {opsHoldLoading ? (
+                              <>
+                                <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-300 border-t-transparent animate-spin" />
+                                Notifying ops…
+                              </>
+                            ) : (
+                              <>
+                                <AlertTriangle size={14} />
+                                Holding Item — Notify Ops
+                              </>
+                            )}
                           </button>
                         </div>
                       )}

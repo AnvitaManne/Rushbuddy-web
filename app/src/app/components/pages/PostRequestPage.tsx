@@ -60,6 +60,7 @@ export function PostRequestPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [valuableAck, setValuableAck] = useState(false);
+  const [customPrice, setCustomPrice] = useState('');
 
   // priceMin = system floor (single source of truth from domain helper)
   const priceMin = itemType && weight && risk
@@ -68,8 +69,16 @@ export function PostRequestPage() {
   // priceMax = display-only upper bound shown to sender; actual posted_price set in handlePost
   const priceMax = Math.round(priceMin * 1.4);
 
+  // Pre-fill customPrice with the system floor whenever it (re)computes
+  useEffect(() => {
+    if (priceMin > 0) setCustomPrice(String(priceMin));
+  }, [priceMin]);
+
+  const customPriceNum = parseInt(customPrice, 10) || 0;
+  const priceValid = customPriceNum >= priceMin && priceMin > 0;
+
   const canProceedStep1 = itemType && weight && risk;
-  const canProceedStep2 = pickup.trim() && drop.trim() && (risk !== 'Valuable' || valuableAck);
+  const canProceedStep2 = pickup.trim() && drop.trim() && (risk !== 'Valuable' || valuableAck) && priceValid;
 
   const handlePost = async () => {
     const errs: Record<string, string> = {};
@@ -83,7 +92,7 @@ export function PostRequestPage() {
     const job_type = 'campus_immediate' as const;
     const created_at = new Date().toISOString();
     const price_floor = computePriceFloor(itemType!, weight!, risk!, job_type);
-    const posted_price = priceMax;
+    const posted_price = customPriceNum;
 
     const newJob: Job = {
       id: `JOB-${2410 + Math.floor(Math.random() * 90)}`,
@@ -391,19 +400,47 @@ export function PostRequestPage() {
               </div>
             </div>
 
-            {/* Price summary */}
+            {/* Price — system floor + sender offer */}
             <div className="rounded-xl p-4 mb-4" style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
-              <div className="flex items-center justify-between text-sm">
-                <div style={{ color: '#64748B' }}>
-                  {itemType} · {weight} · {risk} risk
-                </div>
-                <div className="text-emerald-400 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  ₹{priceMin}–₹{priceMax}
-                </div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs" style={{ color: '#475569' }}>System floor</span>
+                <span className="text-xs font-medium text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  ₹{priceMin} ({itemType} · {weight} · {risk})
+                </span>
               </div>
-              <div className="text-[10px] mt-1.5" style={{ color: '#475569' }}>
-                System-calculated. Not editable. Platform fee: ₹0 (beta).
+              <label className="block text-xs mb-1.5" style={{ color: '#94A3B8' }}>
+                Your offer <span style={{ color: '#475569' }}>(must be ≥ ₹{priceMin})</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium" style={{ color: '#64748B' }}>₹</span>
+                <input
+                  type="number"
+                  min={priceMin}
+                  value={customPrice}
+                  onChange={e => setCustomPrice(e.target.value)}
+                  placeholder={String(priceMin)}
+                  className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
+                  style={{
+                    background: '#060A14',
+                    border: `1px solid ${customPriceNum > 0 && customPriceNum < priceMin ? '#7F1D1D' : '#1E2D45'}`,
+                    color: '#E2E8F0',
+                    fontFamily: 'JetBrains Mono, monospace',
+                  }}
+                  onFocus={e => e.target.style.borderColor = '#06B6D4'}
+                  onBlur={e => {
+                    e.target.style.borderColor = customPriceNum < priceMin ? '#7F1D1D' : '#1E2D45';
+                  }}
+                />
               </div>
+              {customPriceNum > 0 && customPriceNum < priceMin && (
+                <p className="text-[11px] mt-1.5 text-red-400">Offer must be at least ₹{priceMin}</p>
+              )}
+              {customPriceNum > priceMin && (
+                <p className="text-[11px] mt-1.5" style={{ color: '#34D399' }}>
+                  +₹{customPriceNum - priceMin} above floor — runners see this first
+                </p>
+              )}
+              <div className="text-[10px] mt-2" style={{ color: '#334155' }}>Platform fee: ₹0 (beta)</div>
             </div>
 
             <div className="flex gap-3">
@@ -446,7 +483,8 @@ export function PostRequestPage() {
                   { label: 'Pickup', value: pickup },
                   { label: 'Drop', value: drop },
                   { label: 'Description', value: description || '—' },
-                  { label: 'Price Range', value: `₹${priceMin} – ₹${priceMax}`, mono: true, highlight: true },
+                  { label: 'Your Offer', value: `₹${customPriceNum}`, mono: true, highlight: true },
+                  { label: 'System Floor', value: `₹${priceMin}`, mono: true },
                   { label: 'Platform Fee', value: '₹0 (Beta)', mono: true },
                 ].map(({ label, value, mono, highlight }) => (
                   <div key={label} className="flex items-start justify-between gap-4">
