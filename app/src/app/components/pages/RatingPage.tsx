@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { Star, AlertCircle, CheckCircle2, Shield, Smartphone, Banknote } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -14,9 +14,16 @@ const PAYMENT_METHODS = [
 export function RatingPage() {
   const { jobs, setJobs } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const navJobId = (location.state as { jobId?: string } | null)?.jobId ?? null;
 
-  const job = jobs.find(j => j.sender_id === 'u1' && j.status === 'DELIVERED')
-    || jobs.find(j => j.sender_id === 'u1' && ['CLOSED', 'PENDING_RATING', 'DELIVERED'].includes(j.status))
+  // Priority: explicit job from navigation state → PENDING_RATING → DELIVERED → any sender job.
+  // The PENDING_RATING-first order prevents the pre-seeded DELIVERED mock job from being
+  // picked up instead of the real job the user just completed.
+  const job = (navJobId ? jobs.find(j => j.id === navJobId) : null)
+    || jobs.find(j => j.sender_id === 'u1' && j.status === 'PENDING_RATING')
+    || jobs.find(j => j.sender_id === 'u1' && j.status === 'DELIVERED')
+    || jobs.find(j => j.sender_id === 'u1' && ['CLOSED', 'DISPUTED'].includes(j.status))
     || jobs.find(j => j.sender_id === 'u1');
 
   const [stars, setStars] = useState(0);

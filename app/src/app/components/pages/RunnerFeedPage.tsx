@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp, Job } from '../../context/AppContext';
+import { useApp, Job, defaultUser } from '../../context/AppContext';
 import { canRunnerSeeJob } from '@/domain/runnerEligibility';
 import {
   Zap, MapPin, Package, Clock, Filter, Star, Shield,
@@ -193,8 +193,9 @@ export function RunnerFeedPage() {
   const [filter, setFilter] = useState<string>('All');
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
 
+  const runner = user ?? defaultUser; // fall back to mock user if auth not completed
   const openJobs = jobs.filter(
-    j => j.status === 'OPEN' && user && canRunnerSeeJob(user, j),
+    j => j.status === 'OPEN' && canRunnerSeeJob(runner, j),
   );
   const filters = ['All', 'Document', 'Food', 'Medicine', 'Object'];
   const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);

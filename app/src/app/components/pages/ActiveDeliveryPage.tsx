@@ -258,6 +258,8 @@ export function ActiveDeliveryPage() {
     } : j));
 
     setOpsHoldLoading(false);
+    setPhase('delivered');
+    await new Promise(r => setTimeout(r, 1000));
     navigate('/home');
   };
 
@@ -916,15 +918,43 @@ export function ActiveDeliveryPage() {
 
           {phase === 'delivered' && (
             <motion.div key="phase4" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-6">
-              <div className="text-5xl mb-4">🎉</div>
-              <h3 className="text-white font-semibold text-lg mb-1">Delivered!</h3>
-              <p className="text-sm" style={{ color: '#64748B' }}>Earnings updated. Dispute window: 2 hours.</p>
+              {activeJob.no_answer_resolution === 'secure_drop' ? (
+                <>
+                  <div className="text-5xl mb-4">✅</div>
+                  <h3 className="text-white font-semibold text-lg mb-1">Secure Drop Complete</h3>
+                  <p className="text-sm mb-1" style={{ color: '#6EE7B7' }}>
+                    Item secured · Photo logged · Ops notified
+                  </p>
+                  <p className="text-xs" style={{ color: '#64748B' }}>
+                    Full agreed fee earned — sender no-answer.
+                  </p>
+                </>
+              ) : activeJob.no_answer_resolution === 'hold_for_ops' ? (
+                <>
+                  <div className="text-5xl mb-4">📋</div>
+                  <h3 className="text-white font-semibold text-lg mb-1">Item Held — Ops Notified</h3>
+                  <p className="text-sm mb-1" style={{ color: '#FCD34D' }}>
+                    Holding item · Awaiting ops instruction
+                  </p>
+                  <p className="text-xs" style={{ color: '#64748B' }}>
+                    Full agreed fee earned — sender no-answer.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-5xl mb-4">🎉</div>
+                  <h3 className="text-white font-semibold text-lg mb-1">Delivered!</h3>
+                  <p className="text-sm" style={{ color: '#64748B' }}>Earnings updated. Dispute window: 2 hours.</p>
+                </>
+              )}
               <div className="mt-4 px-4 py-3 rounded-lg inline-block"
                 style={{ background: '#0A2010', border: '1px solid #1A4020' }}>
                 <div className="text-emerald-400 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.3rem' }}>
                   +₹{activeJob.agreed_price ?? activeJob.posted_price}
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: '#64748B' }}>Base earnings</div>
+                <div className="text-xs mt-0.5" style={{ color: activeJob.runner_payout_status === 'earned' ? '#10B981' : '#64748B' }}>
+                  {activeJob.runner_payout_status === 'earned' ? 'Payout confirmed ✓' : 'Base earnings'}
+                </div>
               </div>
             </motion.div>
           )}
@@ -946,6 +976,13 @@ export function ActiveDeliveryPage() {
             <div className="text-[10px] mt-0.5" style={{ color: '#475569' }}>Tip set by sender after delivery</div>
           </div>
         </div>
+        {activeJob.runner_payout_status === 'earned' && (
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+            style={{ background: '#0A2010', border: '1px solid #1A4020', color: '#10B981' }}>
+            <CheckCircle2 size={12} />
+            Full agreed fee earned — sender no-answer. Payout confirmed.
+          </div>
+        )}
       </div>
 
       {/* Issue panel */}

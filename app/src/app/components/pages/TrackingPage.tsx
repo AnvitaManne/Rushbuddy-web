@@ -100,7 +100,7 @@ export function TrackingPage() {
       } : j));
       if (status === 'PENDING_RATING') {
         await new Promise<void>(r => setTimeout(r, 800));
-        navigate('/rate');
+        navigate('/rate', { state: { jobId: job.id } });
         break;
       }
     }
@@ -498,12 +498,34 @@ export function TrackingPage() {
         <motion.button
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate('/rate')}
+          onClick={() => navigate('/rate', { state: { jobId: job.id } })}
           className="w-full py-3 rounded-lg text-sm font-semibold text-white"
           style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
         >
           Rate & Confirm Payment →
         </motion.button>
+      )}
+
+      {/* Failure-path payment button — shown when no-answer resolution is complete
+          but job hasn't been closed yet (hold_for_ops lands on ISSUE_REPORTED, not PENDING_RATING). */}
+      {job.no_answer_resolution && !['CLOSED', 'DISPUTED'].includes(job.status) && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="rounded-lg px-3 py-2.5 mb-3 text-xs"
+            style={{ background: '#1A1005', border: '1px solid #3B2A0A', color: '#92400E' }}>
+            Runner payout is the full agreed fee regardless of delivery outcome.
+            No sender refund — confirm payment to close this job.
+          </div>
+          <button
+            onClick={() => navigate('/rate', { state: { jobId: job.id } })}
+            className="w-full py-3 rounded-lg text-sm font-semibold text-white"
+            style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}
+          >
+            Confirm Payment to Runner →
+          </button>
+        </motion.div>
       )}
     </div>
   );
