@@ -39,12 +39,20 @@ export function HomePage() {
   const activeJob = jobs.find(j => (j.runner_id === 'u1' || j.sender_id === 'u1') && ['MATCHED', 'IN_TRANSIT'].includes(j.status));
 
   const handleJobClick = (job: typeof myJobs[0]) => {
+    const id = job.id;
     if (job.status === 'PENDING_RATING' || job.status === 'DELIVERED') {
-      navigate('/rate');
+      navigate('/rate', { state: { jobId: id } });
     } else if (job.status === 'MATCHED' || job.status === 'IN_TRANSIT') {
-      navigate(job.runner_id === 'u1' ? '/runner/active' : '/sender/tracking');
+      if (job.runner_id === 'u1') {
+        navigate('/runner/active');
+      } else {
+        navigate('/sender/tracking', { state: { jobId: id } });
+      }
+    } else if (job.status === 'ISSUE_REPORTED') {
+      // Sender sees tracking with the exact job; runner has no dedicated page.
+      if (currentRole === 'sender') navigate('/sender/tracking', { state: { jobId: id } });
     }
-    // CLOSED, DISPUTED, ISSUE_REPORTED, OPEN — no destination yet
+    // CLOSED, DISPUTED, OPEN — no destination yet
   };
 
   const displayUser = user || {
@@ -313,12 +321,25 @@ export function HomePage() {
                       {job.pickup_location} → {job.drop_location}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <StatusBadge status={job.status} />
                     {job.runner_id === 'u1' ? (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Runner</span>
                     ) : (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Sender</span>
+                    )}
+                    {job.no_answer_resolution && (
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                        style={{
+                          background: job.no_answer_resolution === 'secure_drop' ? '#0A1A10' : '#2D1A00',
+                          border: `1px solid ${job.no_answer_resolution === 'secure_drop' ? '#1A4020' : '#7C2D12'}`,
+                          color: job.no_answer_resolution === 'secure_drop' ? '#6EE7B7' : '#FCD34D',
+                          fontFamily: 'JetBrains Mono, monospace',
+                        }}
+                      >
+                        {job.no_answer_resolution === 'secure_drop' ? 'SECURE DROP' : 'HOLD FOR OPS'}
+                      </span>
                     )}
                   </div>
                 </div>

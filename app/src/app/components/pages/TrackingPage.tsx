@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
-  AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio
+  AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio,
+  AlertTriangle, UserX,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -15,28 +16,46 @@ const TIMELINE_STEPS = [
 ];
 
 function getStepIndex(status: string) {
-  const map: Record<string, number> = { OPEN: 0, MATCHED: 1, IN_TRANSIT: 2, DELIVERED: 3, CLOSED: 3, PENDING_RATING: 3 };
+  const map: Record<string, number> = {
+    OPEN: 0, MATCHED: 1, IN_TRANSIT: 2,
+    DELIVERED: 3, CLOSED: 3, PENDING_RATING: 3,
+    // ISSUE_REPORTED: item was picked up but not delivered normally
+    ISSUE_REPORTED: 2,
+  };
   return map[status] ?? 0;
 }
 
 export function TrackingPage() {
   const { jobs, setJobs, activeJob: ctxActiveJob } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Job ID passed via navigation state from HomePage job-row click.
+  // Takes priority over everything else so the user always sees the job they tapped.
+  const navJobId = (location.state as { jobId?: string } | null)?.jobId ?? null;
 
   const [localJobId, setLocalJobId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ctxActiveJob) setLocalJobId(ctxActiveJob.id);
-    else {
-      const j = jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status));
-      if (j) setLocalJobId(j.id);
-      else {
-        const last = [...jobs].filter(j => j.sender_id === 'u1').sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    if (navJobId) {
+      // Explicit navigation from a job row — always show that exact job.
+      setLocalJobId(navJobId);
+    } else if (ctxActiveJob) {
+      setLocalJobId(ctxActiveJob.id);
+    } else {
+      // Prefer active-status jobs; fall back to most-recently-created sender job.
+      const active = jobs.find(j =>
+        j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT', 'ISSUE_REPORTED'].includes(j.status)
+      );
+      if (active) {
+        setLocalJobId(active.id);
+      } else {
+        const last = [...jobs]
+          .filter(j => j.sender_id === 'u1')
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
         if (last) setLocalJobId(last.id);
       }
     }
-  }, [ctxActiveJob, jobs]);
+  }, [navJobId, ctxActiveJob, jobs]);
 
   const job = jobs.find(j => j.id === localJobId) || jobs.find(j => j.sender_id === 'u1');
 
@@ -44,7 +63,10 @@ export function TrackingPage() {
   const [simulating, setSimulating] = useState(false);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
-  const displayStep = simStep !== null ? simStep : stepIndex;
+  // For failure-path jobs, always use the real step — ignore any stale simStep
+  // left over from a previous "Simulate Delivery Progress" run on the same component instance.
+  const isFailureState = job?.status === 'ISSUE_REPORTED' || !!job?.no_answer_resolution;
+  const displayStep = isFailureState ? stepIndex : simStep !== null ? simStep : stepIndex;
 
   const simulateProgress = async () => {
     if (!job || simulating) return;
@@ -201,13 +223,30 @@ export function TrackingPage() {
               </>
             )}
             {displayStep === 2 && (
-              <>
-                <div className="text-3xl mb-2">📦</div>
-                <p className="text-white font-medium">Picked up!</p>
-                <p className="text-sm mt-1" style={{ color: '#64748B' }}>
-                  {runnerName} has your item and is heading to the drop point
-                </p>
-              </>
+              job.status === 'ISSUE_REPORTED' ? (
+                <>
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
+                    style={{ background: '#2D1A00', border: '2px solid #D97706' }}>
+                    <AlertTriangle size={20} className="text-amber-400" />
+                  </div>
+                  <p className="text-white font-medium">
+                    {job.no_answer_resolution === 'hold_for_ops' ? 'Runner Holding Item' : 'Delivery Issue'}
+                  </p>
+                  <p className="text-sm mt-1" style={{ color: '#D97706' }}>
+                    {job.no_answer_resolution === 'hold_for_ops'
+                      ? 'Sender unreachable · Ops has been notified'
+                      : 'Issue reported · Ops reviewing'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-3xl mb-2">📦</div>
+                  <p className="text-white font-medium">Picked up!</p>
+                  <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+                    {runnerName} has your item and is heading to the drop point
+                  </p>
+                </>
+              )
             )}
             {displayStep === 3 && (
               <>
@@ -221,6 +260,135 @@ export function TrackingPage() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* No-answer failure evidence card — shown when runner resolved a no-answer event */}
+      {job.no_answer_resolution && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl overflow-hidden"
+          style={{
+            border: `1px solid ${job.no_answer_resolution === 'secure_drop' ? '#1A4020' : '#7C2D12'}`,
+          }}
+        >
+          {/* Card header */}
+          <div
+            className="px-4 py-3 flex items-center gap-2"
+            style={{
+              background: job.no_answer_resolution === 'secure_drop' ? '#0A1A10' : '#1A0F05',
+              borderBottom: `1px solid ${job.no_answer_resolution === 'secure_drop' ? '#1A4020' : '#3B1111'}`,
+            }}
+          >
+            {job.no_answer_resolution === 'secure_drop' ? (
+              <Shield size={13} className="text-emerald-400" />
+            ) : (
+              <AlertTriangle size={13} className="text-amber-400" />
+            )}
+            <span
+              className="text-xs font-semibold"
+              style={{
+                color: job.no_answer_resolution === 'secure_drop' ? '#6EE7B7' : '#FCD34D',
+                fontFamily: 'JetBrains Mono, monospace',
+              }}
+            >
+              {job.no_answer_resolution === 'secure_drop'
+                ? 'SECURE DROP COMPLETED'
+                : 'RUNNER HOLDING ITEM — OPS NOTIFIED'}
+            </span>
+          </div>
+
+          {/* Card body */}
+          <div className="p-4 space-y-2.5" style={{ background: '#0B1120' }}>
+            {/* No-answer timeline */}
+            {job.no_answer_at && (
+              <div className="flex items-center justify-between text-xs">
+                <span style={{ color: '#475569' }}>No answer at</span>
+                <span style={{ color: '#94A3B8', fontFamily: 'JetBrains Mono, monospace' }}>
+                  {new Date(job.no_answer_at).toLocaleTimeString()}
+                </span>
+              </div>
+            )}
+            {job.no_answer_contact_attempts !== undefined && (
+              <div className="flex items-center justify-between text-xs">
+                <span style={{ color: '#475569' }}>Contact attempts</span>
+                <span style={{ color: '#94A3B8', fontFamily: 'JetBrains Mono, monospace' }}>
+                  {job.no_answer_contact_attempts} / 2
+                </span>
+              </div>
+            )}
+            {job.sender_unreachable_at && (
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <UserX size={11} className="text-red-400" />
+                  <span style={{ color: '#475569' }}>Sender unreachable at</span>
+                </div>
+                <span style={{ color: '#FCA5A5', fontFamily: 'JetBrains Mono, monospace' }}>
+                  {new Date(job.sender_unreachable_at).toLocaleTimeString()}
+                </span>
+              </div>
+            )}
+
+            {/* Secure drop evidence */}
+            {job.no_answer_resolution === 'secure_drop' && (
+              <>
+                {job.dropoff_secure_location && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span style={{ color: '#475569' }}>Dropped at</span>
+                    <span className="text-emerald-400 font-medium">{job.dropoff_secure_location}</span>
+                  </div>
+                )}
+                {job.dropoff_photo_url && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span style={{ color: '#475569' }}>Drop photo</span>
+                    <span className="text-emerald-400">Uploaded ✓</span>
+                  </div>
+                )}
+                {job.dropoff_geotag && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span style={{ color: '#475569' }}>Geotag</span>
+                    <span style={{ color: '#94A3B8' }}>{job.dropoff_geotag.label}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Hold-for-ops notice */}
+            {job.no_answer_resolution === 'hold_for_ops' && (
+              <div
+                className="rounded-lg px-3 py-2.5 text-xs leading-relaxed"
+                style={{ background: '#2D1A00', border: '1px solid #3B2A0A', color: '#D97706' }}
+              >
+                Runner is holding the item and awaiting ops instruction.
+                Do not expect an unattended drop.
+              </div>
+            )}
+
+            {/* Ops + payout summary */}
+            <div className="border-t pt-2.5" style={{ borderColor: '#1E2D45' }}>
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span style={{ color: '#475569' }}>Ops notified</span>
+                <span style={{ color: job.ops_notified ? '#10B981' : '#64748B' }}>
+                  {job.ops_notified ? '✓ Yes' : 'Pending'}
+                </span>
+              </div>
+              <div
+                className="rounded-lg px-3 py-2 text-xs flex items-center justify-between"
+                style={{ background: '#0A1A0D', border: '1px solid #1A3520' }}
+              >
+                <span style={{ color: '#475569' }}>Runner payout</span>
+                <span className="text-emerald-400 font-medium">Earned — full amount</span>
+              </div>
+              <div
+                className="rounded-lg px-3 py-2 mt-1.5 text-xs flex items-center justify-between"
+                style={{ background: '#0D1120', border: '1px solid #1E2D45' }}
+              >
+                <span style={{ color: '#475569' }}>Sender refund</span>
+                <span style={{ color: '#64748B' }}>None</span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Runner card (visible after matched) */}
       {displayStep >= 1 && (
@@ -304,8 +472,8 @@ export function TrackingPage() {
         </div>
       </div>
 
-      {/* Demo simulate button */}
-      {displayStep < 3 && (
+      {/* Demo simulate button — hidden once a no-answer path has been resolved */}
+      {displayStep < 3 && !job.no_answer_resolution && job.status !== 'ISSUE_REPORTED' && (
         <button
           onClick={simulateProgress}
           disabled={simulating}
