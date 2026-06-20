@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { useApp } from '../../context/AppContext';
+import { useApp, defaultUser } from '../../context/AppContext';
+import { assertTransition } from '@/domain/jobTransitions';
 import { Star, AlertCircle, CheckCircle2, Shield, Smartphone, Banknote } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -12,19 +13,20 @@ const PAYMENT_METHODS = [
 ];
 
 export function RatingPage() {
-  const { jobs, setJobs } = useApp();
+  const { user, jobs, setJobs } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const navJobId = (location.state as { jobId?: string } | null)?.jobId ?? null;
+  const userId = user?.id ?? defaultUser.id;
 
-  // Priority: explicit job from navigation state → PENDING_RATING → DELIVERED → any sender job.
-  // The PENDING_RATING-first order prevents the pre-seeded DELIVERED mock job from being
-  // picked up instead of the real job the user just completed.
+  // Priority: explicit nav state → PENDING_RATING → DELIVERED → any sender job.
+  // PENDING_RATING-first prevents the pre-seeded DELIVERED mock job from shadowing
+  // the real job the user just completed.
   const job = (navJobId ? jobs.find(j => j.id === navJobId) : null)
-    || jobs.find(j => j.sender_id === 'u1' && j.status === 'PENDING_RATING')
-    || jobs.find(j => j.sender_id === 'u1' && j.status === 'DELIVERED')
-    || jobs.find(j => j.sender_id === 'u1' && ['CLOSED', 'DISPUTED'].includes(j.status))
-    || jobs.find(j => j.sender_id === 'u1');
+    ?? jobs.find(j => j.sender_id === userId && j.status === 'PENDING_RATING')
+    ?? jobs.find(j => j.sender_id === userId && j.status === 'DELIVERED')
+    ?? jobs.find(j => j.sender_id === userId && ['ISSUE_REPORTED', 'CLOSED', 'DISPUTED'].includes(j.status))
+    ?? jobs.find(j => j.sender_id === userId);
 
   const [stars, setStars] = useState(0);
   const [hoveredStar, setHoveredStar] = useState(0);
@@ -35,6 +37,7 @@ export function RatingPage() {
   const [disputeDesc, setDisputeDesc] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
 
   const runnerName = job?.runner_name && job.runner_name !== 'You' ? job.runner_name : 'Karthik R';
   const basePrice = job?.agreed_price ?? job?.posted_price ?? 40;
@@ -42,16 +45,25 @@ export function RatingPage() {
 
   const handleSubmit = async () => {
     if (stars === 0 && !disputeMode) return;
+    if (!job) return;
+
+    const nextStatus = disputeMode ? 'DISPUTED' : 'CLOSED';
+    const result = assertTransition(job.status, nextStatus);
+    if (!result.ok) {
+      console.error('[RushBuddy] Transition blocked:', result.error);
+      setTransitionError(result.error);
+      return;
+    }
+
+    setTransitionError(null);
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
-    if (job) {
-      setJobs(prev => prev.map(j => j.id === job.id ? {
-        ...j,
-        status: disputeMode ? 'DISPUTED' : 'CLOSED',
-        rating: stars,
-        tip_amount: tip,
-      } : j));
-    }
+    setJobs(prev => prev.map(j => j.id === job.id ? {
+      ...j,
+      status: nextStatus,
+      rating: stars,
+      tip_amount: tip,
+    } : j));
     setLoading(false);
     setSubmitted(true);
     await new Promise(r => setTimeout(r, 1500));
@@ -59,6 +71,22 @@ export function RatingPage() {
   };
 
   const ratingLabels = ['', 'Poor', 'Below Average', 'Average', 'Good', 'Excellent'];
+
+  if (!job) {
+    return (
+      <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
+        <CheckCircle2 size={32} className="text-slate-600 mx-auto mb-3" />
+        <p className="text-sm" style={{ color: '#64748B' }}>No job awaiting payment right now.</p>
+        <button
+          onClick={() => navigate('/home')}
+          className="mt-4 px-4 py-2 rounded-lg text-sm text-cyan-400 border"
+          style={{ border: '1px solid #0E2D3D', background: '#061620' }}
+        >
+          Back to Home
+        </button>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (
@@ -303,6 +331,15 @@ export function RatingPage() {
             Ops will review within 4 hours. Dispute window: 2 hours post-delivery. After that, job auto-closes.
           </p>
         </motion.div>
+      )}
+
+      {/* Transition error (dev-visible; rare in production) */}
+      {transitionError && (
+        <div className="rounded-lg px-3 py-2 flex items-start gap-2"
+          style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+          <AlertCircle size={13} className="text-red-400 mt-0.5 flex-shrink-0" />
+          <p className="text-[11px]" style={{ color: '#F87171' }}>{transitionError}</p>
+        </div>
       )}
 
       {/* Actions */}
