@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
   AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio,
-  AlertTriangle, UserX,
+  AlertTriangle, UserX, Copy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -61,6 +61,7 @@ export function TrackingPage() {
 
   const [simStep, setSimStep] = useState<number | null>(null);
   const [simulating, setSimulating] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
   // For failure-path jobs, always use the real step — ignore any stale simStep
@@ -260,6 +261,49 @@ export function TrackingPage() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Handoff code — visible while delivery is active so sender can share it with receiver */}
+      {displayStep < 3 && job.confirmation_code && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-4"
+          style={{ background: '#0B1120', border: '1px solid #1E2D45' }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+              YOUR HANDOFF CODE
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(job.confirmation_code).catch(() => {});
+                setCodeCopied(true);
+                setTimeout(() => setCodeCopied(false), 2000);
+              }}
+              className="flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded transition-colors"
+              style={{
+                background: codeCopied ? '#0A1A10' : '#061620',
+                border: `1px solid ${codeCopied ? '#10B981' : '#0E2D3D'}`,
+                color: codeCopied ? '#10B981' : '#22D3EE',
+              }}
+            >
+              <Copy size={10} />
+              {codeCopied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          <div className="text-center py-2">
+            <div
+              className="text-5xl font-bold text-white tracking-widest"
+              style={{ fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.35em' }}
+            >
+              {job.confirmation_code}
+            </div>
+          </div>
+          <p className="text-[11px] text-center mt-3" style={{ color: '#64748B' }}>
+            Share this code with the person receiving the item. Your runner will enter it at handoff to confirm delivery.
+          </p>
+        </motion.div>
+      )}
 
       {/* No-answer failure evidence card — shown when runner resolved a no-answer event */}
       {job.no_answer_resolution && (

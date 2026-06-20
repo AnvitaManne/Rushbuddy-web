@@ -4,6 +4,8 @@ import type {
   JobStatus,
   JobType,
   LocationType,
+  PaymentMethod,
+  PaymentStatus,
   PurchaseType,
   RiskLevel,
   SuspensionStatus,
@@ -18,6 +20,8 @@ export type {
   JobStatus,
   JobType,
   LocationType,
+  PaymentMethod,
+  PaymentStatus,
   PurchaseType,
   RiskLevel,
   SuspensionStatus,
@@ -189,4 +193,29 @@ export interface Job {
 
   tip_amount?: number;
   rating?: number;
+
+  // ── Payment / closure fields (Phase 6) ────────────────────────────────────
+
+  /**
+   * Method the sender selected on the payment screen.
+   * Recorded at confirmation; unverified for cash.
+   */
+  payment_method?: PaymentMethod;
+  /**
+   * Sender-side payment lifecycle.
+   * - `unpaid`: default while job is active / awaiting rating.
+   * - `paid`: sender confirmed payment (moves job to CLOSED).
+   * - `disputed`: sender filed a dispute (moves job to DISPUTED → CLOSED via ops).
+   */
+  payment_status?: PaymentStatus;
+  /** ISO timestamp when the sender tapped "Confirm Payment". */
+  paid_at?: string;
+  /**
+   * ISO timestamp marking the end of the 2-hour dispute window.
+   * Computed from `paid_at` by `computeDisputeWindowEndsAt`.
+   * After this point the job auto-closes and the runner is paid in full.
+   */
+  dispute_window_ends_at?: string;
+  /** ISO timestamp when the job transitioned to CLOSED. */
+  closed_at?: string;
 }

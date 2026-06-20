@@ -31,3 +31,17 @@ export type ItemType = 'Document' | 'Food' | 'Medicine' | 'Object';
 export type WeightTier = 'Light' | 'Medium' | 'Heavy';
 
 export type RiskLevel = 'Low' | 'Fragile' | 'Valuable';
+
+/**
+ * Payment methods the sender can use on the rating / payment screen.
+ * `cash` is only surfaced for Mode 1 jobs when the job is in PENDING_RATING
+ * (i.e. the runner has already entered the handoff code).
+ */
+export type PaymentMethod = 'upi' | 'phonepe' | 'cash';
+
+/**
+ * Lifecycle state of the sender-side payment for a job.
+ * Distinct from JobStatus — a job can be CLOSED with payment_status 'paid' (normal)
+ * or 'disputed' (ops review path).
+ */
+export type PaymentStatus = 'unpaid' | 'paid' | 'disputed';

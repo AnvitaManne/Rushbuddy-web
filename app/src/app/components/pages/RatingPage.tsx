@@ -2,11 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useApp, defaultUser } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
+import { getAllowedPaymentMethods, getPaymentPolicyCopy } from '@/domain/paymentPolicy';
+import type { PaymentMethod } from '@/domain/types';
 import { Star, AlertCircle, CheckCircle2, Shield, Smartphone, Banknote } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const TIPS = [0, 5, 10, 20];
-const PAYMENT_METHODS = [
+
+/** Full ordered set of method definitions. Filtered at render time by policy. */
+const ALL_PAYMENT_METHOD_DEFS: { id: PaymentMethod; label: string; icon: React.ReactNode }[] = [
   { id: 'upi', label: 'UPI', icon: <Smartphone size={14} /> },
   { id: 'phonepe', label: 'PhonePe', icon: <Smartphone size={14} /> },
   { id: 'cash', label: 'Cash', icon: <Banknote size={14} /> },
@@ -31,13 +35,28 @@ export function RatingPage() {
   const [stars, setStars] = useState(0);
   const [hoveredStar, setHoveredStar] = useState(0);
   const [tip, setTip] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState('upi');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
   const [disputeMode, setDisputeMode] = useState(false);
   const [disputeType, setDisputeType] = useState('');
   const [disputeDesc, setDisputeDesc] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [transitionError, setTransitionError] = useState<string | null>(null);
+
+  // ── Payment method policy (derived from the live job) ────────────────────────
+  // Computed before early returns so hook call order stays stable.
+  const allowedMethods = job
+    ? getAllowedPaymentMethods(job)
+    : (['upi', 'phonepe'] as PaymentMethod[]);
+  const visibleMethodDefs = ALL_PAYMENT_METHOD_DEFS.filter(m =>
+    allowedMethods.includes(m.id),
+  );
+  // If the currently selected method is no longer allowed, fall back to the first allowed one.
+  const effectiveMethod: PaymentMethod = allowedMethods.includes(paymentMethod)
+    ? paymentMethod
+    : (allowedMethods[0] ?? 'upi');
+  const policyCopy = job ? getPaymentPolicyCopy(job) : null;
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const runnerName = job?.runner_name && job.runner_name !== 'You' ? job.runner_name : 'Karthik R';
   const basePrice = job?.agreed_price ?? job?.posted_price ?? 40;
@@ -236,26 +255,35 @@ export function RatingPage() {
           <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
             PAYMENT METHOD
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {PAYMENT_METHODS.map(({ id, label, icon }) => (
-              <button
-                key={id}
-                onClick={() => setPaymentMethod(id)}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm transition-all"
-                style={{
-                  background: paymentMethod === id ? '#061620' : '#070B17',
-                  border: `1px solid ${paymentMethod === id ? '#06B6D4' : '#1E2D45'}`,
-                  color: paymentMethod === id ? '#22D3EE' : '#64748B',
-                }}
-              >
-                {icon}
-                {label}
-              </button>
-            ))}
-          </div>
-          {paymentMethod === 'cash' && (
+          {visibleMethodDefs.length > 0 ? (
+            <div
+              className="grid gap-2"
+              style={{ gridTemplateColumns: `repeat(${visibleMethodDefs.length}, 1fr)` }}
+            >
+              {visibleMethodDefs.map(({ id, label, icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setPaymentMethod(id)}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm transition-all"
+                  style={{
+                    background: effectiveMethod === id ? '#061620' : '#070B17',
+                    border: `1px solid ${effectiveMethod === id ? '#06B6D4' : '#1E2D45'}`,
+                    color: effectiveMethod === id ? '#22D3EE' : '#64748B',
+                  }}
+                >
+                  {icon}
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: '#475569' }}>
+              Payment options unavailable for this job state.
+            </p>
+          )}
+          {policyCopy && (
             <p className="text-[10px] mt-2" style={{ color: '#475569' }}>
-              Cash payments are recorded as intent but not verified. UPI escrow is coming in v2.
+              {policyCopy}
             </p>
           )}
         </div>

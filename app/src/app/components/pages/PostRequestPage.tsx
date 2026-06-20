@@ -51,12 +51,24 @@ export function PostRequestPage() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
+  const [jobType, setJobType] = useState<'campus_immediate' | 'campus_scheduled' | 'intercity'>('campus_immediate');
   const [itemType, setItemType] = useState<ItemType | null>(null);
   const [weight, setWeight] = useState<Weight | null>(null);
   const [risk, setRisk] = useState<Risk | null>(null);
   const [pickup, setPickup] = useState('');
   const [drop, setDrop] = useState('');
   const [description, setDescription] = useState('');
+  // campus_scheduled fields
+  const [schedStart, setSchedStart] = useState('');
+  const [schedEnd, setSchedEnd] = useState('');
+  // Intercity-only fields
+  const [corridorLandmark, setCorridorLandmark] = useState('');
+  const [receiverPhone, setReceiverPhone] = useState('');
+  const [travelDate, setTravelDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0]!; // default: tomorrow
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [valuableAck, setValuableAck] = useState(false);
@@ -64,7 +76,7 @@ export function PostRequestPage() {
 
   // priceMin = system floor (single source of truth from domain helper)
   const priceMin = itemType && weight && risk
-    ? computePriceFloor(itemType, weight, risk, 'campus_immediate')
+    ? computePriceFloor(itemType, weight, risk, jobType)
     : 0;
   // priceMax = display-only upper bound shown to sender; actual posted_price set in handlePost
   const priceMax = Math.round(priceMin * 1.4);
@@ -78,7 +90,9 @@ export function PostRequestPage() {
   const priceValid = customPriceNum >= priceMin && priceMin > 0;
 
   const canProceedStep1 = itemType && weight && risk;
-  const canProceedStep2 = pickup.trim() && drop.trim() && (risk !== 'Valuable' || valuableAck) && priceValid;
+  const intercityFieldsValid = jobType !== 'intercity' || (corridorLandmark.trim() && receiverPhone.trim() && !!travelDate);
+  const scheduledFieldsValid = jobType !== 'campus_scheduled' || (!!schedStart && !!schedEnd && schedEnd > schedStart);
+  const canProceedStep2 = pickup.trim() && drop.trim() && (risk !== 'Valuable' || valuableAck) && priceValid && intercityFieldsValid && scheduledFieldsValid;
 
   const handlePost = async () => {
     const errs: Record<string, string> = {};
@@ -89,10 +103,19 @@ export function PostRequestPage() {
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
 
-    const job_type = 'campus_immediate' as const;
+    const job_type = jobType;
     const created_at = new Date().toISOString();
     const price_floor = computePriceFloor(itemType!, weight!, risk!, job_type);
     const posted_price = customPriceNum;
+    const schedWindow = job_type === 'campus_scheduled'
+      ? { start: schedStart, end: schedEnd }
+      : undefined;
+    const expires_at = computeExpiresAt(
+      job_type,
+      created_at,
+      schedWindow,
+      job_type === 'intercity' ? travelDate : undefined,
+    );
 
     const newJob: Job = {
       id: `JOB-${2410 + Math.floor(Math.random() * 90)}`,
@@ -113,12 +136,18 @@ export function PostRequestPage() {
       price_floor,
       posted_price,
       confirmation_code: generateConfirmationCode(),
-      expires_at: computeExpiresAt(job_type, created_at),
+      expires_at,
       condition_acknowledged: false,
       status: 'OPEN',
       created_at,
-      eta: '~12 min',
-      distance: '0.8 km',
+      eta: job_type === 'intercity' ? '~travel day' : '~12 min',
+      distance: job_type === 'intercity' ? undefined : '0.8 km',
+      ...(job_type === 'campus_scheduled' ? { scheduled_window: schedWindow } : {}),
+      ...(job_type === 'intercity' ? {
+        corridor_landmark: corridorLandmark,
+        receiver_phone: receiverPhone,
+        travel_date: travelDate,
+      } : {}),
     };
 
     setJobs(prev => [newJob, ...prev]);
@@ -175,6 +204,30 @@ export function PostRequestPage() {
         {/* Step 1: Item details */}
         {step === 1 && (
           <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+            {/* Delivery type */}
+            <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+              <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                DELIVERY TYPE
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <OptionButton value="campus_immediate" selected={jobType === 'campus_immediate'}
+                  onClick={() => setJobType('campus_immediate')} className="p-3 text-center">
+                  <div className="font-medium text-sm">Campus Now</div>
+                  <div className="text-[10px] mt-0.5 opacity-60">Expires 30 min</div>
+                </OptionButton>
+                <OptionButton value="campus_scheduled" selected={jobType === 'campus_scheduled'}
+                  onClick={() => setJobType('campus_scheduled')} className="p-3 text-center">
+                  <div className="font-medium text-sm">Scheduled</div>
+                  <div className="text-[10px] mt-0.5 opacity-60">Pick time window</div>
+                </OptionButton>
+                <OptionButton value="intercity" selected={jobType === 'intercity'}
+                  onClick={() => setJobType('intercity')} className="p-3 text-center">
+                  <div className="font-medium text-sm">Intercity</div>
+                  <div className="text-[10px] mt-0.5 opacity-60">UPI only</div>
+                </OptionButton>
+              </div>
+            </div>
+
             {/* Item type */}
             <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
               <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -398,6 +451,107 @@ export function PostRequestPage() {
                   onBlur={e => e.target.style.borderColor = '#1E2D45'}
                 />
               </div>
+
+              {/* Campus Scheduled fields */}
+              {jobType === 'campus_scheduled' && (
+                <>
+                  <div className="pt-1">
+                    <div className="h-px mb-3" style={{ background: '#1E2D45' }} />
+                    <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                      SCHEDULED WINDOW
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                      Window Start <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={schedStart}
+                      onChange={e => setSchedStart(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-lg text-sm text-white outline-none"
+                      style={{ background: '#060A14', border: '1px solid #1E2D45', colorScheme: 'dark' }}
+                      onFocus={e => e.target.style.borderColor = '#06B6D4'}
+                      onBlur={e => e.target.style.borderColor = '#1E2D45'}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                      Window End <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={schedEnd}
+                      min={schedStart}
+                      onChange={e => setSchedEnd(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-lg text-sm text-white outline-none"
+                      style={{ background: '#060A14', border: '1px solid #1E2D45', colorScheme: 'dark' }}
+                      onFocus={e => e.target.style.borderColor = '#06B6D4'}
+                      onBlur={e => e.target.style.borderColor = '#1E2D45'}
+                    />
+                    {schedStart && schedEnd && schedEnd <= schedStart && (
+                      <p className="text-[11px] mt-1 text-red-400">End must be after start</p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Intercity-only fields */}
+              {jobType === 'intercity' && (
+                <>
+                  <div className="pt-1">
+                    <div className="h-px mb-3" style={{ background: '#1E2D45' }} />
+                    <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                      INTERCITY DETAILS (MODE 2)
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                      Landmark / Meeting Point <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={corridorLandmark}
+                      onChange={e => setCorridorLandmark(e.target.value)}
+                      placeholder="e.g. Vellore Bus Stand, Gate 2"
+                      className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
+                      style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                      onFocus={e => e.target.style.borderColor = '#06B6D4'}
+                      onBlur={e => e.target.style.borderColor = '#1E2D45'}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                      Receiver Phone <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={receiverPhone}
+                      onChange={e => setReceiverPhone(e.target.value)}
+                      placeholder="+91 9XXXXXXXXX"
+                      className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
+                      style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                      onFocus={e => e.target.style.borderColor = '#06B6D4'}
+                      onBlur={e => e.target.style.borderColor = '#1E2D45'}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                      Travel Date <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={travelDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={e => setTravelDate(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-lg text-sm text-white outline-none"
+                      style={{ background: '#060A14', border: '1px solid #1E2D45', colorScheme: 'dark' }}
+                      onFocus={e => e.target.style.borderColor = '#06B6D4'}
+                      onBlur={e => e.target.style.borderColor = '#1E2D45'}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Price — system floor + sender offer */}
@@ -477,11 +631,21 @@ export function PostRequestPage() {
               </div>
               <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
                 {[
+                  { label: 'Delivery Type', value: jobType === 'intercity' ? 'Intercity (Mode 2)' : jobType === 'campus_scheduled' ? 'Campus Scheduled (Mode 1)' : 'Campus Now (Mode 1)' },
+                  ...(jobType === 'campus_scheduled' ? [
+                    { label: 'Window Start', value: schedStart ? new Date(schedStart).toLocaleString() : '—' },
+                    { label: 'Window End', value: schedEnd ? new Date(schedEnd).toLocaleString() : '—' },
+                  ] : []),
                   { label: 'Item Type', value: itemType },
                   { label: 'Weight Tier', value: weight },
                   { label: 'Risk Level', value: risk },
                   { label: 'Pickup', value: pickup },
                   { label: 'Drop', value: drop },
+                  ...(jobType === 'intercity' ? [
+                    { label: 'Landmark', value: corridorLandmark },
+                    { label: 'Receiver Phone', value: receiverPhone },
+                    { label: 'Travel Date', value: travelDate },
+                  ] : []),
                   { label: 'Description', value: description || '—' },
                   { label: 'Your Offer', value: `₹${customPriceNum}`, mono: true, highlight: true },
                   { label: 'System Floor', value: `₹${priceMin}`, mono: true },

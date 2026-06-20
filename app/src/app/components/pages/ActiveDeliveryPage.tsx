@@ -45,6 +45,8 @@ export function ActiveDeliveryPage() {
   const [secureDropLoading, setSecureDropLoading] = useState(false);
   // hold-for-ops sub-flow state (Fragile/Valuable branch)
   const [opsHoldLoading, setOpsHoldLoading] = useState(false);
+  /** 4-digit handoff code entered by the runner at the drop location. */
+  const [codeInput, setCodeInput] = useState('');
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -93,14 +95,18 @@ export function ActiveDeliveryPage() {
   };
 
   const handleConfirmDelivery = async () => {
+    if (!activeJob) return;
+    const result = assertTransition(activeJob.status, 'DELIVERED');
+    if (!result.ok) {
+      console.error('[RushBuddy] handleConfirmDelivery — invalid transition:', result.error);
+      return;
+    }
     setDeliverLoading(true);
     await new Promise(r => setTimeout(r, 1200));
     setPhase('delivered');
-    if (activeJob) {
-      setJobs(prev => prev.map(j => j.id === activeJob.id ? {
-        ...j, status: 'DELIVERED', delivered_at: new Date().toISOString()
-      } : j));
-    }
+    setJobs(prev => prev.map(j => j.id === activeJob.id ? {
+      ...j, status: 'DELIVERED', delivered_at: new Date().toISOString()
+    } : j));
     setDeliverLoading(false);
     await new Promise(r => setTimeout(r, 800));
     navigate('/home');
@@ -278,6 +284,9 @@ export function ActiveDeliveryPage() {
   }
 
   const isSenderUnreachable = !!activeJob?.sender_unreachable_at;
+  // True when the runner has entered the correct 4-digit code from the receiver.
+  // Gates the "Confirm Delivery" button — spec: runner enters code verbally given by receiver.
+  const codeCorrect = codeInput.length === 4 && codeInput === activeJob.confirmation_code;
 
   const phaseLabels: Record<DeliveryPhase, { title: string; sub: string }> = {
     going_pickup: { title: 'Go to Pickup', sub: 'Head to the sender\'s pickup point' },
@@ -520,11 +529,45 @@ export function ActiveDeliveryPage() {
                     </span>
                   </div>
 
+                  {/* Handoff code entry — runner enters 4-digit code received verbally from the receiver */}
+                  <div className="rounded-lg p-4 mb-4" style={{ background: '#061020', border: '1px solid #0E2D3D' }}>
+                    <div className="text-xs mb-1.5" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                      HANDOFF CODE
+                    </div>
+                    <p className="text-xs mb-3" style={{ color: '#64748B' }}>
+                      Ask the receiver for the 4-digit code the sender shared with them.
+                    </p>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={codeInput}
+                      onChange={e => setCodeInput(e.target.value.replace(/\D/g, ''))}
+                      placeholder="0 0 0 0"
+                      className="w-full px-4 py-3 rounded-lg text-center text-white text-xl outline-none"
+                      style={{
+                        background: '#060A14',
+                        border: `1px solid ${codeCorrect ? '#10B981' : codeInput.length === 4 ? '#EF4444' : '#1E2D45'}`,
+                        fontFamily: 'JetBrains Mono, monospace',
+                        letterSpacing: '0.4em',
+                      }}
+                    />
+                    {codeCorrect && (
+                      <p className="text-[11px] mt-1.5 text-center text-emerald-400">✓ Code verified — ready to confirm</p>
+                    )}
+                    {codeInput.length === 4 && !codeCorrect && (
+                      <p className="text-[11px] mt-1.5 text-center text-red-400">Incorrect code — try again</p>
+                    )}
+                  </div>
+
                   <button
                     onClick={handleConfirmDelivery}
-                    disabled={deliverLoading}
+                    disabled={deliverLoading || !codeCorrect}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-3"
-                    style={{ background: deliverLoading ? '#0A2010' : 'linear-gradient(135deg, #10B981, #059669)', opacity: deliverLoading ? 0.8 : 1 }}
+                    style={{
+                      background: !codeCorrect ? '#0B1120' : deliverLoading ? '#0A2010' : 'linear-gradient(135deg, #10B981, #059669)',
+                      opacity: !codeCorrect || deliverLoading ? 0.6 : 1,
+                    }}
                   >
                     {deliverLoading ? (
                       <>
