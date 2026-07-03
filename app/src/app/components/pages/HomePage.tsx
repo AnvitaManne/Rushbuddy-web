@@ -7,6 +7,7 @@ import {
   AlertCircle, Radio
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { isDisputeWindowOpen } from '@/domain';
 
 const statusColors: Record<string, { bg: string; text: string; border: string; dot: string }> = {
   OPEN: { bg: '#0D1A2D', text: '#60A5FA', border: '#1E3A5F', dot: '#60A5FA' },
@@ -22,15 +23,21 @@ const statusColors: Record<string, { bg: string; text: string; border: string; d
 
 /** Human-readable overrides for status labels shown in the recent-jobs list. */
 const STATUS_LABELS: Record<string, string> = {
-  DISPUTED: 'UNDER REVIEW',
-  PENDING_RATING: 'AWAITING RATING',
-  ISSUE_REPORTED: 'ISSUE REPORTED',
+  PENDING_RATING: 'PAYMENT PENDING',
+  DISPUTED: 'OPS REVIEW',
+  ISSUE_REPORTED: 'OPS REVIEW',
   IN_TRANSIT: 'IN TRANSIT',
 };
 
-function StatusBadge({ status }: { status: string }) {
+/**
+ * StatusBadge — renders a coloured pill for the job status.
+ * `labelOverride` lets callers supply richer context-aware copy
+ * (e.g. "DISPUTE WINDOW" for a DELIVERED job whose window is still open)
+ * without changing the base status colour.
+ */
+function StatusBadge({ status, labelOverride }: { status: string; labelOverride?: string }) {
   const c = statusColors[status] || statusColors.CLOSED;
-  const label = STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
+  const label = labelOverride ?? STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium"
       style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, fontFamily: 'JetBrains Mono, monospace' }}>
@@ -312,6 +319,17 @@ export function HomePage() {
           <div style={{ background: '#0B1120' }}>
             {recentJobs.map((job, i) => {
               const isDone = job.status === 'CLOSED' || job.status === 'DISPUTED';
+
+              // Context-aware badge label: goes beyond status enum when job data gives more info.
+              let badgeLabel: string | undefined;
+              if (job.status === 'DELIVERED') {
+                if (job.payment_status === 'paid' && job.dispute_window_ends_at) {
+                  badgeLabel = isDisputeWindowOpen(job) ? 'DISPUTE WINDOW' : 'CLOSING SOON';
+                } else {
+                  badgeLabel = 'PAYMENT PENDING';
+                }
+              }
+
               return (
               <div
                 key={job.id}
@@ -334,7 +352,7 @@ export function HomePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <StatusBadge status={job.status} />
+                    <StatusBadge status={job.status} labelOverride={badgeLabel} />
                     {job.runner_id === 'u1' ? (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Runner</span>
                     ) : (

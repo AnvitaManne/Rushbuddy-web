@@ -7,6 +7,7 @@ import {
   AlertTriangle, UserX, Copy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { isDisputeWindowOpen } from '@/domain';
 
 const TIMELINE_STEPS = [
   { key: 'OPEN', label: 'Finding Buddy', sub: 'Notifying runners...', icon: Radio },
@@ -18,7 +19,7 @@ const TIMELINE_STEPS = [
 function getStepIndex(status: string) {
   const map: Record<string, number> = {
     OPEN: 0, MATCHED: 1, IN_TRANSIT: 2,
-    DELIVERED: 3, CLOSED: 3, PENDING_RATING: 3,
+    DELIVERED: 3, PENDING_RATING: 3, CLOSED: 3, DISPUTED: 3,
     // ISSUE_REPORTED: item was picked up but not delivered normally
     ISSUE_REPORTED: 2,
   };
@@ -538,7 +539,10 @@ export function TrackingPage() {
         </button>
       )}
 
-      {displayStep === 3 && (
+      {/* ── Post-delivery: rate CTA (PENDING_RATING or unpaid DELIVERED) ────── */}
+      {displayStep === 3 &&
+        (job.status === 'PENDING_RATING' ||
+          (job.status === 'DELIVERED' && job.payment_status !== 'paid')) && (
         <motion.button
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -548,6 +552,96 @@ export function TrackingPage() {
         >
           Rate & Confirm Payment →
         </motion.button>
+      )}
+
+      {/* ── Post-delivery: DELIVERED + paid + dispute window still open ──────── */}
+      {displayStep === 3 &&
+        job.status === 'DELIVERED' &&
+        job.payment_status === 'paid' &&
+        isDisputeWindowOpen(job) && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-4 space-y-2"
+          style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={13} className="text-emerald-400" />
+            <span className="text-sm font-medium text-emerald-400">Payment Confirmed</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span style={{ color: '#64748B' }}>Dispute window closes at</span>
+            <span style={{ color: '#94A3B8', fontFamily: 'JetBrains Mono, monospace' }}>
+              {new Date(job.dispute_window_ends_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+          <p className="text-[11px]" style={{ color: '#475569' }}>
+            No dispute filed yet. Job will auto-close after the window.
+          </p>
+        </motion.div>
+      )}
+
+      {/* ── Post-delivery: DELIVERED + paid + dispute window elapsed ─────────── */}
+      {displayStep === 3 &&
+        job.status === 'DELIVERED' &&
+        job.payment_status === 'paid' &&
+        !isDisputeWindowOpen(job) &&
+        job.dispute_window_ends_at && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-4"
+          style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <CheckCircle2 size={13} className="text-emerald-400" />
+            <span className="text-sm font-medium text-emerald-400">Dispute Window Closed</span>
+          </div>
+          <p className="text-xs" style={{ color: '#64748B' }}>
+            Job will auto-close shortly. Runner payout confirmed.
+          </p>
+        </motion.div>
+      )}
+
+      {/* ── Post-delivery: CLOSED ─────────────────────────────────────────────── */}
+      {displayStep === 3 && job.status === 'CLOSED' && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-4"
+          style={{ background: '#0D1120', border: '1px solid #1E2D45' }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <CheckCircle2 size={13} className="text-slate-400" />
+            <span className="text-sm font-medium" style={{ color: '#94A3B8' }}>Job Closed</span>
+          </div>
+          <p className="text-xs" style={{ color: '#64748B' }}>
+            Payment confirmed and job closed.{job.rating ? ` Rated ${job.rating} ★.` : ''}
+          </p>
+          {job.closed_at && (
+            <p className="text-[10px] mt-1.5" style={{ color: '#334155', fontFamily: 'JetBrains Mono, monospace' }}>
+              Closed at {new Date(job.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
+        </motion.div>
+      )}
+
+      {/* ── Post-delivery: DISPUTED ───────────────────────────────────────────── */}
+      {displayStep === 3 && job.status === 'DISPUTED' && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-4"
+          style={{ background: '#0D1120', border: '1px solid #1E2D45' }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <AlertCircle size={13} className="text-slate-400" />
+            <span className="text-sm font-medium" style={{ color: '#94A3B8' }}>Dispute Under Ops Review</span>
+          </div>
+          <p className="text-xs" style={{ color: '#64748B' }}>
+            Our team will review and respond within 4 hours.
+          </p>
+        </motion.div>
       )}
 
       {/* Failure-path payment button — shown when no-answer resolution is complete

@@ -6,3 +6,4 @@ export * from './jobHelpers';
 export * from './runnerEligibility';
 export * from './failureHandling';
 export * from './paymentPolicy';
+export * from './closurePolicy';
