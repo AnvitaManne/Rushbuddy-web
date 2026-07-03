@@ -506,6 +506,27 @@ export function RatingPage() {
             >
               Report an Issue Instead
             </button>
+            {/* DEV only — stamps payment as confirmed with an already-expired dispute window,
+                then sends the sender to TrackingPage where the Close Job button will be ready. */}
+            {import.meta.env.DEV && job && (
+              <button
+                onClick={() => {
+                  const paidAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+                  setJobs(prev => prev.map(j => j.id === job.id ? {
+                    ...j,
+                    payment_status: 'paid' as const,
+                    payment_method: effectiveMethod,
+                    paid_at: paidAt,
+                    dispute_window_ends_at: paidAt,
+                  } : j));
+                  navigate('/sender/tracking', { state: { jobId: job.id } });
+                }}
+                className="w-full py-1.5 rounded text-[10px] border"
+                style={{ background: '#070B17', border: '1px solid #1A2535', color: '#475569' }}
+              >
+                DEV · Skip to Close Job (Tracking)
+              </button>
+            )}
           </>
         ) : (
           // pageStep === 'rating'

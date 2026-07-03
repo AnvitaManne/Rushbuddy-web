@@ -7,7 +7,7 @@ import {
   AlertTriangle, UserX, Copy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { isDisputeWindowOpen } from '@/domain';
+import { isDisputeWindowOpen, canAutoCloseJob, buildCloseJobPatch } from '@/domain';
 
 const TIMELINE_STEPS = [
   { key: 'OPEN', label: 'Finding Buddy', sub: 'Notifying runners...', icon: Radio },
@@ -63,6 +63,7 @@ export function TrackingPage() {
   const [simStep, setSimStep] = useState<number | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [closeLoading, setCloseLoading] = useState(false);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
   // For failure-path jobs, always use the real step — ignore any stale simStep
@@ -114,6 +115,39 @@ export function TrackingPage() {
       setJobs(prev => prev.filter(j => j.id !== job.id));
       navigate('/home');
     }
+  };
+
+  /**
+   * Closes a job whose dispute window has elapsed.
+   * Validates DELIVERED/PENDING_RATING → CLOSED via assertTransition (inside buildCloseJobPatch).
+   * No-ops silently if the job is not yet eligible (e.g. DISPUTED, window still open).
+   */
+  const handleCloseJob = async () => {
+    if (!job) return;
+    const patch = buildCloseJobPatch(job);
+    if (!patch) return;
+    setCloseLoading(true);
+    await new Promise(r => setTimeout(r, 800));
+    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
+    setCloseLoading(false);
+  };
+
+  /**
+   * DEV ONLY — stamps payment as confirmed and rewinds dispute_window_ends_at to
+   * 3 hours ago, making the job immediately eligible for Close Job.
+   * Works regardless of whether the sender has visited /rate yet.
+   */
+  const devExpireWindow = () => {
+    if (!job) return;
+    const now = new Date();
+    const paidAt = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString();
+    setJobs(prev => prev.map(j => j.id === job.id ? {
+      ...j,
+      payment_status: 'paid' as const,
+      payment_method: j.payment_method ?? 'upi',
+      paid_at: paidAt,
+      dispute_window_ends_at: paidAt, // already in the past
+    } : j));
   };
 
   if (!job) {
@@ -539,19 +573,30 @@ export function TrackingPage() {
         </button>
       )}
 
-      {/* ── Post-delivery: rate CTA (PENDING_RATING or unpaid DELIVERED) ────── */}
+      {/* ── Post-delivery: rate CTA (PENDING_RATING or unpaid DELIVERED, not yet auto-closeable) ── */}
       {displayStep === 3 &&
+        !canAutoCloseJob(job) &&
         (job.status === 'PENDING_RATING' ||
           (job.status === 'DELIVERED' && job.payment_status !== 'paid')) && (
-        <motion.button
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate('/rate', { state: { jobId: job.id } })}
-          className="w-full py-3 rounded-lg text-sm font-semibold text-white"
-          style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
-        >
-          Rate & Confirm Payment →
-        </motion.button>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+          <button
+            onClick={() => navigate('/rate', { state: { jobId: job.id } })}
+            className="w-full py-3 rounded-lg text-sm font-semibold text-white"
+            style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
+          >
+            Rate & Confirm Payment →
+          </button>
+          {/* Dev shortcut: stamps payment + expires window in one tap. */}
+          {import.meta.env.DEV && !canAutoCloseJob(job) && (
+            <button
+              onClick={devExpireWindow}
+              className="w-full py-1.5 rounded text-[10px] border"
+              style={{ background: '#070B17', border: '1px solid #1A2535', color: '#475569' }}
+            >
+              DEV · Confirm Payment &amp; Expire Window
+            </button>
+          )}
+        </motion.div>
       )}
 
       {/* ── Post-delivery: DELIVERED + paid + dispute window still open ──────── */}
@@ -578,28 +623,51 @@ export function TrackingPage() {
           <p className="text-[11px]" style={{ color: '#475569' }}>
             No dispute filed yet. Job will auto-close after the window.
           </p>
+          {import.meta.env.DEV && (
+            <button
+              onClick={devExpireWindow}
+              className="w-full py-1.5 rounded text-[10px] border mt-1"
+              style={{ background: '#070B17', border: '1px solid #1A2535', color: '#475569' }}
+            >
+              DEV · Expire Dispute Window
+            </button>
+          )}
         </motion.div>
       )}
 
-      {/* ── Post-delivery: DELIVERED + paid + dispute window elapsed ─────────── */}
-      {displayStep === 3 &&
-        job.status === 'DELIVERED' &&
-        job.payment_status === 'paid' &&
-        !isDisputeWindowOpen(job) &&
-        job.dispute_window_ends_at && (
+      {/* ── Post-delivery: dispute window elapsed → Close Job ───────────────── */}
+      {/* canAutoCloseJob covers DELIVERED and PENDING_RATING, and excludes DISPUTED / ISSUE_REPORTED. */}
+      {displayStep === 3 && canAutoCloseJob(job) && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl p-4"
+          className="rounded-xl p-4 space-y-3"
           style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
         >
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2">
             <CheckCircle2 size={13} className="text-emerald-400" />
             <span className="text-sm font-medium text-emerald-400">Dispute Window Closed</span>
           </div>
           <p className="text-xs" style={{ color: '#64748B' }}>
-            Job will auto-close shortly. Runner payout confirmed.
+            No dispute was filed. Close the job to confirm runner payout.
           </p>
+          <button
+            onClick={handleCloseJob}
+            disabled={closeLoading}
+            className="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all flex items-center justify-center gap-2"
+            style={{
+              background: closeLoading
+                ? '#1E2D45'
+                : 'linear-gradient(135deg, #10B981, #059669)',
+            }}
+          >
+            {closeLoading ? (
+              <>
+                <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                Closing...
+              </>
+            ) : 'Close Job →'}
+          </button>
         </motion.div>
       )}
 
