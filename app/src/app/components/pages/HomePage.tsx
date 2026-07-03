@@ -14,18 +14,28 @@ const statusColors: Record<string, { bg: string; text: string; border: string; d
   IN_TRANSIT: { bg: '#1A1005', text: '#FCD34D', border: '#3B2A0A', dot: '#FCD34D' },
   DELIVERED: { bg: '#0A1A0D', text: '#10B981', border: '#1A3520', dot: '#10B981' },
   CLOSED: { bg: '#0D1120', text: '#64748B', border: '#1E2D45', dot: '#64748B' },
-  DISPUTED: { bg: '#1C0A0A', text: '#F87171', border: '#3B1111', dot: '#F87171' },
+  // Disputed = ops is reviewing; muted blue-slate, not alarm-red.
+  DISPUTED: { bg: '#0D1525', text: '#94A3B8', border: '#1E2D45', dot: '#64748B' },
   ISSUE_REPORTED: { bg: '#1C0A0A', text: '#F97316', border: '#3B1811', dot: '#F97316' },
   PENDING_RATING: { bg: '#1A1005', text: '#FCD34D', border: '#3B2A0A', dot: '#FCD34D' },
 };
 
+/** Human-readable overrides for status labels shown in the recent-jobs list. */
+const STATUS_LABELS: Record<string, string> = {
+  DISPUTED: 'UNDER REVIEW',
+  PENDING_RATING: 'AWAITING RATING',
+  ISSUE_REPORTED: 'ISSUE REPORTED',
+  IN_TRANSIT: 'IN TRANSIT',
+};
+
 function StatusBadge({ status }: { status: string }) {
   const c = statusColors[status] || statusColors.CLOSED;
+  const label = STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium"
       style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, fontFamily: 'JetBrains Mono, monospace' }}>
       <div className="w-1.5 h-1.5 rounded-full" style={{ background: c.dot }} />
-      {status.replace('_', ' ')}
+      {label}
     </span>
   );
 }
@@ -300,11 +310,13 @@ export function HomePage() {
           </div>
         ) : (
           <div style={{ background: '#0B1120' }}>
-            {recentJobs.map((job, i) => (
+            {recentJobs.map((job, i) => {
+              const isDone = job.status === 'CLOSED' || job.status === 'DISPUTED';
+              return (
               <div
                 key={job.id}
-                onClick={() => handleJobClick(job)}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                onClick={() => !isDone && handleJobClick(job)}
+                className={`flex items-center gap-3 px-4 py-3 transition-colors ${isDone ? 'cursor-default opacity-60' : 'hover:bg-white/[0.02] cursor-pointer'}`}
                 style={{ borderBottom: i < recentJobs.length - 1 ? '1px solid #111E35' : 'none' }}
               >
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -353,7 +365,8 @@ export function HomePage() {
                   ) : null}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
