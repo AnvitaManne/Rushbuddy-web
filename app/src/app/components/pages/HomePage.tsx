@@ -23,6 +23,7 @@ const statusColors: Record<string, { bg: string; text: string; border: string; d
 
 /** Human-readable overrides for status labels shown in the recent-jobs list. */
 const STATUS_LABELS: Record<string, string> = {
+<<<<<<< HEAD
   PENDING_RATING: 'PAYMENT PENDING',
   DISPUTED: 'OPS REVIEW',
   ISSUE_REPORTED: 'OPS REVIEW',
@@ -38,6 +39,17 @@ const STATUS_LABELS: Record<string, string> = {
 function StatusBadge({ status, labelOverride }: { status: string; labelOverride?: string }) {
   const c = statusColors[status] || statusColors.CLOSED;
   const label = labelOverride ?? STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
+=======
+  DISPUTED: 'UNDER REVIEW',
+  PENDING_RATING: 'AWAITING RATING',
+  ISSUE_REPORTED: 'ISSUE REPORTED',
+  IN_TRANSIT: 'IN TRANSIT',
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const c = statusColors[status] || statusColors.CLOSED;
+  const label = STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
+>>>>>>> 6f1429e60ad9bf6af9b14fa68e4057a8f2ee1b87
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium"
       style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, fontFamily: 'JetBrains Mono, monospace' }}>
@@ -319,6 +331,7 @@ export function HomePage() {
           <div style={{ background: '#0B1120' }}>
             {recentJobs.map((job, i) => {
               const isDone = job.status === 'CLOSED' || job.status === 'DISPUTED';
+<<<<<<< HEAD
 
               // Context-aware badge label: goes beyond status enum when job data gives more info.
               let badgeLabel: string | undefined;
@@ -330,6 +343,8 @@ export function HomePage() {
                 }
               }
 
+=======
+>>>>>>> 6f1429e60ad9bf6af9b14fa68e4057a8f2ee1b87
               return (
               <div
                 key={job.id}
