@@ -145,3 +145,96 @@ export interface Job {
   tip_amount?: number;
   rating?: number;
 }
+
+/** Ops/trust event categories for no-shows, disputes, and FIR-ready logs. */
+export type TrustEventType =
+  | 'runner_no_show_pre_pickup'
+  | 'runner_unresponsive_after_pickup'
+  | 'sender_no_answer_dropoff'
+  | 'secure_drop_completed'
+  | 'hold_for_ops'
+  | 'dispute_filed'
+  | 'theft_escalation'
+  | 'account_suspended'
+  | 'ops_note_added';
+
+export type TrustSeverity = 'info' | 'warning' | 'critical';
+
+/**
+ * Append-only trust/ops log entry.
+ * Used for account actions and FIR export assembly — not a legal filing.
+ */
+export interface TrustEvent {
+  id: string;
+  type: TrustEventType;
+  job_id?: string;
+  actor_user_id?: string;
+  target_user_id?: string;
+  created_at: string;
+  severity: TrustSeverity;
+  message: string;
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
+/**
+ * Runner-facing trust aggregate (mirrors User trust fields + ops extras).
+ * Kept separate so ops can evolve without widening every User consumer.
+ */
+export interface RunnerTrustRecord {
+  runner_id: string;
+  no_show_count: number;
+  suspension_status: SuspensionStatus;
+  trust_score: number;
+  last_incident_at?: string;
+  suspension_reason?: string;
+}
+
+/** Mock-only party identity for FIR support packages. Never real Aadhaar. */
+export interface FirPartyIdentity {
+  user_id: string;
+  display_name: string;
+  email: string;
+  hostel_block: string;
+  /** V1 mock KYC — college email only; not government ID. */
+  identity_source: 'mock_vit_email_only';
+  /** Placeholder ref; always clearly mock. */
+  mock_aadhaar_ref: string;
+}
+
+export interface FirTimelineEntry {
+  at: string;
+  label: string;
+  source: 'job' | 'trust_event';
+  status?: JobStatus;
+  event_type?: TrustEventType;
+}
+
+export interface FirEvidence {
+  pickup_photo_url: string | null;
+  dropoff_photo_url: string | null;
+  ops_notified: boolean;
+  no_answer_at: string | null;
+  trust_events: TrustEvent[];
+  /** Mock GPS breadcrumbs for FIR support; not live tracking. */
+  mock_gps_log: Array<{
+    at: string;
+    label: string;
+    lat: number | null;
+    lng: number | null;
+  }>;
+}
+
+/**
+ * FIR support package export.
+ * Mock / supporting document only — not a legal filing with law enforcement.
+ */
+export interface FIRExport {
+  job_id: string;
+  runner_identity: FirPartyIdentity;
+  sender_identity: FirPartyIdentity;
+  job_timeline: FirTimelineEntry[];
+  last_known_status: JobStatus;
+  evidence: FirEvidence;
+  generated_at: string;
+  disclaimer: 'mock/supporting-document-not-legal-filing';
+}
