@@ -65,11 +65,11 @@ export function HomePage() {
       } else {
         navigate('/sender/tracking', { state: { jobId: id } });
       }
-    } else if (job.status === 'ISSUE_REPORTED') {
-      // Sender sees tracking with the exact job; runner has no dedicated page.
+    } else if (job.status === 'ISSUE_REPORTED' || job.status === 'DISPUTED') {
+      // Both states have detail on TrackingPage (dispute card / failure-evidence card).
       if (currentRole === 'sender') navigate('/sender/tracking', { state: { jobId: id } });
     }
-    // CLOSED, DISPUTED, OPEN — no destination yet
+    // CLOSED, OPEN — no destination yet
   };
 
   const displayUser = user || {
@@ -318,7 +318,8 @@ export function HomePage() {
         ) : (
           <div style={{ background: '#0B1120' }}>
             {recentJobs.map((job, i) => {
-              const isDone = job.status === 'CLOSED' || job.status === 'DISPUTED';
+              // Only CLOSED is truly terminal with no detail page to show.
+              const isDone = job.status === 'CLOSED';
 
               // Context-aware badge label: goes beyond status enum when job data gives more info.
               let badgeLabel: string | undefined;

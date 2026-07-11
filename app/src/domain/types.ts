@@ -218,4 +218,16 @@ export interface Job {
   dispute_window_ends_at?: string;
   /** ISO timestamp when the job transitioned to CLOSED. */
   closed_at?: string;
+
+  // ── Dispute fields (Phase 6.7) ─────────────────────────────────────────────
+
+  /**
+   * Issue category selected by the sender on the dispute form.
+   * One of: 'Item damaged' | 'Not delivered' | 'Wrong item'.
+   */
+  dispute_type?: string;
+  /** Free-text description entered by the sender at dispute filing. */
+  dispute_description?: string;
+  /** ISO timestamp when the sender tapped "Submit Dispute". */
+  disputed_at?: string;
 }

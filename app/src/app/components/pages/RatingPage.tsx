@@ -144,10 +144,16 @@ export function RatingPage() {
     setTransitionError(null);
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
+    const now = new Date().toISOString();
     setJobs(prev => prev.map(j => j.id === job.id ? {
       ...j,
       status: 'DISPUTED',
       payment_status: 'disputed' as const,
+      // Runner payout is withheld pending ops resolution.
+      runner_payout_status: 'withheld' as const,
+      dispute_type: disputeType || undefined,
+      dispute_description: disputeDesc || undefined,
+      disputed_at: now,
     } : j));
     setLoading(false);
     setSubmitted(true);

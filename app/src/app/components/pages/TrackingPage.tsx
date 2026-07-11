@@ -699,16 +699,40 @@ export function TrackingPage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl p-4"
+          className="rounded-xl p-4 space-y-2.5"
           style={{ background: '#0D1120', border: '1px solid #1E2D45' }}
         >
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2">
             <AlertCircle size={13} className="text-slate-400" />
             <span className="text-sm font-medium" style={{ color: '#94A3B8' }}>Dispute Under Ops Review</span>
           </div>
           <p className="text-xs" style={{ color: '#64748B' }}>
-            Our team will review and respond within 4 hours.
+            Ops will review and respond within 4 hours. Runner payout is withheld pending resolution.
           </p>
+          {/* Dispute detail rows — only shown when the data was captured */}
+          {(job.dispute_type || job.disputed_at) && (
+            <div className="rounded-lg p-3 space-y-1.5" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+              {job.dispute_type && (
+                <div className="flex items-center justify-between text-xs">
+                  <span style={{ color: '#475569' }}>Issue type</span>
+                  <span style={{ color: '#94A3B8' }}>{job.dispute_type}</span>
+                </div>
+              )}
+              {job.disputed_at && (
+                <div className="flex items-center justify-between text-xs">
+                  <span style={{ color: '#475569' }}>Filed at</span>
+                  <span style={{ color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
+                    {new Date(job.disputed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              {job.dispute_description && (
+                <p className="text-[10px] pt-1" style={{ color: '#475569', borderTop: '1px solid #1E2D45' }}>
+                  "{job.dispute_description}"
+                </p>
+              )}
+            </div>
+          )}
         </motion.div>
       )}
 
