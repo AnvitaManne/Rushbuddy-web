@@ -6,6 +6,9 @@ import {
   AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { assertTransition } from '@/domain/jobTransitions';
+import { applyNoShowStrike } from '@/domain/trustOps';
+import { logJobTransition } from '@/domain/devJobDebug';
 
 const TIMELINE_STEPS = [
   { key: 'OPEN', label: 'Finding Buddy', sub: 'Notifying runners...', icon: Radio },
@@ -14,37 +17,82 @@ const TIMELINE_STEPS = [
   { key: 'DELIVERED', label: 'Delivered', sub: 'Rate your Buddy', icon: CheckCircle2 },
 ];
 
+/** Pre-pickup no-show unlock window (matched_at → Find New Buddy). */
+const PRE_PICKUP_NOSHOW_MS = 10 * 60 * 1000;
+
 function getStepIndex(status: string) {
   const map: Record<string, number> = { OPEN: 0, MATCHED: 1, IN_TRANSIT: 2, DELIVERED: 3, CLOSED: 3, PENDING_RATING: 3 };
   return map[status] ?? 0;
 }
 
 export function TrackingPage() {
-  const { jobs, setJobs, activeJob: ctxActiveJob } = useApp();
+  const {
+    jobs,
+    setJobs,
+    activeJob: ctxActiveJob,
+    user,
+    appendTrustEvent,
+    updateRunnerTrustRecord,
+  } = useApp();
   const navigate = useNavigate();
 
   const [localJobId, setLocalJobId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ctxActiveJob) setLocalJobId(ctxActiveJob.id);
-    else {
-      const j = jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status));
-      if (j) setLocalJobId(j.id);
-      else {
-        const last = [...jobs].filter(j => j.sender_id === 'u1').sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-        if (last) setLocalJobId(last.id);
-      }
+    // Always bind tracking to a job we own as sender — never a runner-only activeJob.
+    if (ctxActiveJob?.sender_id === 'u1') {
+      setLocalJobId(ctxActiveJob.id);
+      return;
     }
+    const live = jobs.find(j =>
+      j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status),
+    );
+    if (live) {
+      setLocalJobId(live.id);
+      return;
+    }
+    const last = [...jobs]
+      .filter(j => j.sender_id === 'u1')
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    if (last) setLocalJobId(last.id);
   }, [ctxActiveJob, jobs]);
 
-  const job = jobs.find(j => j.id === localJobId) || jobs.find(j => j.sender_id === 'u1');
+  const job =
+    jobs.find(j => j.id === localJobId && j.sender_id === 'u1') ||
+    jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status)) ||
+    jobs.find(j => j.sender_id === 'u1');
 
   const [simStep, setSimStep] = useState<number | null>(null);
   const [simulating, setSimulating] = useState(false);
+  /** Dev-only: treat 10 min pre-pickup window as elapsed. */
+  const [devNoshowElapsed, setDevNoshowElapsed] = useState(false);
+  /** Forces re-render when the real 10 min window unlocks. */
+  const [, setNoshowTick] = useState(0);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
   const displayStep = simStep !== null ? simStep : stepIndex;
+
+  const isPrePickupMatched =
+    !!job && job.status === 'MATCHED' && !job.pickup_confirmed_at;
+
+  const tenMinElapsed =
+    isPrePickupMatched &&
+    !!job.matched_at &&
+    (devNoshowElapsed ||
+      Date.now() - new Date(job.matched_at).getTime() >= PRE_PICKUP_NOSHOW_MS);
+
+  useEffect(() => {
+    setDevNoshowElapsed(false);
+  }, [job?.id, job?.matched_at, job?.status]);
+
+  useEffect(() => {
+    if (!isPrePickupMatched || !job?.matched_at || devNoshowElapsed) return;
+    const remaining =
+      PRE_PICKUP_NOSHOW_MS - (Date.now() - new Date(job.matched_at).getTime());
+    if (remaining <= 0) return;
+    const timer = window.setTimeout(() => setNoshowTick((n) => n + 1), remaining);
+    return () => window.clearTimeout(timer);
+  }, [isPrePickupMatched, job?.matched_at, job?.id, devNoshowElapsed]);
 
   const simulateProgress = async () => {
     if (!job || simulating) return;
@@ -73,6 +121,50 @@ export function TrackingPage() {
       setJobs(prev => prev.filter(j => j.id !== job.id));
       navigate('/home');
     }
+  };
+
+  const handleFindNewBuddy = () => {
+    if (!job || job.status !== 'MATCHED' || job.pickup_confirmed_at) return;
+    if (!job.runner_id) return;
+
+    const transition = assertTransition(job.status, 'OPEN');
+    if (!transition.ok) {
+      console.warn('[RushBuddy] re-pool blocked:', transition.error);
+      return;
+    }
+
+    const priorRunnerId = job.runner_id;
+    logJobTransition(job.id, job.status, 'OPEN');
+
+    appendTrustEvent({
+      type: 'runner_no_show_pre_pickup',
+      job_id: job.id,
+      actor_user_id: user?.id ?? job.sender_id,
+      target_user_id: priorRunnerId,
+      message: 'Runner unresponsive before pickup — sender re-pooled job',
+      metadata: { matched_at: job.matched_at ?? null, mock: true },
+    });
+
+    updateRunnerTrustRecord(priorRunnerId, (prev) => applyNoShowStrike(prev));
+
+    setJobs((prev) =>
+      prev.map((j) => {
+        if (j.id !== job.id) return j;
+        return {
+          ...j,
+          status: 'OPEN' as const,
+          runner_id: undefined,
+          runner_name: undefined,
+          runner_rating: undefined,
+          runner_hostel: undefined,
+          matched_at: undefined,
+          agreed_price: undefined,
+        };
+      }),
+    );
+
+    setSimStep(null);
+    setDevNoshowElapsed(false);
   };
 
   if (!job) {
@@ -181,6 +273,11 @@ export function TrackingPage() {
                 <p className="text-sm mt-1" style={{ color: '#64748B' }}>
                   <span className="text-white">{runnerName}</span> accepted your request · ETA ~{job.eta || '10 min'}
                 </p>
+                {isPrePickupMatched && (
+                  <p className="text-sm mt-3" style={{ color: '#FBBF24' }}>
+                    Runner hasn't confirmed pickup yet.
+                  </p>
+                )}
               </>
             )}
             {displayStep === 2 && (
@@ -286,6 +383,38 @@ export function TrackingPage() {
           ))}
         </div>
       </div>
+
+      {/* Pre-pickup no-show / re-pool */}
+      {isPrePickupMatched && (
+        <div className="space-y-2">
+          {import.meta.env.DEV && !tenMinElapsed && (
+            <button
+              type="button"
+              onClick={() => setDevNoshowElapsed(true)}
+              className="w-full py-2.5 rounded-lg text-xs font-medium border transition-all flex items-center justify-center gap-2"
+              style={{ background: '#070B17', border: '1px solid #1A2535', color: '#94A3B8' }}
+            >
+              <Clock size={12} />
+              Dev: Simulate 10 min elapsed
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleFindNewBuddy}
+            disabled={!tenMinElapsed || !job.runner_id}
+            className="w-full py-3 rounded-lg text-sm font-medium border transition-all flex items-center justify-center gap-2"
+            style={{
+              background: tenMinElapsed && job.runner_id ? '#1C0A0A' : '#070B17',
+              border: `1px solid ${tenMinElapsed && job.runner_id ? '#3B1111' : '#1A2535'}`,
+              color: tenMinElapsed && job.runner_id ? '#F87171' : '#475569',
+              cursor: tenMinElapsed && job.runner_id ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <AlertCircle size={14} />
+            Runner Unresponsive — Find New Buddy
+          </button>
+        </div>
+      )}
 
       {/* Demo simulate button */}
       {displayStep < 3 && (

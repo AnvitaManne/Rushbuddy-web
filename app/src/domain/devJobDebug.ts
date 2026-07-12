@@ -1,5 +1,5 @@
 import type { JobStatus } from './enums';
-import type { Job } from './types';
+import type { Job, RunnerTrustRecord, TrustEvent } from './types';
 import { assertTransition } from './jobTransitions';
 import {
   computeExpiresAt,
@@ -7,6 +7,8 @@ import {
   generateConfirmationCode,
   resolveHandoffMode,
 } from './jobHelpers';
+import type { CreateTrustEventInput } from './trustOps';
+import { createTrustEvent, suspendRunner as applySuspendRunner } from './trustOps';
 
 /** Fields you may override when synthesizing mock / test jobs. */
 export type SampleJobOverrides = Partial<
@@ -126,6 +128,14 @@ export function createSampleJob(overrides: SampleJobOverrides = {}): Job {
 export type DevJobDebugHandlers = {
   setJobs: (update: Job[] | ((prev: Job[]) => Job[])) => void;
   setActiveJob?: (job: Job | null) => void;
+  /** Current trust event log (read via ref in AppContext). */
+  getTrustEvents?: () => TrustEvent[];
+  getRunnerTrustRecords?: () => Record<string, RunnerTrustRecord>;
+  appendTrustEvent?: (input: CreateTrustEventInput | TrustEvent) => TrustEvent;
+  updateRunnerTrustRecord?: (
+    runnerId: string,
+    updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
+  ) => void;
 };
 
 export type RushBuddyDevGlobal = {
@@ -135,6 +145,14 @@ export type RushBuddyDevGlobal = {
   addJob: (overrides?: SampleJobOverrides) => Job;
   /** Updates status with transition logging. */
   transitionJob: (jobId: string, to: JobStatus) => void;
+  /** In-memory trust event log. */
+  trustEvents: () => TrustEvent[];
+  /** In-memory runner trust records by runner id. */
+  runnerTrustRecords: () => Record<string, RunnerTrustRecord>;
+  /** Append a trust event (creates record lazily for target_user_id). */
+  addTrustEvent: (input: CreateTrustEventInput | TrustEvent) => TrustEvent;
+  /** Suspend a runner record and log account_suspended. */
+  suspendRunner: (runnerId: string, reason: string) => RunnerTrustRecord | undefined;
 };
 
 declare global {
@@ -171,11 +189,48 @@ export function attachDevJobDebug(handlers: DevJobDebugHandlers): () => void {
         }),
       );
     },
+    trustEvents() {
+      return handlers.getTrustEvents?.() ?? [];
+    },
+    runnerTrustRecords() {
+      return handlers.getRunnerTrustRecords?.() ?? {};
+    },
+    addTrustEvent(input) {
+      if (!handlers.appendTrustEvent) {
+        const event = 'id' in input && 'severity' in input && 'created_at' in input
+          ? (input as TrustEvent)
+          : createTrustEvent(input as CreateTrustEventInput);
+        console.warn('[RushBuddy dev] appendTrustEvent not wired; returning local event only');
+        return event;
+      }
+      return handlers.appendTrustEvent(input);
+    },
+    suspendRunner(runnerId, reason) {
+      if (!handlers.updateRunnerTrustRecord) {
+        console.warn('[RushBuddy dev] updateRunnerTrustRecord not wired');
+        return undefined;
+      }
+      let next: RunnerTrustRecord | undefined;
+      handlers.updateRunnerTrustRecord(runnerId, (prev) => {
+        next = applySuspendRunner(prev, reason);
+        return next;
+      });
+      handlers.appendTrustEvent?.(
+        createTrustEvent({
+          type: 'account_suspended',
+          target_user_id: runnerId,
+          message: reason,
+          metadata: { mock: true },
+        }),
+      );
+      console.info(`[RushBuddy trust] suspended ${runnerId}: ${reason}`);
+      return next;
+    },
   };
 
   window.__rushbuddyDev = api;
   console.info(
-    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), logJobTransition(), createSampleJob()',
+    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), trustEvents(), runnerTrustRecords(), addTrustEvent(), suspendRunner()',
   );
 
   return () => {

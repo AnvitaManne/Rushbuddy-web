@@ -1,10 +1,50 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { Job, User } from '@/domain/types';
-import type { UserRole } from '@/domain/enums';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import type { Job, RunnerTrustRecord, TrustEvent, User } from '@/domain/types';
+import type { UserGender, UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
+import type { CreateTrustEventInput } from '@/domain/trustOps';
+import { createTrustEvent } from '@/domain/trustOps';
 
 export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
+
+/** Collected on AuthPage before OTP — applied to User on verify. */
+export type PendingSignup = {
+  email: string;
+  name: string;
+  hostel_block: string;
+  gender: UserGender;
+};
+
+function isTrustEvent(value: CreateTrustEventInput | TrustEvent): value is TrustEvent {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'created_at' in value &&
+    'severity' in value &&
+    typeof (value as TrustEvent).id === 'string'
+  );
+}
+
+function trustRecordFromUser(user: User): RunnerTrustRecord {
+  return {
+    runner_id: user.id,
+    no_show_count: user.no_show_count,
+    suspension_status: user.suspension_status,
+    trust_score: user.trust_score,
+  };
+}
+
+/** Simple defaults for mock runners that have not been seeded yet. */
+function defaultRunnerTrustRecord(runnerId: string): RunnerTrustRecord {
+  return {
+    runner_id: runnerId,
+    no_show_count: 0,
+    suspension_status: 'active',
+    trust_score: 80,
+  };
+}
 
 interface AppContextType {
   user: User | null;
@@ -17,8 +57,22 @@ interface AppContextType {
   setActiveJob: (job: Job | null) => void;
   pendingEmail: string;
   setPendingEmail: (email: string) => void;
+  /** Full signup draft (email + name + hostel + gender). LOCKED MVP — see mvp-locked-fields rule. */
+  pendingSignup: PendingSignup | null;
+  setPendingSignup: (signup: PendingSignup | null) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (v: boolean) => void;
+  trustEvents: TrustEvent[];
+  setTrustEvents: React.Dispatch<React.SetStateAction<TrustEvent[]>>;
+  appendTrustEvent: (input: CreateTrustEventInput | TrustEvent) => TrustEvent;
+  runnerTrustRecords: Record<string, RunnerTrustRecord>;
+  setRunnerTrustRecords: React.Dispatch<
+    React.SetStateAction<Record<string, RunnerTrustRecord>>
+  >;
+  updateRunnerTrustRecord: (
+    runnerId: string,
+    updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
+  ) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -192,6 +246,10 @@ const defaultUser: User = {
   best_week_earnings: 450,
 };
 
+const initialRunnerTrustRecords: Record<string, RunnerTrustRecord> = {
+  [defaultUser.id]: trustRecordFromUser(defaultUser),
+};
+
 /**
  * Example runner for eligibility testing (prefer_not_to_say cannot see gendered hostel jobs).
  *
@@ -210,7 +268,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<Job[]>(mockJobs);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingSignup, setPendingSignup] = useState<PendingSignup | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [trustEvents, setTrustEvents] = useState<TrustEvent[]>([]);
+  const [runnerTrustRecords, setRunnerTrustRecords] = useState<
+    Record<string, RunnerTrustRecord>
+  >(initialRunnerTrustRecords);
+
+  const trustEventsRef = useRef(trustEvents);
+  trustEventsRef.current = trustEvents;
+  const runnerTrustRecordsRef = useRef(runnerTrustRecords);
+  runnerTrustRecordsRef.current = runnerTrustRecords;
+
+  const updateRunnerTrustRecord = (
+    runnerId: string,
+    updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
+  ) => {
+    setRunnerTrustRecords((prev) => {
+      const current = prev[runnerId] ?? defaultRunnerTrustRecord(runnerId);
+      return { ...prev, [runnerId]: updater(current) };
+    });
+  };
+
+  const appendTrustEvent = (input: CreateTrustEventInput | TrustEvent): TrustEvent => {
+    const event = isTrustEvent(input) ? input : createTrustEvent(input);
+    setTrustEvents((prev) => [...prev, event]);
+    if (event.target_user_id) {
+      setRunnerTrustRecords((prev) => {
+        if (prev[event.target_user_id!]) return prev;
+        return {
+          ...prev,
+          [event.target_user_id!]: defaultRunnerTrustRecord(event.target_user_id!),
+        };
+      });
+    }
+    return event;
+  };
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -218,7 +311,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.debug(`[RushBuddy dev] ${mockJobs.length} mock jobs loaded`);
     mockJobs.forEach(j => logJobTransition(j.id, '(new)', j.status));
 
-    return attachDevJobDebug({ setJobs, setActiveJob });
+    return attachDevJobDebug({
+      setJobs,
+      setActiveJob,
+      getTrustEvents: () => trustEventsRef.current,
+      getRunnerTrustRecords: () => runnerTrustRecordsRef.current,
+      appendTrustEvent,
+      updateRunnerTrustRecord,
+    });
   }, []);
 
   const handleSetUser = (u: User | null) => {
@@ -237,8 +337,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveJob,
       pendingEmail,
       setPendingEmail,
+      pendingSignup,
+      setPendingSignup,
       isAuthenticated,
       setIsAuthenticated,
+      trustEvents,
+      setTrustEvents,
+      appendTrustEvent,
+      runnerTrustRecords,
+      setRunnerTrustRecords,
+      updateRunnerTrustRecord,
     }}>
       {children}
     </AppContext.Provider>

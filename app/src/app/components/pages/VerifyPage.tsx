@@ -5,7 +5,7 @@ import { Shield, RefreshCw, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-r
 import { motion } from 'motion/react';
 
 export function VerifyPage() {
-  const { pendingEmail, setUser, setIsAuthenticated } = useApp();
+  const { pendingEmail, pendingSignup, setUser, setIsAuthenticated } = useApp();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
@@ -58,7 +58,13 @@ export function VerifyPage() {
     if (code === '123456') {
       setSuccess(true);
       setIsAuthenticated(true);
-      setUser({ ...defaultUser, email: pendingEmail || defaultUser.email });
+      setUser({
+        ...defaultUser,
+        email: pendingSignup?.email || pendingEmail || defaultUser.email,
+        name: pendingSignup?.name || defaultUser.name,
+        hostel_block: pendingSignup?.hostel_block || defaultUser.hostel_block,
+        gender: pendingSignup?.gender || defaultUser.gender,
+      });
       await new Promise(r => setTimeout(r, 1200));
       navigate('/home');
     } else {

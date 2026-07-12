@@ -7,16 +7,8 @@ import {
   LogOut, Settings, Layers, Radio
 } from 'lucide-react';
 
-const navItems = [
-  { to: '/home', icon: LayoutDashboard, label: 'Command Center', desc: 'Overview' },
-  { to: '/sender/post', icon: Package, label: 'Post Request', desc: 'Sender' },
-  { to: '/runner/feed', icon: Zap, label: 'Job Feed', desc: 'Runner' },
-  { to: '/runner/active', icon: Radio, label: 'Active Delivery', desc: 'Live ops' },
-  { to: '/profile', icon: User, label: 'Profile', desc: 'Account' },
-];
-
 export function AppShell() {
-  const { user, currentRole } = useApp();
+  const { user, currentRole, jobs, setCurrentRole, setActiveJob } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,6 +20,53 @@ export function AppShell() {
       : 'text-slate-400 bg-slate-400/10 border-slate-400/30';
 
   const roleDot = currentRole === 'sender' ? 'bg-violet-400' : currentRole === 'runner' ? 'bg-cyan-400' : 'bg-slate-500';
+
+  const openLiveJob = () => {
+    const senderLiveStatuses = ['OPEN', 'MATCHED', 'IN_TRANSIT'];
+    const runnerLiveStatuses = ['MATCHED', 'IN_TRANSIT'];
+    const senderLive = jobs.find(j => j.sender_id === 'u1' && senderLiveStatuses.includes(j.status));
+    const runnerLive = jobs.find(j => j.runner_id === 'u1' && runnerLiveStatuses.includes(j.status));
+
+    // Sender mode always opens sender tracking — never runner active.
+    if (currentRole === 'sender') {
+      if (senderLive) setActiveJob(senderLive);
+      setCurrentRole('sender');
+      navigate('/sender/tracking');
+      return;
+    }
+    if (currentRole === 'runner' && runnerLive) {
+      setActiveJob(runnerLive);
+      navigate('/runner/active');
+      return;
+    }
+    if (senderLive && !runnerLive) {
+      setActiveJob(senderLive);
+      setCurrentRole('sender');
+      navigate('/sender/tracking');
+      return;
+    }
+    if (runnerLive) {
+      setActiveJob(runnerLive);
+      setCurrentRole('runner');
+      navigate('/runner/active');
+      return;
+    }
+    navigate(currentRole === 'sender' ? '/sender/tracking' : '/runner/active');
+  };
+
+  const navItems = [
+    { to: '/home', icon: LayoutDashboard, label: 'Command Center', desc: 'Overview' },
+    { to: '/sender/post', icon: Package, label: 'Post Request', desc: 'Sender' },
+    { to: '/runner/feed', icon: Zap, label: 'Job Feed', desc: 'Runner' },
+    {
+      to: currentRole === 'sender' ? '/sender/tracking' : '/runner/active',
+      icon: Radio,
+      label: 'Active Delivery',
+      desc: currentRole === 'sender' ? 'Sender track' : 'Live ops',
+      onNavigate: openLiveJob,
+    },
+    { to: '/profile', icon: User, label: 'Profile', desc: 'Account' },
+  ];
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#060A14', fontFamily: 'Inter, sans-serif' }}>
@@ -76,11 +115,17 @@ export function AppShell() {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
-          {navItems.map(({ to, icon: Icon, label, desc }) => (
+          {navItems.map(({ to, icon: Icon, label, desc, onNavigate }) => (
             <NavLink
-              key={to}
+              key={label}
               to={to}
-              onClick={() => setSidebarOpen(false)}
+              onClick={(e) => {
+                setSidebarOpen(false);
+                if (onNavigate) {
+                  e.preventDefault();
+                  onNavigate();
+                }
+              }}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group
                 ${isActive
@@ -190,10 +235,16 @@ export function AppShell() {
       {/* Mobile bottom nav */}
       <div className="fixed bottom-0 left-0 right-0 md:hidden flex items-center z-30"
         style={{ background: '#080C18', borderTop: '1px solid #1A2535' }}>
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {navItems.map(({ to, icon: Icon, label, onNavigate }) => (
           <NavLink
-            key={to}
+            key={label}
             to={to}
+            onClick={(e) => {
+              if (onNavigate) {
+                e.preventDefault();
+                onNavigate();
+              }
+            }}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center gap-1 py-2.5 text-[10px] transition-colors
               ${isActive ? 'text-cyan-400' : 'text-slate-500'}`

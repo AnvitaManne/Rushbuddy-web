@@ -31,12 +31,47 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function HomePage() {
-  const { user, setCurrentRole, currentRole, jobs } = useApp();
+  const { user, setCurrentRole, currentRole, jobs, setActiveJob } = useApp();
   const navigate = useNavigate();
 
   const myJobs = jobs.filter(j => j.sender_id === 'u1' || j.runner_id === 'u1');
   const recentJobs = myJobs.slice(0, 4);
-  const activeJob = jobs.find(j => (j.runner_id === 'u1' || j.sender_id === 'u1') && ['MATCHED', 'IN_TRANSIT'].includes(j.status));
+
+  const senderLiveStatuses = ['OPEN', 'MATCHED', 'IN_TRANSIT'];
+  const runnerLiveStatuses = ['MATCHED', 'IN_TRANSIT'];
+
+  const senderActiveJob = jobs.find(
+    j => j.sender_id === 'u1' && senderLiveStatuses.includes(j.status),
+  );
+  const runnerActiveJob = jobs.find(
+    j => j.runner_id === 'u1' && runnerLiveStatuses.includes(j.status),
+  );
+
+  // Hard role lock: never show the other role's job in the banner.
+  const activeJob =
+    currentRole === 'sender'
+      ? senderActiveJob
+      : currentRole === 'runner'
+        ? runnerActiveJob
+        : senderActiveJob ?? runnerActiveJob;
+
+  const activeJobRole: 'sender' | 'runner' | null = !activeJob
+    ? null
+    : activeJob === senderActiveJob && activeJob.sender_id === 'u1'
+      ? 'sender'
+      : 'runner';
+
+  const openActiveJob = () => {
+    if (!activeJob || !activeJobRole) return;
+    setActiveJob(activeJob);
+    if (activeJobRole === 'sender') {
+      setCurrentRole('sender');
+      navigate('/sender/tracking');
+      return;
+    }
+    setCurrentRole('runner');
+    navigate('/runner/active');
+  };
 
   const displayUser = user || {
     name: 'Aditi Krishnan',
@@ -71,10 +106,10 @@ export function HomePage() {
             </p>
           </div>
 
-          {/* Role selector */}
+          {/* Role selector — stay on home so Active Job updates for the chosen POV */}
           <div className="flex rounded-lg overflow-hidden flex-shrink-0" style={{ border: '1px solid #1E2D45' }}>
             <button
-              onClick={() => { setCurrentRole('sender'); navigate('/sender/post'); }}
+              onClick={() => setCurrentRole('sender')}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all"
               style={{
                 background: currentRole === 'sender' ? '#1A0F2E' : '#0B1120',
@@ -86,7 +121,7 @@ export function HomePage() {
               Sender
             </button>
             <button
-              onClick={() => { setCurrentRole('runner'); navigate('/runner/feed'); }}
+              onClick={() => setCurrentRole('runner')}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all"
               style={{
                 background: currentRole === 'runner' ? '#061620' : '#0B1120',
@@ -105,7 +140,7 @@ export function HomePage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate(activeJob.runner_id === 'u1' ? '/runner/active' : '/sender/tracking')}
+          onClick={openActiveJob}
           className="rounded-xl p-4 cursor-pointer transition-all hover:brightness-110"
           style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
         >
@@ -117,7 +152,9 @@ export function HomePage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>ACTIVE JOB</span>
+                <span className="text-xs text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  ACTIVE JOB · {activeJobRole === 'sender' ? 'SENDER' : 'RUNNER'}
+                </span>
               </div>
               <p className="text-sm text-white truncate">{activeJob.pickup_location} → {activeJob.drop_location}</p>
               <p className="text-xs mt-0.5" style={{ color: '#64748B' }}>
