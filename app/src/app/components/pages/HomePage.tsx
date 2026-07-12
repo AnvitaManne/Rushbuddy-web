@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../../context/AppContext';
+import { useApp, defaultUser } from '../../context/AppContext';
 import {
   Package, Zap, TrendingUp, Star, Shield, Clock,
   ChevronRight, ArrowUpRight, Award, CheckCircle2,
@@ -31,12 +31,35 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function HomePage() {
-  const { user, setCurrentRole, currentRole, jobs } = useApp();
+  const { user, setCurrentRole, currentRole, jobs, setActiveJob } = useApp();
   const navigate = useNavigate();
 
-  const myJobs = jobs.filter(j => j.sender_id === 'u1' || j.runner_id === 'u1');
+  const uid = user?.id ?? defaultUser.id;
+  const myJobs = jobs.filter(j => j.sender_id === uid || j.runner_id === uid);
   const recentJobs = myJobs.slice(0, 4);
-  const activeJob = jobs.find(j => (j.runner_id === 'u1' || j.sender_id === 'u1') && ['MATCHED', 'IN_TRANSIT'].includes(j.status));
+  const activeJob = jobs.find(j =>
+    (j.runner_id === uid || j.sender_id === uid)
+    && ['MATCHED', 'IN_TRANSIT', 'PENDING_RATING', 'ISSUE_REPORTED'].includes(j.status),
+  );
+
+  const openJob = (job: (typeof jobs)[number]) => {
+    setActiveJob(job);
+    if (job.status === 'PENDING_RATING' || job.status === 'DELIVERED' || job.status === 'ISSUE_REPORTED') {
+      if (job.sender_id === uid) {
+        navigate('/rate', { state: { jobId: job.id } });
+        return;
+      }
+    }
+    if (job.status === 'DISPUTED' && job.sender_id === uid) {
+      navigate('/sender/tracking');
+      return;
+    }
+    if (job.runner_id === uid && ['MATCHED', 'IN_TRANSIT'].includes(job.status)) {
+      navigate('/runner/active');
+      return;
+    }
+    navigate('/sender/tracking');
+  };
 
   const displayUser = user || {
     name: 'Aditi Krishnan',
@@ -105,26 +128,33 @@ export function HomePage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate(activeJob.runner_id === 'u1' ? '/runner/active' : '/sender/tracking')}
+          onClick={() => openJob(activeJob)}
           className="rounded-xl p-4 cursor-pointer transition-all hover:brightness-110"
-          style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
+          style={{
+            background: activeJob.status === 'PENDING_RATING' || activeJob.status === 'ISSUE_REPORTED' ? '#1A1005' : '#0A1A10',
+            border: `1px solid ${activeJob.status === 'PENDING_RATING' || activeJob.status === 'ISSUE_REPORTED' ? '#3B2A0A' : '#1A3520'}`,
+          }}
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 animate-pulse"
               style={{ background: '#0D2010', border: '1px solid #1A4020' }}>
-              <Radio size={18} className="text-emerald-400" />
+              <Radio size={18} className={activeJob.status === 'PENDING_RATING' ? 'text-amber-400' : 'text-emerald-400'} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>ACTIVE JOB</span>
+                <div className={`w-2 h-2 rounded-full animate-pulse ${activeJob.status === 'PENDING_RATING' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                <span className={`text-xs ${activeJob.status === 'PENDING_RATING' ? 'text-amber-400' : 'text-emerald-400'}`} style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {activeJob.status === 'PENDING_RATING' ? 'PAYMENT PENDING' : activeJob.status === 'ISSUE_REPORTED' ? 'NEEDS REVIEW' : 'ACTIVE JOB'}
+                </span>
               </div>
               <p className="text-sm text-white truncate">{activeJob.pickup_location} → {activeJob.drop_location}</p>
               <p className="text-xs mt-0.5" style={{ color: '#64748B' }}>
-                {activeJob.item_type} · ₹{activeJob.agreed_price ?? activeJob.posted_price}
+                {activeJob.status === 'PENDING_RATING'
+                  ? 'Tap to confirm payment & rate'
+                  : `${activeJob.item_type} · ₹${activeJob.agreed_price ?? activeJob.posted_price}`}
               </p>
             </div>
-            <ChevronRight size={16} className="text-emerald-400 flex-shrink-0" />
+            <ChevronRight size={16} className={activeJob.status === 'PENDING_RATING' ? 'text-amber-400' : 'text-emerald-400'} style={{ flexShrink: 0 }} />
           </div>
         </motion.div>
       )}
@@ -286,6 +316,10 @@ export function HomePage() {
             {recentJobs.map((job, i) => (
               <div
                 key={job.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openJob(job)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openJob(job); } }}
                 className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer"
                 style={{ borderBottom: i < recentJobs.length - 1 ? '1px solid #111E35' : 'none' }}
               >
@@ -305,7 +339,7 @@ export function HomePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={job.status} />
-                    {job.runner_id === 'u1' ? (
+                    {job.runner_id === uid ? (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Runner</span>
                     ) : (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Sender</span>

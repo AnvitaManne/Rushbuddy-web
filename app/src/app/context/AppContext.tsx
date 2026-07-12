@@ -1,11 +1,19 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { Job, User } from '@/domain/types';
-import type { UserRole } from '@/domain/enums';
+import type { Job, RunnerTrustRecord, TrustEvent, User } from '@/domain/types';
+import type { SuspensionStatus, UserGender, UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
 import { createPilotScenarioJobs } from '@/domain/demoScenarios';
 
 export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
+
+/** Fields collected on Auth, applied onto `User` at Verify. */
+export interface PendingSignup {
+  email: string;
+  name: string;
+  hostel_block: string;
+  gender: UserGender;
+}
 
 interface AppContextType {
   user: User | null;
@@ -16,13 +24,27 @@ interface AppContextType {
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
   activeJob: Job | null;
   setActiveJob: (job: Job | null) => void;
+  /** @deprecated kept for backward compat — prefer `pendingSignup`. */
   pendingEmail: string;
   setPendingEmail: (email: string) => void;
+  pendingSignup: PendingSignup | null;
+  setPendingSignup: (signup: PendingSignup | null) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (v: boolean) => void;
+  trustEvents: TrustEvent[];
+  appendTrustEvent: (event: TrustEvent) => void;
+  runnerTrustRecords: Record<string, RunnerTrustRecord>;
+  updateRunnerTrustRecord: (
+    runnerId: string,
+    updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
+  ) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
+
+function emptyTrustRecord(runnerId: string): RunnerTrustRecord {
+  return { runner_id: runnerId, no_show_count: 0, suspension_status: 'active' };
+}
 
 export const mockJobs: Job[] = [
   createSampleJob({
@@ -211,7 +233,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<Job[]>(mockJobs);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingSignup, setPendingSignup] = useState<PendingSignup | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [trustEvents, setTrustEvents] = useState<TrustEvent[]>([]);
+  const [runnerTrustRecords, setRunnerTrustRecords] = useState<Record<string, RunnerTrustRecord>>({
+    u1: emptyTrustRecord('u1'),
+  });
+
+  const appendTrustEvent = (event: TrustEvent) => {
+    setTrustEvents(prev => [event, ...prev]);
+  };
+
+  const updateRunnerTrustRecord = (
+    runnerId: string,
+    updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
+  ) => {
+    setRunnerTrustRecords(prev => {
+      const current = prev[runnerId] ?? emptyTrustRecord(runnerId);
+      const next = updater(current);
+      setUser(prevUser =>
+        prevUser && prevUser.id === runnerId
+          ? { ...prevUser, suspension_status: next.suspension_status }
+          : prevUser,
+      );
+      return { ...prev, [runnerId]: next };
+    });
+  };
+
+  const setRunnerSuspension = (
+    runnerId: string,
+    status: SuspensionStatus,
+    reason?: string,
+  ) => {
+    updateRunnerTrustRecord(runnerId, prev => ({
+      ...prev,
+      suspension_status: status,
+      suspended_at: status === 'suspended' ? new Date().toISOString() : undefined,
+      suspension_reason: status === 'suspended' ? reason : undefined,
+    }));
+  };
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -223,7 +283,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setJobs,
       setActiveJob,
       createPilotJobs: createPilotScenarioJobs,
+      setRunnerSuspension,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSetUser = (u: User | null) => {
@@ -242,8 +304,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveJob,
       pendingEmail,
       setPendingEmail,
+      pendingSignup,
+      setPendingSignup,
       isAuthenticated,
       setIsAuthenticated,
+      trustEvents,
+      appendTrustEvent,
+      runnerTrustRecords,
+      updateRunnerTrustRecord,
     }}>
       {children}
     </AppContext.Provider>

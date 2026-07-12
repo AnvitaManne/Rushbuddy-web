@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
+import type { UserGender } from '@/domain/enums';
 import { Mail, ArrowRight, AlertCircle, Zap, Shield, Package } from 'lucide-react';
 import { motion } from 'motion/react';
 
+const GENDER_OPTIONS: { value: UserGender; label: string }[] = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
+
 export function AuthPage() {
-  const { setPendingEmail } = useApp();
+  const { setPendingEmail, setPendingSignup } = useApp();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [hostel, setHostel] = useState('');
+  const [gender, setGender] = useState<UserGender | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -23,10 +31,12 @@ export function AuthPage() {
     }
     if (!name.trim()) { setError('Full name is required.'); return; }
     if (!hostel.trim()) { setError('Hostel block is required.'); return; }
+    if (!gender) { setError('Please select a gender — used only for hostel-matching.'); return; }
 
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
     setPendingEmail(email);
+    setPendingSignup({ email, name: name.trim(), hostel_block: hostel.trim(), gender });
     setLoading(false);
     navigate('/verify');
   };
@@ -201,6 +211,33 @@ export function AuthPage() {
                   onBlur={e => { e.target.style.borderColor = '#1E2D45'; e.target.style.boxShadow = 'none'; }}
                   required
                 />
+              </div>
+
+              {/* Gender — matching-only, hidden elsewhere in the UI */}
+              <div>
+                <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                  Gender
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {GENDER_OPTIONS.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setGender(value)}
+                      className="py-2 rounded-lg text-xs border transition-all"
+                      style={{
+                        background: gender === value ? '#061620' : '#060A14',
+                        border: `1px solid ${gender === value ? '#06B6D4' : '#1E2D45'}`,
+                        color: gender === value ? '#22D3EE' : '#94A3B8',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] mt-1.5" style={{ color: '#475569' }}>
+                  Used only to match gendered-hostel deliveries. Never shown on your profile.
+                </p>
               </div>
 
               {/* Error */}

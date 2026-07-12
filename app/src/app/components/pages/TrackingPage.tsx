@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../../context/AppContext';
+import { useApp, defaultUser } from '../../context/AppContext';
+import { assertTransition } from '@/domain/jobTransitions';
+import { computeDisputeWindowEndsAt } from '@/domain/paymentPolicy';
+import { applyNoShowStrike, buildFirExport, createTrustEvent } from '@/domain/trustOps';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
-  AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio
+  AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio, KeyRound, Users, FileWarning, Copy, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -11,59 +14,93 @@ const TIMELINE_STEPS = [
   { key: 'OPEN', label: 'Finding Buddy', sub: 'Notifying runners...', icon: Radio },
   { key: 'MATCHED', label: 'Buddy Found', sub: 'Runner on the way', icon: Star },
   { key: 'IN_TRANSIT', label: 'Picked Up', sub: 'Item in transit', icon: Package },
-  { key: 'DELIVERED', label: 'Delivered', sub: 'Rate your Buddy', icon: CheckCircle2 },
+  { key: 'PENDING_RATING', label: 'Delivered', sub: 'Rate your Buddy', icon: CheckCircle2 },
 ];
 
 function getStepIndex(status: string) {
-  const map: Record<string, number> = { OPEN: 0, MATCHED: 1, IN_TRANSIT: 2, DELIVERED: 3, CLOSED: 3, PENDING_RATING: 3 };
+  const map: Record<string, number> = {
+    OPEN: 0, MATCHED: 1, IN_TRANSIT: 2,
+    DELIVERED: 3, PENDING_RATING: 3, CLOSED: 3, ISSUE_REPORTED: 3, DISPUTED: 3,
+  };
   return map[status] ?? 0;
 }
 
+const FIND_NEW_BUDDY_WAIT_MS = 10 * 60 * 1000;
+
 export function TrackingPage() {
-  const { jobs, setJobs, activeJob: ctxActiveJob } = useApp();
+  const { jobs, setJobs, activeJob: ctxActiveJob, user, appendTrustEvent, updateRunnerTrustRecord } = useApp();
   const navigate = useNavigate();
+  const uid = user?.id ?? defaultUser.id;
 
   const [localJobId, setLocalJobId] = useState<string | null>(null);
 
   useEffect(() => {
     if (ctxActiveJob) setLocalJobId(ctxActiveJob.id);
     else {
-      const j = jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status));
+      const j = jobs.find(j => j.sender_id === uid && ['OPEN', 'MATCHED', 'IN_TRANSIT', 'PENDING_RATING', 'ISSUE_REPORTED', 'DISPUTED'].includes(j.status));
       if (j) setLocalJobId(j.id);
       else {
-        const last = [...jobs].filter(j => j.sender_id === 'u1').sort((a, b) =>
+        const last = [...jobs].filter(j => j.sender_id === uid).sort((a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
         if (last) setLocalJobId(last.id);
       }
     }
-  }, [ctxActiveJob, jobs]);
+  }, [ctxActiveJob, jobs, uid]);
 
-  const job = jobs.find(j => j.id === localJobId) || jobs.find(j => j.sender_id === 'u1');
+  const job = jobs.find(j => j.id === localJobId) || jobs.find(j => j.sender_id === uid);
 
   const [simStep, setSimStep] = useState<number | null>(null);
   const [simulating, setSimulating] = useState(false);
+  const [firData, setFirData] = useState<ReturnType<typeof buildFirExport> | null>(null);
+  const [firCopied, setFirCopied] = useState(false);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
   const displayStep = simStep !== null ? simStep : stepIndex;
 
+  const canFindNewBuddy = !!job
+    && job.status === 'MATCHED'
+    && !job.pickup_confirmed_at
+    && !!job.matched_at
+    && Date.now() - new Date(job.matched_at).getTime() >= FIND_NEW_BUDDY_WAIT_MS;
+  const devFindNewBuddyAvailable = !!job && job.status === 'MATCHED' && !job.pickup_confirmed_at && import.meta.env.DEV;
+
   const simulateProgress = async () => {
     if (!job || simulating) return;
     setSimulating(true);
-    const nextStatuses = ['MATCHED', 'IN_TRANSIT', 'DELIVERED'] as const;
+    const nextStatuses = ['MATCHED', 'IN_TRANSIT', 'PENDING_RATING'] as const;
+    let current = job.status;
     for (let i = 0; i < nextStatuses.length; i++) {
       const ns = nextStatuses[i];
+      // Handoff completion is modeled as two hops (IN_TRANSIT → DELIVERED → PENDING_RATING);
+      // validate both before collapsing into the single PENDING_RATING patch below.
+      const result = ns === 'PENDING_RATING'
+        ? (() => {
+            const toDelivered = assertTransition(current, 'DELIVERED');
+            return toDelivered.ok ? assertTransition('DELIVERED', 'PENDING_RATING') : toDelivered;
+          })()
+        : assertTransition(current, ns);
+      if (!result.ok) break;
+      current = ns;
       const idx = TIMELINE_STEPS.findIndex(s => s.key === ns);
       await new Promise(r => setTimeout(r, 1500));
       setSimStep(idx);
+      const delivered_at = new Date().toISOString();
       setJobs(prev => prev.map(j => j.id === job.id ? {
         ...j, status: ns,
-        runner_name: ns === 'MATCHED' ? 'Karthik R' : j.runner_name,
-        runner_rating: ns === 'MATCHED' ? 4.9 : j.runner_rating,
+        runner_name: ns === 'MATCHED' ? (j.runner_name ?? 'Karthik R') : j.runner_name,
+        runner_rating: ns === 'MATCHED' ? (j.runner_rating ?? 4.9) : j.runner_rating,
+        runner_id: ns === 'MATCHED' ? (j.runner_id ?? 'r-sim') : j.runner_id,
         matched_at: ns === 'MATCHED' ? new Date().toISOString() : j.matched_at,
         pickup_confirmed_at: ns === 'IN_TRANSIT' ? new Date().toISOString() : j.pickup_confirmed_at,
-        delivered_at: ns === 'DELIVERED' ? new Date().toISOString() : j.delivered_at,
+        delivered_at: ns === 'PENDING_RATING' ? delivered_at : j.delivered_at,
+        dispute_window_ends_at: ns === 'PENDING_RATING' ? computeDisputeWindowEndsAt(delivered_at) : j.dispute_window_ends_at,
       } : j));
-      if (ns === 'DELIVERED') { await new Promise(r => setTimeout(r, 800)); navigate('/rate'); break; }
+      if (ns === 'PENDING_RATING') {
+        await new Promise(r => setTimeout(r, 800));
+        setSimulating(false);
+        navigate('/rate', { state: { jobId: job.id } });
+        return;
+      }
     }
     setSimulating(false);
   };
@@ -72,6 +109,43 @@ export function TrackingPage() {
     if (job && job.status === 'OPEN') {
       setJobs(prev => prev.filter(j => j.id !== job.id));
       navigate('/home');
+    }
+  };
+
+  const handleFindNewBuddy = () => {
+    if (!job || !job.runner_id) return;
+    const result = assertTransition('MATCHED', 'OPEN');
+    if (!result.ok) return;
+    const runnerId = job.runner_id;
+    setJobs(prev => prev.map(j => j.id === job.id ? {
+      ...j,
+      status: 'OPEN',
+      runner_id: undefined,
+      runner_name: undefined,
+      runner_rating: undefined,
+      runner_hostel: undefined,
+      matched_at: undefined,
+      agreed_price: undefined,
+    } : j));
+    updateRunnerTrustRecord(runnerId, prev => applyNoShowStrike(prev));
+    appendTrustEvent(createTrustEvent({
+      runner_id: runnerId,
+      job_id: job.id,
+      type: 'no_show',
+      description: `Re-pooled ${job.id} to Find New Buddy — no pickup confirmation.`,
+    }));
+  };
+
+  const handleGenerateFir = async () => {
+    if (!job) return;
+    const fir = buildFirExport(job);
+    setFirData(fir);
+    setFirCopied(false);
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(fir, null, 2));
+      setFirCopied(true);
+    } catch {
+      // clipboard unavailable — FIR JSON still shown inline below
     }
   };
 
@@ -114,6 +188,23 @@ export function TrackingPage() {
           </button>
         )}
       </div>
+
+      {/* Confirmation code — visible while the job hasn't been handed off yet */}
+      {['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(job.status) && (
+        <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
+          <div className="flex items-center gap-2">
+            <KeyRound size={14} className="text-emerald-400" />
+            <div>
+              <div className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                HANDOFF CODE — GIVE TO YOUR RUNNER
+              </div>
+              <div className="text-emerald-400 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.3rem', letterSpacing: '0.15em' }}>
+                {job.confirmation_code}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status card */}
       <div className="rounded-xl p-5" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
@@ -194,16 +285,87 @@ export function TrackingPage() {
             )}
             {displayStep === 3 && (
               <>
-                <div className="text-3xl mb-2">✅</div>
-                <p className="text-white font-medium">Delivered!</p>
+                <div className="text-3xl mb-2">
+                  {job.status === 'DISPUTED' ? '⚠️' : job.status === 'ISSUE_REPORTED' ? '🛑' : '✅'}
+                </div>
+                <p className="text-white font-medium">
+                  {job.status === 'DISPUTED' ? 'Dispute filed' : job.status === 'ISSUE_REPORTED' ? 'Held for Ops' : 'Delivered!'}
+                </p>
                 <p className="text-sm mt-1" style={{ color: '#64748B' }}>
-                  Please rate your Buddy and confirm payment
+                  {job.status === 'DISPUTED'
+                    ? 'Ops is reviewing this dispute.'
+                    : job.status === 'ISSUE_REPORTED'
+                      ? 'Sender was unreachable — item held by ops.'
+                      : 'Please rate your Buddy and confirm payment'}
                 </p>
               </>
             )}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Find New Buddy — MATCHED, pre-pickup */}
+      {(canFindNewBuddy || devFindNewBuddyAvailable) && job.status === 'MATCHED' && !job.pickup_confirmed_at && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-4 flex items-center justify-between gap-3" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
+          <div className="flex items-start gap-2">
+            <Users size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs text-amber-300 font-medium">Runner hasn't confirmed pickup</p>
+              <p className="text-[11px]" style={{ color: '#92400E' }}>
+                {canFindNewBuddy ? 'It\'s been over 10 minutes since match.' : 'Dev shortcut — skip the 10 min wait.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleFindNewBuddy}
+            className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white"
+            style={{ background: 'linear-gradient(135deg, #F59E0B, #DC2626)' }}
+          >
+            Find New Buddy
+          </button>
+        </motion.div>
+      )}
+
+      {/* CTA to rate — PENDING_RATING / ISSUE_REPORTED */}
+      {(job.status === 'PENDING_RATING' || job.status === 'ISSUE_REPORTED') && (
+        <motion.button
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => navigate('/rate', { state: { jobId: job.id } })}
+          className="w-full py-3 rounded-lg text-sm font-semibold text-white"
+          style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
+        >
+          {job.status === 'ISSUE_REPORTED' ? 'Review & Report Issue →' : 'Rate & Confirm Payment →'}
+        </motion.button>
+      )}
+
+      {/* DISPUTED — FIR support package */}
+      {job.status === 'DISPUTED' && (
+        <div className="rounded-xl p-4 space-y-3" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+          <div className="flex items-center gap-2">
+            <FileWarning size={14} className="text-red-400" />
+            <span className="text-sm text-red-300 font-medium">Dispute — FIR Support Package</span>
+          </div>
+          <p className="text-[11px]" style={{ color: '#F87171' }}>
+            Generates a structured incident export (job, parties, timeline, dispute) to hand to campus security / police.
+          </p>
+          <button
+            onClick={handleGenerateFir}
+            className="w-full py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
+            style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)' }}
+          >
+            {firCopied ? <Check size={14} /> : <Copy size={14} />}
+            Generate FIR Support Package
+          </button>
+          {firData && (
+            <pre className="text-[10px] p-3 rounded-lg overflow-auto max-h-56" style={{ background: '#0D0303', border: '1px solid #3B1111', color: '#F87171' }}>
+              {JSON.stringify(firData, null, 2)}
+            </pre>
+          )}
+          {firCopied && <p className="text-[10px] text-emerald-400">Copied JSON to clipboard.</p>}
+        </div>
+      )}
 
       {/* Runner card (visible after matched) */}
       {displayStep >= 1 && (
@@ -232,7 +394,7 @@ export function TrackingPage() {
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-1 text-xs" style={{ color: '#F59E0B' }}>
                   <Star size={11} fill="#F59E0B" />
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>4.9</span>
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{job.runner_rating ?? 4.9}</span>
                 </div>
                 <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
                   <Shield size={11} className="text-cyan-400" />
@@ -307,18 +469,6 @@ export function TrackingPage() {
             </>
           )}
         </button>
-      )}
-
-      {displayStep === 3 && (
-        <motion.button
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate('/rate')}
-          className="w-full py-3 rounded-lg text-sm font-semibold text-white"
-          style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
-        >
-          Rate & Confirm Payment →
-        </motion.button>
       )}
     </div>
   );
