@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { assertTransition } from '@/domain/jobTransitions';
-import { applyNoShowStrike, buildFirExport } from '@/domain/trustOps';
+import { applyNoShowStrike, buildFirExport, applyDisputeRunnerFaultPenalty, payoutStatusForDisputeResolution, unsuspendRunner, type DisputeResolutionOutcome } from '@/domain/trustOps';
 import { logJobTransition } from '@/domain/devJobDebug';
 import type { FIRExport, Job, User } from '@/domain/types';
 
@@ -109,6 +109,9 @@ export function TrackingPage() {
   /** Mock FIR support package preview (theft escalation only). */
   const [firPackage, setFirPackage] = useState<FIRExport | null>(null);
   const [firCopyHint, setFirCopyHint] = useState<string | null>(null);
+  /** DEV mock ops: optionally unsuspend runner on resolve. */
+  const [opsUnsuspendRunner, setOpsUnsuspendRunner] = useState(false);
+  const [opsResolveHint, setOpsResolveHint] = useState<string | null>(null);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
   const displayStep = simStep !== null ? simStep : stepIndex;
@@ -117,6 +120,10 @@ export function TrackingPage() {
     !!job && job.status === 'MATCHED' && !job.pickup_confirmed_at;
 
   const isDisputed = !!job && job.status === 'DISPUTED';
+  const isClosed = !!job && job.status === 'CLOSED';
+  const canRateAndPay =
+    !!job &&
+    (job.status === 'DELIVERED' || job.status === 'PENDING_RATING');
   const jobTheftEscalation = isDisputed
     ? trustEvents.some(
         (e) => e.job_id === job.id && e.type === 'theft_escalation',
@@ -134,6 +141,8 @@ export function TrackingPage() {
 
   useEffect(() => {
     setDevNoshowElapsed(false);
+    setOpsUnsuspendRunner(false);
+    setOpsResolveHint(null);
   }, [job?.id, job?.matched_at, job?.status]);
 
   useEffect(() => {
@@ -218,6 +227,74 @@ export function TrackingPage() {
 
     setSimStep(null);
     setDevNoshowElapsed(false);
+  };
+
+  const RESOLUTION_LABELS: Record<DisputeResolutionOutcome, string> = {
+    runner_at_fault: 'Runner at fault',
+    sender_error: 'Sender error / pre-existing issue',
+    unclear: 'Unclear / goodwill',
+  };
+
+  const handleResolveDispute = (outcome: DisputeResolutionOutcome) => {
+    if (!job || job.status !== 'DISPUTED') return;
+
+    const transition = assertTransition(job.status, 'CLOSED');
+    if (!transition.ok) {
+      console.warn('[RushBuddy] ops resolve blocked:', transition.error);
+      setOpsResolveHint(transition.error);
+      return;
+    }
+
+    const closedAt = new Date().toISOString();
+    const payout = payoutStatusForDisputeResolution(outcome);
+    const label = RESOLUTION_LABELS[outcome];
+
+    logJobTransition(job.id, job.status, 'CLOSED');
+
+    appendTrustEvent({
+      type: 'ops_note_added',
+      job_id: job.id,
+      actor_user_id: user?.id ?? 'ops-mock',
+      target_user_id: job.runner_id,
+      message: `Mock ops resolved dispute: ${label}`,
+      metadata: {
+        mock: true,
+        resolution: outcome,
+        runner_payout_status: payout,
+        unsuspend_requested: opsUnsuspendRunner,
+        note:
+          outcome === 'unclear'
+            ? 'Goodwill close — payout released; suspension unchanged unless unchecked below'
+            : null,
+      },
+    });
+
+    if (job.runner_id) {
+      if (outcome === 'runner_at_fault') {
+        updateRunnerTrustRecord(job.runner_id, (prev) =>
+          applyDisputeRunnerFaultPenalty(prev),
+        );
+      }
+      if (opsUnsuspendRunner) {
+        updateRunnerTrustRecord(job.runner_id, (prev) => unsuspendRunner(prev));
+      }
+    }
+
+    setJobs((prev) =>
+      prev.map((j) => {
+        if (j.id !== job.id) return j;
+        return {
+          ...j,
+          status: 'CLOSED' as const,
+          closed_at: closedAt,
+          runner_payout_status: payout,
+        };
+      }),
+    );
+
+    setFirPackage(null);
+    setOpsUnsuspendRunner(false);
+    setOpsResolveHint(`Resolved as “${label}” → CLOSED (mock).`);
   };
 
   if (!job) {
@@ -342,12 +419,26 @@ export function TrackingPage() {
                 </p>
               </>
             )}
-            {displayStep === 3 && !isDisputed && (
+            {displayStep === 3 && !isDisputed && !isClosed && (
               <>
                 <div className="text-3xl mb-2">✅</div>
                 <p className="text-white font-medium">Delivered!</p>
                 <p className="text-sm mt-1" style={{ color: '#64748B' }}>
                   Please rate your Buddy and confirm payment
+                </p>
+              </>
+            )}
+            {isClosed && (
+              <>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
+                  style={{ background: '#0A2010', border: '2px solid #10B981' }}>
+                  <CheckCircle2 size={22} className="text-emerald-400" />
+                </div>
+                <p className="text-white font-medium">Job closed</p>
+                <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+                  {job.closed_at
+                    ? 'Ops resolution complete (mock). No payment step needed.'
+                    : 'This job is closed.'}
                 </p>
               </>
             )}
@@ -475,6 +566,65 @@ export function TrackingPage() {
               </pre>
             </div>
           )}
+
+          {/* DEV / mock ops resolution */}
+          <div
+            className="rounded-lg p-3 space-y-2.5"
+            style={{ background: '#0B1120', border: '1px dashed #334155' }}
+          >
+            <div>
+              <p className="text-[10px] uppercase tracking-wide" style={{ color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
+                DEV / mock ops panel
+              </p>
+              <p className="text-[11px] mt-1" style={{ color: '#94A3B8' }}>
+                Resolve DISPUTED → CLOSED. Not a real ops dashboard.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {(
+                [
+                  ['runner_at_fault', 'Runner at fault'],
+                  ['sender_error', 'Sender error / pre-existing issue'],
+                  ['unclear', 'Unclear / goodwill'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handleResolveDispute(value)}
+                  className="w-full text-left rounded-lg px-3 py-2 text-xs text-white transition-opacity hover:opacity-90"
+                  style={{ background: '#111827', border: '1px solid #1E2D45' }}
+                >
+                  <span className="font-medium">{label}</span>
+                  <span className="block text-[10px] mt-0.5" style={{ color: '#64748B' }}>
+                    {value === 'runner_at_fault'
+                      ? 'Payout withheld · trust score −10 · keep suspension'
+                      : value === 'sender_error'
+                        ? 'Payout earned · suspension unchanged unless opted below'
+                        : 'Payout earned (goodwill) · suspension unchanged unless opted below'}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {disputedRunnerSuspended && (
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={opsUnsuspendRunner}
+                  onChange={(e) => setOpsUnsuspendRunner(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-[11px]" style={{ color: '#94A3B8' }}>
+                  Also unsuspend runner (explicit — theft suspension is not cleared by default)
+                </span>
+              </label>
+            )}
+            {opsResolveHint && (
+              <p className="text-[10px]" style={{ color: '#94A3B8' }}>
+                {opsResolveHint}
+              </p>
+            )}
+          </div>
         </motion.div>
       )}
 
@@ -614,7 +764,7 @@ export function TrackingPage() {
         </button>
       )}
 
-      {displayStep === 3 && !isDisputed && (
+      {canRateAndPay && (
         <motion.button
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

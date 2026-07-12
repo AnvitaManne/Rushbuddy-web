@@ -137,6 +137,8 @@ export interface Job {
   matched_at?: string;
   pickup_confirmed_at?: string;
   delivered_at?: string;
+  /** Set when ops/sender path closes the job (DISPUTED→CLOSED or happy-path close). */
+  closed_at?: string;
 
   /** Display-only hints used by mock UI until routing/ETA services exist. */
   eta?: string;

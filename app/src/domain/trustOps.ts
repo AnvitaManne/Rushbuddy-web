@@ -128,6 +128,33 @@ export function unsuspendRunner(record: RunnerTrustRecord): RunnerTrustRecord {
   };
 }
 
+/** Mock ops dispute resolution outcomes (TrackingPage DEV panel). */
+export type DisputeResolutionOutcome =
+  | 'runner_at_fault'
+  | 'sender_error'
+  | 'unclear';
+
+/** Trust score penalty when ops finds runner at fault (mock). */
+export const DISPUTE_RUNNER_FAULT_TRUST_PENALTY = 10;
+
+/** Maps resolution → runner payout status for mock ops close. */
+export function payoutStatusForDisputeResolution(
+  outcome: DisputeResolutionOutcome,
+): 'withheld' | 'earned' {
+  return outcome === 'runner_at_fault' ? 'withheld' : 'earned';
+}
+
+/** Applies runner-at-fault trust penalty on the trust record. */
+export function applyDisputeRunnerFaultPenalty(
+  record: RunnerTrustRecord,
+): RunnerTrustRecord {
+  return {
+    ...record,
+    trust_score: Math.max(0, record.trust_score - DISPUTE_RUNNER_FAULT_TRUST_PENALTY),
+    last_incident_at: new Date().toISOString(),
+  };
+}
+
 function buildMockPartyIdentity(user: User): FirPartyIdentity {
   const mockPhone = `+91-MOCK-${user.id.slice(-4).padStart(4, '0')}`;
   return {
@@ -201,7 +228,7 @@ function buildJobTimeline(job: Job, events: TrustEvent[]): FirTimelineEntry[] {
 
   if (job.status === 'CLOSED') {
     fromJob.push({
-      at: job.delivered_at ?? job.created_at,
+      at: job.closed_at ?? job.delivered_at ?? job.created_at,
       label: 'Job closed',
       source: 'job',
       status: 'CLOSED',
