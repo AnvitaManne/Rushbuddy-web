@@ -89,6 +89,25 @@ export function buildFirExport(job: Job): FIRExport {
   };
 }
 
+/** Mock ops outcomes for DISPUTED → CLOSED (Tracking DEV panel). */
+export type DisputeResolutionOutcome = 'runner_at_fault' | 'sender_error' | 'unclear';
+
+/** Payout after mock ops resolve — runner-at-fault withholds; others earn. */
+export function payoutStatusForDisputeResolution(
+  outcome: DisputeResolutionOutcome,
+): NonNullable<Job['runner_payout_status']> {
+  return outcome === 'runner_at_fault' ? 'withheld' : 'earned';
+}
+
+/**
+ * Runner-at-fault penalty: ensure suspended (theft/dispute already may be).
+ * Trust score delta is mock-logged via ops_note_added event (no score field on RunnerTrustRecord).
+ */
+export function applyDisputeRunnerFaultPenalty(record: RunnerTrustRecord): RunnerTrustRecord {
+  if (record.suspension_status === 'suspended') return record;
+  return suspendRunner(record, 'Ops: runner at fault on dispute resolution');
+}
+
 /*
  * --- Examples (no test runner) ---
  *
@@ -97,4 +116,7 @@ export function buildFirExport(job: Job): FIRExport {
  *
  * suspendRunner({ runner_id: 'r1', no_show_count: 0, suspension_status: 'active' }, 'Theft escalation')
  *   // { ..., suspension_status: 'suspended', suspension_reason: 'Theft escalation' }
+ *
+ * payoutStatusForDisputeResolution('runner_at_fault') // 'withheld'
+ * payoutStatusForDisputeResolution('unclear')         // 'earned'
  */

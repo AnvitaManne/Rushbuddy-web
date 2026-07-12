@@ -186,7 +186,8 @@ export type TrustEventType =
   | 'theft_escalation'
   | 'dispute_filed'
   | 'suspension'
-  | 'unsuspension';
+  | 'unsuspension'
+  | 'ops_note_added';
 
 /** Immutable trust/safety log entry, attributable to a runner and (optionally) a job. */
 export interface TrustEvent {

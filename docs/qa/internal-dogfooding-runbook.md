@@ -60,6 +60,9 @@ Use `@vitstudent.ac.in`-style **test** emails only. Prefer one browser profile /
 1. Ops opens [`scenario-test-matrix.md`](./scenario-test-matrix.md) and a blank log (section 5).  
 2. Confirm everyone heard the hard rules.  
 3. Smoke-check: one person can open Home, Post Request, Runner Feed.  
+   - On Home: **Sender** toggle stays on Command Centre and shows **sender** jobs/stats (not runner earnings).  
+   - **Runner** toggle stays on Home and shows runs / earnings.  
+   - Post / Feed are via Quick Actions or sidebar — not the mode toggle itself.  
 4. Agree hand signals: “stuck”, “bug”, “skip to next job”.  
 5. **Do not** refresh mid-job unless testing P2-04 on purpose.
 
@@ -100,7 +103,7 @@ Risk = Low. After pickup, runner taps No Answer → (DEV skip wait if available)
 Risk = Fragile or Valuable. Same no-answer start; **do not** leave package. Hold-for-ops path only. Sender can still confirm payment to runner.
 
 **Disputes (jobs 16–17)**  
-After a delivery reaches rating: one mild dispute (e.g. damaged); one **Not delivered** theft path → check suspension + mock FIR generate/copy. Ops screenshots FIR preview.
+After a delivery reaches rating: one mild dispute (e.g. damaged); one **Not delivered** theft path → check suspension + mock FIR generate/copy on Tracking. Then use **Mock Ops Resolution** (three outcomes) to close `DISPUTED` → `CLOSED`. Ops screenshots FIR + resolve panel.
 
 **No-show (job 18)**  
 Match a runner; **do not** Condition Ack. Sender opens Tracking → DEV “10 min elapsed” if shown → **Find New Buddy**. Job should go back to Finding Buddy; note no-show count if visible.

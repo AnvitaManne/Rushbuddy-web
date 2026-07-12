@@ -3,7 +3,16 @@ import { useNavigate } from 'react-router';
 import { useApp, defaultUser } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
 import { computeDisputeWindowEndsAt } from '@/domain/paymentPolicy';
-import { applyNoShowStrike, buildFirExport, createTrustEvent } from '@/domain/trustOps';
+import {
+  applyNoShowStrike,
+  buildFirExport,
+  createTrustEvent,
+  applyDisputeRunnerFaultPenalty,
+  payoutStatusForDisputeResolution,
+  unsuspendRunner,
+  type DisputeResolutionOutcome,
+} from '@/domain/trustOps';
+import { logJobTransition } from '@/domain/devJobDebug';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
   AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio, KeyRound, Users, FileWarning, Copy, Check
@@ -53,6 +62,15 @@ export function TrackingPage() {
   const [simulating, setSimulating] = useState(false);
   const [firData, setFirData] = useState<ReturnType<typeof buildFirExport> | null>(null);
   const [firCopied, setFirCopied] = useState(false);
+  const [opsUnsuspendRunner, setOpsUnsuspendRunner] = useState(false);
+  const [opsResolveHint, setOpsResolveHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOpsUnsuspendRunner(false);
+    setOpsResolveHint(null);
+    setFirData(null);
+    setFirCopied(false);
+  }, [job?.id, job?.status]);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
   const displayStep = simStep !== null ? simStep : stepIndex;
@@ -147,6 +165,61 @@ export function TrackingPage() {
     } catch {
       // clipboard unavailable — FIR JSON still shown inline below
     }
+  };
+
+  const RESOLUTION_LABELS: Record<DisputeResolutionOutcome, string> = {
+    runner_at_fault: 'Runner at fault',
+    sender_error: 'Sender error / pre-existing',
+    unclear: 'Unclear / goodwill',
+  };
+
+  const handleResolveDispute = (outcome: DisputeResolutionOutcome) => {
+    if (!job || job.status !== 'DISPUTED') return;
+
+    const transition = assertTransition(job.status, 'CLOSED');
+    if (!transition.ok) {
+      setOpsResolveHint(transition.error ?? 'Cannot close disputed job');
+      return;
+    }
+
+    const closedAt = new Date().toISOString();
+    const payout = payoutStatusForDisputeResolution(outcome);
+    const label = RESOLUTION_LABELS[outcome];
+    const runnerId = job.runner_id;
+
+    logJobTransition(job.id, job.status, 'CLOSED');
+
+    setJobs(prev => prev.map(j => j.id === job.id ? {
+      ...j,
+      status: 'CLOSED',
+      closed_at: closedAt,
+      runner_payout_status: payout,
+    } : j));
+
+    if (runnerId) {
+      appendTrustEvent(createTrustEvent({
+        runner_id: runnerId,
+        job_id: job.id,
+        type: 'ops_note_added',
+        description: `Mock ops resolved ${job.id} as "${label}" · payout=${payout}`,
+      }));
+
+      if (outcome === 'runner_at_fault') {
+        updateRunnerTrustRecord(runnerId, prev => applyDisputeRunnerFaultPenalty(prev));
+      }
+
+      if (opsUnsuspendRunner) {
+        updateRunnerTrustRecord(runnerId, prev => unsuspendRunner(prev));
+        appendTrustEvent(createTrustEvent({
+          runner_id: runnerId,
+          job_id: job.id,
+          type: 'unsuspension',
+          description: `Mock ops unsuspended runner after resolving ${job.id}`,
+        }));
+      }
+    }
+
+    setOpsResolveHint(`Resolved: ${label} → CLOSED`);
   };
 
   if (!job) {
@@ -286,17 +359,27 @@ export function TrackingPage() {
             {displayStep === 3 && (
               <>
                 <div className="text-3xl mb-2">
-                  {job.status === 'DISPUTED' ? '⚠️' : job.status === 'ISSUE_REPORTED' ? '🛑' : '✅'}
+                  {job.status === 'DISPUTED' ? '⚠️' : job.status === 'ISSUE_REPORTED' ? '🛑' : job.status === 'CLOSED' ? '✔️' : '✅'}
                 </div>
                 <p className="text-white font-medium">
-                  {job.status === 'DISPUTED' ? 'Dispute filed' : job.status === 'ISSUE_REPORTED' ? 'Held for Ops' : 'Delivered!'}
+                  {job.status === 'DISPUTED'
+                    ? 'Dispute filed'
+                    : job.status === 'ISSUE_REPORTED'
+                      ? 'Held for Ops'
+                      : job.status === 'CLOSED'
+                        ? 'Job closed'
+                        : 'Delivered!'}
                 </p>
                 <p className="text-sm mt-1" style={{ color: '#64748B' }}>
                   {job.status === 'DISPUTED'
-                    ? 'Ops is reviewing this dispute.'
+                    ? 'Ops is reviewing this dispute — use mock resolution below (or FIR package).'
                     : job.status === 'ISSUE_REPORTED'
                       ? 'Sender was unreachable — item held by ops.'
-                      : 'Please rate your Buddy and confirm payment'}
+                      : job.status === 'CLOSED'
+                        ? (job.closed_at
+                          ? `Closed ${new Date(job.closed_at).toLocaleString('en-IN')} · payout ${job.runner_payout_status ?? 'n/a'}`
+                          : 'This job is closed.')
+                        : 'Please rate your Buddy and confirm payment'}
                 </p>
               </>
             )}
@@ -346,30 +429,73 @@ export function TrackingPage() {
         </motion.button>
       )}
 
-      {/* DISPUTED — FIR support package */}
+      {/* DISPUTED — FIR support package + mock ops resolution */}
       {job.status === 'DISPUTED' && (
-        <div className="rounded-xl p-4 space-y-3" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
-          <div className="flex items-center gap-2">
-            <FileWarning size={14} className="text-red-400" />
-            <span className="text-sm text-red-300 font-medium">Dispute — FIR Support Package</span>
+        <div className="space-y-3">
+          <div className="rounded-xl p-4 space-y-3" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+            <div className="flex items-center gap-2">
+              <FileWarning size={14} className="text-red-400" />
+              <span className="text-sm text-red-300 font-medium">Dispute — FIR Support Package</span>
+            </div>
+            <p className="text-[11px]" style={{ color: '#F87171' }}>
+              Mock export only — not a real police filing. Generate/copy for process practice.
+            </p>
+            <button
+              type="button"
+              onClick={handleGenerateFir}
+              className="w-full py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)' }}
+            >
+              {firCopied ? <Check size={14} /> : <Copy size={14} />}
+              Generate FIR Support Package
+            </button>
+            {firData && (
+              <pre className="text-[10px] p-3 rounded-lg overflow-auto max-h-56" style={{ background: '#0D0303', border: '1px solid #3B1111', color: '#F87171' }}>
+                {JSON.stringify(firData, null, 2)}
+              </pre>
+            )}
+            {firCopied && <p className="text-[10px] text-emerald-400">Copied JSON to clipboard.</p>}
           </div>
-          <p className="text-[11px]" style={{ color: '#F87171' }}>
-            Generates a structured incident export (job, parties, timeline, dispute) to hand to campus security / police.
-          </p>
-          <button
-            onClick={handleGenerateFir}
-            className="w-full py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
-            style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)' }}
-          >
-            {firCopied ? <Check size={14} /> : <Copy size={14} />}
-            Generate FIR Support Package
-          </button>
-          {firData && (
-            <pre className="text-[10px] p-3 rounded-lg overflow-auto max-h-56" style={{ background: '#0D0303', border: '1px solid #3B1111', color: '#F87171' }}>
-              {JSON.stringify(firData, null, 2)}
-            </pre>
-          )}
-          {firCopied && <p className="text-[10px] text-emerald-400">Copied JSON to clipboard.</p>}
+
+          <div className="rounded-xl p-4 space-y-3" style={{ background: '#0D1120', border: '1px solid #1E2D45' }}>
+            <div className="text-xs" style={{ color: '#94A3B8', fontFamily: 'JetBrains Mono, monospace' }}>
+              MOCK OPS RESOLUTION
+            </div>
+            <p className="text-[11px]" style={{ color: '#64748B' }}>
+              Closes the dispute (`DISPUTED` → `CLOSED`). Pilot mock — no real ops dashboard.
+            </p>
+            <div className="grid gap-2">
+              {([
+                ['runner_at_fault', 'Runner at fault — withhold payout'],
+                ['sender_error', 'Sender error / pre-existing — runner earned'],
+                ['unclear', 'Unclear / goodwill — runner earned'],
+              ] as const).map(([outcome, label]) => (
+                <button
+                  key={outcome}
+                  type="button"
+                  onClick={() => handleResolveDispute(outcome)}
+                  className="w-full py-2.5 rounded-lg text-xs font-semibold text-left px-3 text-white"
+                  style={{ background: '#0B1525', border: '1px solid #1E2D45' }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 text-[11px]" style={{ color: '#64748B' }}>
+              <input
+                type="checkbox"
+                checked={opsUnsuspendRunner}
+                onChange={e => setOpsUnsuspendRunner(e.target.checked)}
+                className="rounded border-slate-600"
+              />
+              Also unsuspend runner on resolve (off by default)
+            </label>
+            {opsResolveHint && (
+              <p className="text-[11px] text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 size={12} /> {opsResolveHint}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

@@ -21,6 +21,8 @@ Pilot QA docs (repo root): [docs/qa/scenario-test-matrix.md](../docs/qa/scenario
 
 **Reminder:** no real money, no real KYC, no backend persistence (refresh resets state).
 
+**Home mode:** Sender/Runner toggle on Command Centre stays on `/home` and filters the dashboard by role (Sender → your requests / Tracking; Runner → your runs / Active Delivery). Post and Feed are separate nav/quick actions.
+
 ## Dev job helpers (domain verification)
 
 When `pnpm dev` is running, helpers attach to the browser console via `window.__rushbuddyDev` (see `src/domain/devJobDebug.ts`). Mock jobs in `AppContext` are built with `createSampleJob()`.

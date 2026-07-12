@@ -336,8 +336,8 @@ Pilot QA checklist for the mock frontend. Source of truth: `docs/plans/sjt-mvp-c
 | **Role(s)** | Sender / DEV ops |
 | **Priority** | P1 |
 | **Preconditions** | Job in `DISPUTED` |
-| **Steps** | Wait / check Tracking and Home; do not use ops resolve yet. Confirm Close / auto-close controls. |
-| **Expected result** | Job remains `DISPUTED` and navigable; no auto-close to `CLOSED` without ops resolve (DEV panel allowed for separate ops test). |
+| **Steps** | Wait / check Tracking and Home; use **Mock Ops Resolution** on Tracking to close, or leave open. Confirm no auto-close without ops resolve. |
+| **Expected result** | Job remains `DISPUTED` until mock ops picks an outcome → `CLOSED`; no auto-close. FIR package is separate from resolution. |
 | **Pass/Fail** | |
 | **Notes** | |
 

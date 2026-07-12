@@ -7,6 +7,10 @@ Campus peer-delivery MVP (VIT Vellore beta). This repo holds the product spec, e
 ```
 rushbuddy-web/
 ├── README.md                 # You are here
+├── notes/                    # Phase summaries (add phase-N-summary.md after each phase)
+│   ├── README.md             # Template for future phases
+│   ├── phase-1-summary.md
+│   └── phase-8-summary.md
 ├── docs/
 │   ├── product/              # Source-of-truth product docs
 │   │   ├── core-flow-specs.md
@@ -68,6 +72,14 @@ __rushbuddyDev.loadPilotScenarios()
 ```
 
 That seeds `PILOT-01`…`12` jobs for dogfooding. More helpers: [app/README.md](app/README.md).
+
+### Home Sender / Runner mode (mock)
+
+Same logged-in user can act as both. On Command Centre (`/home`):
+
+- **Sender / Runner toggle stays on Home** — it does not jump to Post Request or Job Feed (use Quick Actions or nav for those).
+- **Sender mode** shows your sent requests + sender snapshot; opening a job goes to Tracking / Rate.
+- **Runner mode** shows your runs + earnings metrics; opening a job goes to Active Delivery.
 
 ## What to read first
 

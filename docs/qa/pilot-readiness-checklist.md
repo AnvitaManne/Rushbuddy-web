@@ -90,7 +90,7 @@ Mark **Ready** only if a draft exists and has been reviewed; **Pending** if stil
 | 5.3 | **State resets on refresh** — everyone warned; finish jobs before refresh; refresh-wipe is not a product bug (P2-04) | Briefing | ☐ Done / ☐ Open |
 | 5.4 | **No real payment** — Cash / UPI / PhonePe taps are mock intent only; no bank transfer in pilot protocol | Hard rules + briefing | ☐ Done / ☐ Open |
 | 5.5 | DEV helpers (if used) limited to ops / dogfood — not advertised as user features | Ops note | ☐ Done / ☐ Open |
-| 5.6 | Single-user mock caveat understood (same account can act sender + runner) — role toggle on Home; do not treat as multi-account production | Briefing | ☐ Done / ☐ Open |
+| 5.6 | Single-user mock caveat understood (same account can act sender + runner) — Home **Sender/Runner toggle stays on `/home`**, filters jobs/stats by mode (Sender → Tracking/Rate; Runner → Active Delivery); do not treat as multi-account production | Briefing + Home smoke | ☐ Done / ☐ Open |
 
 **Tech gate:** 5.1–5.4 must be Done. If the pilot expects real persistence or real pay, this checklist stays **Red** until backend/payments exist (out of Phase 8 scope).
 

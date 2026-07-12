@@ -41,17 +41,29 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const ACTIVE_STATUSES = ['MATCHED', 'IN_TRANSIT', 'PENDING_RATING', 'ISSUE_REPORTED'] as const;
+
 export function HomePage() {
   const { user, setCurrentRole, currentRole, jobs, setActiveJob } = useApp();
   const navigate = useNavigate();
 
   const uid = user?.id ?? defaultUser.id;
-  const myJobs = jobs.filter(j => j.sender_id === uid || j.runner_id === uid);
+  const isSenderMode = currentRole === 'sender';
+  const isRunnerMode = currentRole === 'runner';
+
+  // Home view follows the mode toggle — do not mix runner jobs into sender home.
+  const myJobs = jobs.filter(j => {
+    if (isSenderMode) return j.sender_id === uid;
+    if (isRunnerMode) return j.runner_id === uid;
+    return j.sender_id === uid || j.runner_id === uid;
+  });
   const recentJobs = myJobs.slice(0, 4);
-  const activeJob = jobs.find(j =>
-    (j.runner_id === uid || j.sender_id === uid)
-    && ['MATCHED', 'IN_TRANSIT', 'PENDING_RATING', 'ISSUE_REPORTED'].includes(j.status),
-  );
+  const activeJob = jobs.find(j => {
+    if (!ACTIVE_STATUSES.includes(j.status as (typeof ACTIVE_STATUSES)[number])) return false;
+    if (isSenderMode) return j.sender_id === uid;
+    if (isRunnerMode) return j.runner_id === uid;
+    return j.sender_id === uid || j.runner_id === uid;
+  });
 
   const openJob = (job: (typeof jobs)[number]) => {
     setActiveJob(job);
@@ -59,40 +71,31 @@ export function HomePage() {
     const iAmRunner = job.runner_id === uid;
     const inFlight = ['MATCHED', 'IN_TRANSIT'].includes(job.status);
 
-    // Payment / dispute are sender actions.
-    if (iAmSender && (job.status === 'PENDING_RATING' || job.status === 'DELIVERED' || job.status === 'ISSUE_REPORTED')) {
+    // Respect Home mode toggle — never force-switch role out from under the user.
+    const preferRunner = isRunnerMode || (!isSenderMode && iAmRunner && !iAmSender);
+    const preferSender = isSenderMode || (!isRunnerMode && iAmSender);
+
+    // Payment / dispute are sender actions (only when acting as sender).
+    if (preferSender && iAmSender && (job.status === 'PENDING_RATING' || job.status === 'DELIVERED' || job.status === 'ISSUE_REPORTED')) {
       navigate('/rate', { state: { jobId: job.id } });
       return;
     }
-    if (iAmSender && job.status === 'DISPUTED') {
+    if (preferSender && iAmSender && job.status === 'DISPUTED') {
       navigate('/sender/tracking');
       return;
     }
 
-    // Same person can be sender + runner in the mock. Prefer the mode toggle on Home.
-    if (iAmSender && iAmRunner && inFlight) {
-      if (currentRole === 'runner') {
-        navigate('/runner/active');
-      } else {
-        // sender mode (or unset) → tracking with handoff code
-        setCurrentRole('sender');
-        navigate('/sender/tracking');
-      }
-      return;
-    }
-
-    if (iAmRunner && inFlight) {
-      setCurrentRole('runner');
+    if (inFlight && preferRunner && iAmRunner) {
       navigate('/runner/active');
       return;
     }
 
-    if (iAmSender) {
-      setCurrentRole('sender');
+    if (preferSender && iAmSender) {
       navigate('/sender/tracking');
       return;
     }
 
+    // Job doesn't match current mode (e.g. runner-only job while in Sender mode).
     navigate('/home');
   };
 
@@ -203,13 +206,13 @@ export function HomePage() {
               </div>
               <p className="text-sm text-white truncate">{activeJob.pickup_location} → {activeJob.drop_location}</p>
               <p className="text-xs mt-0.5" style={{ color: '#64748B' }}>
-                {activeJob.status === 'PENDING_RATING'
+                {activeJob.status === 'PENDING_RATING' && isSenderMode
                   ? 'Tap to confirm payment & rate'
-                  : activeJob.sender_id === uid && activeJob.runner_id === uid
-                    ? currentRole === 'runner'
-                      ? 'You are sender & runner — opening runner delivery (toggle Sender for tracking)'
-                      : 'You are sender & runner — opening sender tracking (toggle Runner for delivery)'
-                    : `${activeJob.item_type} · ₹${activeJob.agreed_price ?? activeJob.posted_price}`}
+                  : isRunnerMode
+                    ? 'Tap to open active delivery'
+                    : isSenderMode
+                      ? 'Tap to open sender tracking'
+                      : `${activeJob.item_type} · ₹${activeJob.agreed_price ?? activeJob.posted_price}`}
               </p>
             </div>
             <ChevronRight size={16} className={activeJob.status === 'PENDING_RATING' ? 'text-amber-400' : 'text-emerald-400'} style={{ flexShrink: 0 }} />
@@ -217,51 +220,97 @@ export function HomePage() {
         </motion.div>
       )}
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          {
-            label: 'This Week', value: `₹${displayUser.weekly_earnings}`,
-            sub: `${weeksProgress}% of best week`, icon: TrendingUp,
-            color: '#10B981', bg: '#0A1A10', border: '#1A3520',
-          },
-          {
-            label: 'Total Earned', value: `₹${displayUser.total_earnings.toLocaleString()}`,
-            sub: `${displayUser.total_deliveries} deliveries`, icon: Award,
-            color: '#6366F1', bg: '#0D0D20', border: '#1E1E45',
-          },
-          {
-            label: 'Rating', value: `${displayUser.rating}★`,
-            sub: 'Platform avg 4.6', icon: Star,
-            color: '#F59E0B', bg: '#1A1005', border: '#3B2A0A',
-          },
-          {
-            label: 'Trust Score', value: `${displayUser.trust_score}`,
-            sub: `${displayUser.streak}-day streak`, icon: Shield,
-            color: '#06B6D4', bg: '#061620', border: '#0E2D3D',
-          },
-        ].map(({ label, value, sub, icon: Icon, color, bg, border }) => (
-          <motion.div
-            key={label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="rounded-xl p-4"
-            style={{ background: bg, border: `1px solid ${border}` }}
-          >
-            <div className="flex items-start justify-between mb-2">
-              <span className="text-xs" style={{ color: '#64748B' }}>{label}</span>
-              <Icon size={14} style={{ color }} />
-            </div>
-            <div className="text-white mb-0.5" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, fontSize: '1.2rem', color }}>
-              {value}
-            </div>
-            <div className="text-[10px]" style={{ color: '#475569' }}>{sub}</div>
-          </motion.div>
-        ))}
-      </div>
+      {/* Stats — sender vs runner */}
+      {isSenderMode ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            {
+              label: 'My requests', value: String(myJobs.length),
+              sub: `${myJobs.filter(j => j.status === 'OPEN').length} finding buddy`, icon: Package,
+              color: '#A78BFA', bg: '#0D0A1E', border: '#2D1E45',
+            },
+            {
+              label: 'In progress', value: String(myJobs.filter(j => ACTIVE_STATUSES.includes(j.status as (typeof ACTIVE_STATUSES)[number])).length),
+              sub: 'Matched / transit / pay', icon: Radio,
+              color: '#FCD34D', bg: '#1A1005', border: '#3B2A0A',
+            },
+            {
+              label: 'Closed', value: String(myJobs.filter(j => j.status === 'CLOSED').length),
+              sub: 'Completed sends', icon: CheckCircle2,
+              color: '#10B981', bg: '#0A1A10', border: '#1A3520',
+            },
+            {
+              label: 'Trust', value: `${displayUser.trust_score}`,
+              sub: displayUser.hostel_block, icon: Shield,
+              color: '#06B6D4', bg: '#061620', border: '#0E2D3D',
+            },
+          ].map(({ label, value, sub, icon: Icon, color, bg, border }) => (
+            <motion.div
+              key={label}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="rounded-xl p-4"
+              style={{ background: bg, border: `1px solid ${border}` }}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <span className="text-xs" style={{ color: '#64748B' }}>{label}</span>
+                <Icon size={14} style={{ color }} />
+              </div>
+              <div className="text-white mb-0.5" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, fontSize: '1.2rem', color }}>
+                {value}
+              </div>
+              <div className="text-[10px]" style={{ color: '#475569' }}>{sub}</div>
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            {
+              label: 'This Week', value: `₹${displayUser.weekly_earnings}`,
+              sub: `${weeksProgress}% of best week`, icon: TrendingUp,
+              color: '#10B981', bg: '#0A1A10', border: '#1A3520',
+            },
+            {
+              label: 'Total Earned', value: `₹${displayUser.total_earnings.toLocaleString()}`,
+              sub: `${displayUser.total_deliveries} deliveries`, icon: Award,
+              color: '#6366F1', bg: '#0D0D20', border: '#1E1E45',
+            },
+            {
+              label: 'Rating', value: `${displayUser.rating}★`,
+              sub: 'Platform avg 4.6', icon: Star,
+              color: '#F59E0B', bg: '#1A1005', border: '#3B2A0A',
+            },
+            {
+              label: 'Trust Score', value: `${displayUser.trust_score}`,
+              sub: `${displayUser.streak}-day streak`, icon: Shield,
+              color: '#06B6D4', bg: '#061620', border: '#0E2D3D',
+            },
+          ].map(({ label, value, sub, icon: Icon, color, bg, border }) => (
+            <motion.div
+              key={label}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="rounded-xl p-4"
+              style={{ background: bg, border: `1px solid ${border}` }}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <span className="text-xs" style={{ color: '#64748B' }}>{label}</span>
+                <Icon size={14} style={{ color }} />
+              </div>
+              <div className="text-white mb-0.5" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, fontSize: '1.2rem', color }}>
+                {value}
+              </div>
+              <div className="text-[10px]" style={{ color: '#475569' }}>{sub}</div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
-      {/* Weekly progress */}
+      {/* Weekly progress — runner only */}
+      {!isSenderMode && (
       <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -291,13 +340,19 @@ export function HomePage() {
           <span className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>₹{displayUser.best_week_earnings}</span>
         </div>
       </div>
+      )}
 
-      {/* Quick actions */}
+      {/* Quick actions — highlight the mode's primary CTA */}
       <div className="grid grid-cols-2 gap-3">
         <button
+          type="button"
           onClick={() => { setCurrentRole('sender'); navigate('/sender/post'); }}
           className="rounded-xl p-4 text-left transition-all hover:brightness-110 group"
-          style={{ background: '#0D0A1E', border: '1px solid #2D1E45' }}
+          style={{
+            background: '#0D0A1E',
+            border: `1px solid ${isSenderMode ? '#7C3AED' : '#2D1E45'}`,
+            opacity: isRunnerMode ? 0.55 : 1,
+          }}
         >
           <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
             style={{ background: '#1A0F2E', border: '1px solid #3D2060' }}>
@@ -312,9 +367,14 @@ export function HomePage() {
         </button>
 
         <button
+          type="button"
           onClick={() => { setCurrentRole('runner'); navigate('/runner/feed'); }}
           className="rounded-xl p-4 text-left transition-all hover:brightness-110"
-          style={{ background: '#061620', border: '1px solid #0E2D3D' }}
+          style={{
+            background: '#061620',
+            border: `1px solid ${isRunnerMode ? '#22D3EE' : '#0E2D3D'}`,
+            opacity: isSenderMode ? 0.55 : 1,
+          }}
         >
           <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
             style={{ background: '#0A2030', border: '1px solid #1A4050' }}>
@@ -331,35 +391,57 @@ export function HomePage() {
         </button>
       </div>
 
-      {/* Performance metrics */}
-      <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-        <div className="text-xs mb-4" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-          RUNNER METRICS
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: 'Acceptance Rate', value: `${displayUser.acceptance_rate}%`, good: displayUser.acceptance_rate >= 80 },
-            { label: 'Deliveries', value: displayUser.total_deliveries, good: true },
-            { label: 'Rating', value: `${displayUser.rating}/5.0`, good: displayUser.rating >= 4 },
-          ].map(({ label, value, good }) => (
-            <div key={label} className="text-center">
-              <div className="mb-1" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: good ? '#10B981' : '#F59E0B', fontSize: '1.1rem' }}>
-                {value}
+      {/* Metrics — role-specific */}
+      {isSenderMode ? (
+        <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+          <div className="text-xs mb-4" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            SENDER SNAPSHOT
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: 'Open', value: myJobs.filter(j => j.status === 'OPEN').length, good: true },
+              { label: 'Active', value: myJobs.filter(j => ACTIVE_STATUSES.includes(j.status as (typeof ACTIVE_STATUSES)[number])).length, good: true },
+              { label: 'Disputed', value: myJobs.filter(j => j.status === 'DISPUTED').length, good: myJobs.filter(j => j.status === 'DISPUTED').length === 0 },
+            ].map(({ label, value, good }) => (
+              <div key={label} className="text-center">
+                <div className="mb-1" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: good ? '#10B981' : '#F59E0B', fontSize: '1.1rem' }}>
+                  {value}
+                </div>
+                <div className="text-[10px]" style={{ color: '#475569' }}>{label}</div>
               </div>
-              <div className="text-[10px]" style={{ color: '#475569' }}>{label}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+          <div className="text-xs mb-4" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            RUNNER METRICS
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: 'Acceptance Rate', value: `${displayUser.acceptance_rate}%`, good: displayUser.acceptance_rate >= 80 },
+              { label: 'Deliveries', value: displayUser.total_deliveries, good: true },
+              { label: 'Rating', value: `${displayUser.rating}/5.0`, good: displayUser.rating >= 4 },
+            ].map(({ label, value, good }) => (
+              <div key={label} className="text-center">
+                <div className="mb-1" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: good ? '#10B981' : '#F59E0B', fontSize: '1.1rem' }}>
+                  {value}
+                </div>
+                <div className="text-[10px]" style={{ color: '#475569' }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent activity */}
       <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1E2D45' }}>
         <div className="flex items-center justify-between px-4 py-3"
           style={{ background: '#0D1525', borderBottom: '1px solid #1E2D45' }}>
           <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-            RECENT JOBS
+            {isSenderMode ? 'MY REQUESTS' : isRunnerMode ? 'MY RUNS' : 'RECENT JOBS'}
           </div>
-          <button className="text-xs text-cyan-400 flex items-center gap-1 hover:text-cyan-300 transition-colors">
+          <button type="button" className="text-xs text-cyan-400 flex items-center gap-1 hover:text-cyan-300 transition-colors">
             View all <ChevronRight size={11} />
           </button>
         </div>
@@ -367,7 +449,13 @@ export function HomePage() {
         {recentJobs.length === 0 ? (
           <div className="px-4 py-8 text-center" style={{ background: '#0B1120' }}>
             <Package size={24} className="text-slate-600 mx-auto mb-2" />
-            <p className="text-sm" style={{ color: '#475569' }}>No jobs yet. Post your first request!</p>
+            <p className="text-sm" style={{ color: '#475569' }}>
+              {isSenderMode
+                ? 'No requests yet. Post a request to get started.'
+                : isRunnerMode
+                  ? 'No runs yet. Browse the job feed.'
+                  : 'No jobs yet. Pick Sender or Runner above.'}
+            </p>
           </div>
         ) : (
           <div style={{ background: '#0B1120' }}>
@@ -397,7 +485,11 @@ export function HomePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={job.status} />
-                    {job.sender_id === uid && job.runner_id === uid ? (
+                    {isSenderMode ? (
+                      <span className="text-[10px]" style={{ color: '#475569' }}>as Sender</span>
+                    ) : isRunnerMode ? (
+                      <span className="text-[10px]" style={{ color: '#475569' }}>as Runner</span>
+                    ) : job.sender_id === uid && job.runner_id === uid ? (
                       <span className="text-[10px]" style={{ color: '#64748B' }}>you = sender + runner</span>
                     ) : job.runner_id === uid ? (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Runner</span>
