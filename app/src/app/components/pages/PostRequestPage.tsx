@@ -373,8 +373,11 @@ export function PostRequestPage() {
                 color: canProceedStep1 ? 'white' : '#475569',
               }}
             >
-              Continue to Item Details
-              <ChevronRight size={16} />
+              {canProceedStep1 ? (
+                <>Continue to Item Details <ChevronRight size={16} /></>
+              ) : (
+                'Select a job type to continue'
+              )}
             </button>
           </motion.div>
         )}
@@ -529,8 +532,16 @@ export function PostRequestPage() {
                 color: canProceedStep2 ? 'white' : '#475569',
               }}
             >
-              Continue to Locations
-              <ChevronRight size={16} />
+              {!canProceedStep2 && itemType === 'Food' && !foodReadyAck
+                ? 'Confirm food is ready to continue'
+                : !canProceedStep2 && risk === 'Valuable' && !valuableAck
+                  ? 'Acknowledge valuable disclaimer'
+                  : !canProceedStep2 && declaredValue && Number(declaredValue) > DECLARED_VALUE_MAX_INR
+                    ? `Declared value must be ≤ ₹${DECLARED_VALUE_MAX_INR}`
+                    : !canProceedStep2
+                      ? 'Complete item details to continue'
+                      : 'Continue to Locations'}
+              {canProceedStep2 && <ChevronRight size={16} />}
             </button>
           </motion.div>
         )}
@@ -708,7 +719,13 @@ export function PostRequestPage() {
                   color: canProceedStep3 ? 'white' : '#475569',
                 }}
               >
-                Review →
+                {!canProceedStep3 && (!pickup.trim() || !drop.trim())
+                  ? 'Add pickup & drop'
+                  : !canProceedStep3 && ((pickupType === 'mens_hostel' && dropType === 'womens_hostel') || (pickupType === 'womens_hostel' && dropType === 'mens_hostel'))
+                    ? 'Fix hostel conflict'
+                    : !canProceedStep3 && postedPrice < priceFloor
+                      ? `Offer must be ≥ ₹${priceFloor}`
+                      : 'Review →'}
               </button>
             </div>
           </motion.div>

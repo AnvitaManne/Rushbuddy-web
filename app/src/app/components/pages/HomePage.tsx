@@ -19,13 +19,24 @@ const statusColors: Record<string, { bg: string; text: string; border: string; d
   PENDING_RATING: { bg: '#1A1005', text: '#FCD34D', border: '#3B2A0A', dot: '#FCD34D' },
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  OPEN: 'FINDING BUDDY',
+  MATCHED: 'MATCHED',
+  IN_TRANSIT: 'IN TRANSIT',
+  DELIVERED: 'DELIVERED',
+  PENDING_RATING: 'PAYMENT PENDING',
+  CLOSED: 'CLOSED',
+  DISPUTED: 'OPS REVIEW',
+  ISSUE_REPORTED: 'NEEDS REVIEW',
+};
+
 function StatusBadge({ status }: { status: string }) {
   const c = statusColors[status] || statusColors.CLOSED;
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium"
       style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, fontFamily: 'JetBrains Mono, monospace' }}>
       <div className="w-1.5 h-1.5 rounded-full" style={{ background: c.dot }} />
-      {status.replace('_', ' ')}
+      {STATUS_LABELS[status] ?? status.replace(/_/g, ' ')}
     </span>
   );
 }
@@ -44,21 +55,45 @@ export function HomePage() {
 
   const openJob = (job: (typeof jobs)[number]) => {
     setActiveJob(job);
-    if (job.status === 'PENDING_RATING' || job.status === 'DELIVERED' || job.status === 'ISSUE_REPORTED') {
-      if (job.sender_id === uid) {
-        navigate('/rate', { state: { jobId: job.id } });
-        return;
-      }
+    const iAmSender = job.sender_id === uid;
+    const iAmRunner = job.runner_id === uid;
+    const inFlight = ['MATCHED', 'IN_TRANSIT'].includes(job.status);
+
+    // Payment / dispute are sender actions.
+    if (iAmSender && (job.status === 'PENDING_RATING' || job.status === 'DELIVERED' || job.status === 'ISSUE_REPORTED')) {
+      navigate('/rate', { state: { jobId: job.id } });
+      return;
     }
-    if (job.status === 'DISPUTED' && job.sender_id === uid) {
+    if (iAmSender && job.status === 'DISPUTED') {
       navigate('/sender/tracking');
       return;
     }
-    if (job.runner_id === uid && ['MATCHED', 'IN_TRANSIT'].includes(job.status)) {
+
+    // Same person can be sender + runner in the mock. Prefer the mode toggle on Home.
+    if (iAmSender && iAmRunner && inFlight) {
+      if (currentRole === 'runner') {
+        navigate('/runner/active');
+      } else {
+        // sender mode (or unset) → tracking with handoff code
+        setCurrentRole('sender');
+        navigate('/sender/tracking');
+      }
+      return;
+    }
+
+    if (iAmRunner && inFlight) {
+      setCurrentRole('runner');
       navigate('/runner/active');
       return;
     }
-    navigate('/sender/tracking');
+
+    if (iAmSender) {
+      setCurrentRole('sender');
+      navigate('/sender/tracking');
+      return;
+    }
+
+    navigate('/home');
   };
 
   const displayUser = user || {
@@ -90,14 +125,21 @@ export function HomePage() {
               Hey, {displayUser.name.split(' ')[0]} 👋
             </h1>
             <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
-              {displayUser.hostel_block} · Verified Runner
+              {displayUser.hostel_block}
+              {' · '}
+              {currentRole === 'sender'
+                ? 'Sender mode'
+                : currentRole === 'runner'
+                  ? 'Runner mode'
+                  : 'Pick Sender or Runner'}
             </p>
           </div>
 
-          {/* Role selector */}
+          {/* Role selector — stays on Home; post/feed are via quick actions below */}
           <div className="flex rounded-lg overflow-hidden flex-shrink-0" style={{ border: '1px solid #1E2D45' }}>
             <button
-              onClick={() => { setCurrentRole('sender'); navigate('/sender/post'); }}
+              type="button"
+              onClick={() => setCurrentRole('sender')}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all"
               style={{
                 background: currentRole === 'sender' ? '#1A0F2E' : '#0B1120',
@@ -109,7 +151,8 @@ export function HomePage() {
               Sender
             </button>
             <button
-              onClick={() => { setCurrentRole('runner'); navigate('/runner/feed'); }}
+              type="button"
+              onClick={() => setCurrentRole('runner')}
               className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all"
               style={{
                 background: currentRole === 'runner' ? '#061620' : '#0B1120',
@@ -122,6 +165,17 @@ export function HomePage() {
           </div>
         </div>
       </motion.div>
+
+      {import.meta.env.DEV && (
+        <div className="rounded-lg px-3 py-2.5 text-[11px]" style={{ background: '#070B17', border: '1px solid #1A2535', color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
+          DEV dogfood: <span className="text-cyan-400">__rushbuddyDev.loadPilotScenarios()</span>
+          {' · '}
+          <span className="text-cyan-400">bypassNoAnswerWait(true)</span>
+          {' · '}
+          <span className="text-cyan-400">unsuspendRunner('u1')</span>
+          {' — '}refresh resets in-memory state
+        </div>
+      )}
 
       {/* Active job alert */}
       {activeJob && (
@@ -151,7 +205,11 @@ export function HomePage() {
               <p className="text-xs mt-0.5" style={{ color: '#64748B' }}>
                 {activeJob.status === 'PENDING_RATING'
                   ? 'Tap to confirm payment & rate'
-                  : `${activeJob.item_type} · ₹${activeJob.agreed_price ?? activeJob.posted_price}`}
+                  : activeJob.sender_id === uid && activeJob.runner_id === uid
+                    ? currentRole === 'runner'
+                      ? 'You are sender & runner — opening runner delivery (toggle Sender for tracking)'
+                      : 'You are sender & runner — opening sender tracking (toggle Runner for delivery)'
+                    : `${activeJob.item_type} · ₹${activeJob.agreed_price ?? activeJob.posted_price}`}
               </p>
             </div>
             <ChevronRight size={16} className={activeJob.status === 'PENDING_RATING' ? 'text-amber-400' : 'text-emerald-400'} style={{ flexShrink: 0 }} />
@@ -339,7 +397,9 @@ export function HomePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={job.status} />
-                    {job.runner_id === uid ? (
+                    {job.sender_id === uid && job.runner_id === uid ? (
+                      <span className="text-[10px]" style={{ color: '#64748B' }}>you = sender + runner</span>
+                    ) : job.runner_id === uid ? (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Runner</span>
                     ) : (
                       <span className="text-[10px]" style={{ color: '#475569' }}>as Sender</span>

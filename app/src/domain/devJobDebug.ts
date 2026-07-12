@@ -241,7 +241,12 @@ export function attachDevJobDebug(handlers: DevJobDebugHandlers): () => void {
 
   window.__rushbuddyDev = api;
   console.info(
-    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), loadPilotScenarios(), bypassNoAnswerWait(), suspendRunner(), unsuspendRunner(), logJobTransition(), createSampleJob()',
+    `[RushBuddy dev] window.__rushbuddyDev ready
+  loadPilotScenarios()     — seed PILOT-01…12 jobs for dogfooding
+  bypassNoAnswerWait(true) — skip 20-min no-answer wait
+  suspendRunner('u1') / unsuspendRunner('u1')
+  addJob({ ... }) / transitionJob(id, status)
+  Tip: soft-refresh clears all in-memory state`,
   );
 
   return () => {

@@ -14,7 +14,7 @@ const TIMELINE_STEPS = [
   { key: 'OPEN', label: 'Finding Buddy', sub: 'Notifying runners...', icon: Radio },
   { key: 'MATCHED', label: 'Buddy Found', sub: 'Runner on the way', icon: Star },
   { key: 'IN_TRANSIT', label: 'Picked Up', sub: 'Item in transit', icon: Package },
-  { key: 'PENDING_RATING', label: 'Delivered', sub: 'Rate your Buddy', icon: CheckCircle2 },
+  { key: 'PENDING_RATING', label: 'Payment due', sub: 'Confirm pay & rate', icon: CheckCircle2 },
 ];
 
 function getStepIndex(status: string) {
@@ -305,7 +305,7 @@ export function TrackingPage() {
       </div>
 
       {/* Find New Buddy — MATCHED, pre-pickup */}
-      {(canFindNewBuddy || devFindNewBuddyAvailable) && job.status === 'MATCHED' && !job.pickup_confirmed_at && (
+      {job.status === 'MATCHED' && !job.pickup_confirmed_at && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-xl p-4 flex items-center justify-between gap-3" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
           <div className="flex items-start gap-2">
@@ -313,16 +313,22 @@ export function TrackingPage() {
             <div>
               <p className="text-xs text-amber-300 font-medium">Runner hasn't confirmed pickup</p>
               <p className="text-[11px]" style={{ color: '#92400E' }}>
-                {canFindNewBuddy ? 'It\'s been over 10 minutes since match.' : 'Dev shortcut — skip the 10 min wait.'}
+                {canFindNewBuddy
+                  ? 'Over 10 minutes since match — you can re-pool.'
+                  : import.meta.env.DEV
+                    ? 'Wait 10 minutes, or use the button (dev skip).'
+                    : 'Available after 10 minutes from match if pickup is still unconfirmed.'}
               </p>
             </div>
           </div>
           <button
             onClick={handleFindNewBuddy}
-            className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white"
-            style={{ background: 'linear-gradient(135deg, #F59E0B, #DC2626)' }}
+            disabled={!canFindNewBuddy && !devFindNewBuddyAvailable}
+            className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+            style={{ background: (canFindNewBuddy || devFindNewBuddyAvailable) ? 'linear-gradient(135deg, #F59E0B, #DC2626)' : '#3B2A0A' }}
+            title={!canFindNewBuddy && !devFindNewBuddyAvailable ? 'Unlocked after 10 minutes' : 'Unassign runner and re-open job'}
           >
-            Find New Buddy
+            {canFindNewBuddy || devFindNewBuddyAvailable ? 'Find New Buddy' : 'Wait 10 min'}
           </button>
         </motion.div>
       )}
@@ -336,7 +342,7 @@ export function TrackingPage() {
           className="w-full py-3 rounded-lg text-sm font-semibold text-white"
           style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
         >
-          {job.status === 'ISSUE_REPORTED' ? 'Review & Report Issue →' : 'Rate & Confirm Payment →'}
+          {job.status === 'ISSUE_REPORTED' ? 'Open payment / dispute →' : 'Continue to payment & rating →'}
         </motion.button>
       )}
 
@@ -465,7 +471,7 @@ export function TrackingPage() {
           ) : (
             <>
               <ChevronRight size={14} />
-              Demo: Simulate Delivery Progress
+              Demo: Simulate to payment step
             </>
           )}
         </button>

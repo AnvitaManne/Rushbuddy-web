@@ -52,6 +52,7 @@ export function ActiveDeliveryPage() {
   const [photoCaptured, setPhotoCaptured] = useState(false);
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
+  const [codeAttemptsLeft, setCodeAttemptsLeft] = useState(3);
   const [showNoAnswerPanel, setShowNoAnswerPanel] = useState(false);
   const [secureLocation, setSecureLocation] = useState('');
 
@@ -60,6 +61,13 @@ export function ActiveDeliveryPage() {
       setPhase('in_transit');
     }
   }, [job?.status, phase]);
+
+  // Fresh attempt budget when switching jobs / re-entering transit.
+  useEffect(() => {
+    setCodeAttemptsLeft(3);
+    setCodeInput('');
+    setCodeError('');
+  }, [job?.id]);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -89,8 +97,19 @@ export function ActiveDeliveryPage() {
 
   const handleConfirmCode = () => {
     if (!job) return;
+    if (codeAttemptsLeft <= 0) {
+      setCodeError('Handoff code locked after 3 wrong tries. Use “Sender not answering?” or Report an Issue.');
+      return;
+    }
     if (codeInput.trim() !== job.confirmation_code) {
-      setCodeError('Incorrect code. Ask the sender to confirm their 4-digit handoff code.');
+      const left = codeAttemptsLeft - 1;
+      setCodeAttemptsLeft(left);
+      setCodeInput('');
+      if (left <= 0) {
+        setCodeError('Incorrect code. Locked after 3 failed attempts — delivery not completed. Open “Sender not answering?” or Report an Issue.');
+      } else {
+        setCodeError(`Incorrect code — delivery not completed. ${left} attempt${left === 1 ? '' : 's'} left.`);
+      }
       return;
     }
     const result = assertHandoffToPendingRating(job.status);
@@ -365,7 +384,7 @@ export function ActiveDeliveryPage() {
               <button
                 onClick={handleConditionAck}
                 disabled={condAckLoading || !canAckCondition}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-3"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-1"
                 style={{
                   background: condAckLoading ? '#1A1005' : canAckCondition ? 'linear-gradient(135deg, #F59E0B, #EF4444)' : '#1E2D45',
                   color: canAckCondition ? 'white' : '#475569',
@@ -384,6 +403,12 @@ export function ActiveDeliveryPage() {
                   </>
                 )}
               </button>
+              {!canAckCondition && (
+                <p className="text-[10px] mb-3 text-center" style={{ color: '#F59E0B' }}>
+                  Capture a pickup photo first — required for Fragile / Valuable items.
+                </p>
+              )}
+              {canAckCondition && <div className="mb-3" />}
 
               <button
                 onClick={() => setShowIssuePanel(true)}
@@ -427,7 +452,7 @@ export function ActiveDeliveryPage() {
                   </span>
                 </div>
                 <p className="text-[11px] mb-3" style={{ color: '#64748B' }}>
-                  Ask the sender for their 4-digit handoff code and enter it to complete delivery.
+                  Ask the person receiving the package for the sender’s 4-digit code. Wrong code will not complete the job · {codeAttemptsLeft}/3 attempts left.
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -435,9 +460,10 @@ export function ActiveDeliveryPage() {
                     inputMode="numeric"
                     maxLength={4}
                     value={codeInput}
+                    disabled={codeAttemptsLeft <= 0}
                     onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setCodeError(''); }}
                     placeholder="0000"
-                    className="flex-1 px-3 py-2.5 rounded-lg text-center text-lg text-white outline-none tracking-widest"
+                    className="flex-1 px-3 py-2.5 rounded-lg text-center text-lg text-white outline-none tracking-widest disabled:opacity-50"
                     style={{
                       background: '#060A14',
                       border: `1px solid ${codeError ? '#EF4444' : '#1A3520'}`,
@@ -446,11 +472,26 @@ export function ActiveDeliveryPage() {
                   />
                   <button
                     onClick={handleConfirmCode}
-                    disabled={codeInput.length < 4}
+                    disabled={codeAttemptsLeft <= 0 || codeInput.length < 4}
                     className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all"
-                    style={{ background: codeInput.length < 4 ? '#1E2D45' : 'linear-gradient(135deg, #10B981, #059669)' }}
+                    style={{
+                      background: codeAttemptsLeft <= 0 || codeInput.length < 4
+                        ? '#1E2D45'
+                        : 'linear-gradient(135deg, #10B981, #059669)',
+                    }}
+                    title={
+                      codeAttemptsLeft <= 0
+                        ? 'Locked after 3 wrong codes'
+                        : codeInput.length < 4
+                          ? 'Enter all 4 digits'
+                          : 'Submit handoff code'
+                    }
                   >
-                    Confirm
+                    {codeAttemptsLeft <= 0
+                      ? 'Locked'
+                      : codeInput.length < 4
+                        ? 'Enter 4 digits'
+                        : 'Submit code'}
                   </button>
                 </div>
                 {codeError && (

@@ -164,11 +164,17 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
               disabled={accepting || disabled}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
               style={{ background: disabled ? '#1E2D45' : accepting ? '#0A2030' : 'linear-gradient(135deg, #06B6D4, #0EA5E9)', minWidth: 110 }}
+              title={disabled ? 'Account suspended — cannot accept' : `Accept for ₹${job.posted_price}`}
             >
               {accepting ? (
                 <>
                   <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                   Accepting...
+                </>
+              ) : disabled ? (
+                <>
+                  <Ban size={13} />
+                  Suspended
                 </>
               ) : (
                 <>

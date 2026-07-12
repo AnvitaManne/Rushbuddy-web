@@ -177,11 +177,16 @@ export function RatingPage() {
       {/* Header */}
       <div>
         <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-          FLOW 5 · RATING & PAYMENT
+          {paymentConfirmed ? 'STEP 2 · RATE YOUR BUDDY' : 'STEP 1 · CONFIRM PAYMENT'}
         </div>
         <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
-          Rate your Buddy
+          {paymentConfirmed ? 'How was the delivery?' : 'Pay your Buddy'}
         </h1>
+        <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+          {paymentConfirmed
+            ? 'Stars only — tip and payment were already confirmed.'
+            : 'Choose tip + payment method first. Rating comes next.'}
+        </p>
       </div>
 
       {/* Runner card */}
@@ -247,7 +252,7 @@ export function RatingPage() {
 
         {!disputeMode && !paymentConfirmed && (
           <div className="text-xs" style={{ color: '#475569' }}>
-            Choose tip + payment method below, then rate your Buddy.
+            Tip + payment method below — then confirm. Rating is the next step.
           </div>
         )}
       </div>
@@ -428,10 +433,17 @@ export function RatingPage() {
             'Submit Dispute'
           ) : !paymentConfirmed ? (
             `Confirm Payment · ₹${total}`
+          ) : stars === 0 ? (
+            'Pick a star rating to close'
           ) : (
-            'Rate & Close Job'
+            'Submit rating & close job'
           )}
         </button>
+        {!disputeMode && paymentConfirmed && stars === 0 && (
+          <p className="text-[10px] text-center" style={{ color: '#64748B' }}>
+            Button unlocks after you select 1–5 stars.
+          </p>
+        )}
 
         <button
           onClick={() => { setDisputeMode(d => !d); setStars(0); setDisputeError(''); }}

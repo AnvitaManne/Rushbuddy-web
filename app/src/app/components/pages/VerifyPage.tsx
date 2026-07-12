@@ -71,9 +71,9 @@ export function VerifyPage() {
       const remaining = attempts - 1;
       setAttempts(remaining);
       if (remaining <= 0) {
-        setError('Account locked for 15 minutes after too many attempts.');
+        setError('Too many incorrect codes. Tap Resend code below to unlock and try again. (Demo lock — not a real 15‑minute ban.)');
       } else {
-        setError(`Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`);
+        setError(`Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining. Demo OTP is 123456.`);
       }
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
@@ -195,7 +195,7 @@ export function VerifyPage() {
               <button
                 onClick={handleVerify}
                 disabled={loading || attempts <= 0 || otp.join('').length < 6}
-                className="w-full py-3 rounded-lg text-sm font-semibold text-white transition-all mb-4"
+                className="w-full py-3 rounded-lg text-sm font-semibold text-white transition-all mb-2"
                 style={{
                   background: attempts <= 0 || otp.join('').length < 6
                     ? '#0E1525'
@@ -208,8 +208,19 @@ export function VerifyPage() {
                     <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                     Verifying...
                   </span>
-                ) : 'Verify & Enter'}
+                ) : attempts <= 0 ? (
+                  'Locked — use Resend code'
+                ) : otp.join('').length < 6 ? (
+                  'Enter all 6 digits'
+                ) : (
+                  'Verify & Enter'
+                )}
               </button>
+              {attempts <= 0 && (
+                <p className="text-[10px] text-center mb-3" style={{ color: '#64748B' }}>
+                  Button stays locked until you resend a new code.
+                </p>
+              )}
 
               {/* Resend */}
               <div className="text-center text-xs" style={{ color: '#475569' }}>
