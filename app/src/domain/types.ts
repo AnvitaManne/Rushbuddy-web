@@ -195,9 +195,17 @@ export interface RunnerTrustRecord {
 /** Mock-only party identity for FIR support packages. Never real Aadhaar. */
 export interface FirPartyIdentity {
   user_id: string;
+  /** Display name (same as User.name). */
+  name: string;
   display_name: string;
   email: string;
   hostel_block: string;
+  /** Mock phone placeholder — not collected in V1. */
+  phone: string;
+  /** Mock college ID placeholder — not a real document. */
+  college_id: string;
+  /** Mock Aadhaar-linked phone placeholder — not real KYC. */
+  aadhaar_linked_phone: string;
   /** V1 mock KYC — college email only; not government ID. */
   identity_source: 'mock_vit_email_only';
   /** Placeholder ref; always clearly mock. */
@@ -213,8 +221,20 @@ export interface FirTimelineEntry {
 }
 
 export interface FirEvidence {
-  pickup_photo_url: string | null;
+  /** Pickup / item photo (`Job.photo_url`). */
+  photo_url: string | null;
   dropoff_photo_url: string | null;
+  /** Mock geotag from dropoff evidence if present; otherwise null. */
+  dropoff_geotag: {
+    lat: number | null;
+    lng: number | null;
+    label: string;
+    captured_at: string | null;
+  } | null;
+  /** Condition note at pickup if recorded; mock-safe. */
+  condition_note: string | null;
+  dispute_type: string | null;
+  dispute_description: string | null;
   ops_notified: boolean;
   no_answer_at: string | null;
   trust_events: TrustEvent[];
@@ -239,5 +259,7 @@ export interface FIRExport {
   last_known_status: JobStatus;
   evidence: FirEvidence;
   generated_at: string;
+  /** Platform support package — not a legal FIR filing. */
   disclaimer: 'mock/supporting-document-not-legal-filing';
+  package_label: 'RushBuddy mock FIR support package (not a legal filing)';
 }

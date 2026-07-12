@@ -129,11 +129,16 @@ export function unsuspendRunner(record: RunnerTrustRecord): RunnerTrustRecord {
 }
 
 function buildMockPartyIdentity(user: User): FirPartyIdentity {
+  const mockPhone = `+91-MOCK-${user.id.slice(-4).padStart(4, '0')}`;
   return {
     user_id: user.id,
+    name: user.name,
     display_name: user.name,
     email: user.email,
     hostel_block: user.hostel_block,
+    phone: mockPhone,
+    college_id: `MOCK-COLLEGE-ID-${user.id}`,
+    aadhaar_linked_phone: `MOCK-AADHAAR-PHONE-${user.id}`,
     identity_source: 'mock_vit_email_only',
     mock_aadhaar_ref: `MOCK-AADHAAR-REDACTED-${user.id}`,
   };
@@ -181,6 +186,28 @@ function buildJobTimeline(job: Job, events: TrustEvent[]): FirTimelineEntry[] {
     });
   }
 
+  const disputeEvent = events.find(
+    (e) => e.job_id === job.id && (e.type === 'dispute_filed' || e.type === 'theft_escalation'),
+  );
+  if (disputeEvent || job.status === 'DISPUTED') {
+    fromJob.push({
+      at: disputeEvent?.created_at ?? job.delivered_at ?? job.created_at,
+      label: 'Dispute / escalation recorded',
+      source: disputeEvent ? 'trust_event' : 'job',
+      status: 'DISPUTED',
+      event_type: disputeEvent?.type,
+    });
+  }
+
+  if (job.status === 'CLOSED') {
+    fromJob.push({
+      at: job.delivered_at ?? job.created_at,
+      label: 'Job closed',
+      source: 'job',
+      status: 'CLOSED',
+    });
+  }
+
   const fromEvents: FirTimelineEntry[] = events
     .filter((e) => !e.job_id || e.job_id === job.id)
     .map((e) => ({
@@ -206,6 +233,21 @@ export function buildFirExport(
   events: TrustEvent[],
 ): FIRExport {
   const jobEvents = events.filter((e) => !e.job_id || e.job_id === job.id);
+  const disputeFiled = jobEvents.find((e) => e.type === 'dispute_filed');
+  const disputeType =
+    (disputeFiled?.metadata?.dispute_type as string | undefined) ?? null;
+  const disputeDescription =
+    (disputeFiled?.metadata?.dispute_description as string | undefined) ?? null;
+
+  const dropoff_geotag =
+    job.dropoff_photo_url || job.no_answer_at || disputeFiled
+      ? {
+          lat: null as number | null,
+          lng: null as number | null,
+          label: 'Mock dropoff geotag (not live GPS)',
+          captured_at: job.no_answer_at ?? job.delivered_at ?? disputeFiled?.created_at ?? null,
+        }
+      : null;
 
   return {
     job_id: job.id,
@@ -214,8 +256,14 @@ export function buildFirExport(
     job_timeline: buildJobTimeline(job, jobEvents),
     last_known_status: job.status,
     evidence: {
-      pickup_photo_url: job.photo_url ?? null,
+      photo_url: job.photo_url ?? null,
       dropoff_photo_url: job.dropoff_photo_url ?? null,
+      dropoff_geotag,
+      condition_note: job.condition_acknowledged
+        ? 'Condition acknowledged at pickup (no free-text note stored in V1 mock)'
+        : null,
+      dispute_type: disputeType,
+      dispute_description: disputeDescription,
       ops_notified: job.ops_notified ?? false,
       no_answer_at: job.no_answer_at ?? null,
       trust_events: jobEvents,
@@ -230,5 +278,6 @@ export function buildFirExport(
     },
     generated_at: new Date().toISOString(),
     disclaimer: 'mock/supporting-document-not-legal-filing',
+    package_label: 'RushBuddy mock FIR support package (not a legal filing)',
   };
 }

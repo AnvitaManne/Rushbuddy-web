@@ -1,14 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../../context/AppContext';
+import { useApp, defaultUser } from '../../context/AppContext';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
-  AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio
+  AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio, Copy, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { assertTransition } from '@/domain/jobTransitions';
-import { applyNoShowStrike } from '@/domain/trustOps';
+import { applyNoShowStrike, buildFirExport } from '@/domain/trustOps';
 import { logJobTransition } from '@/domain/devJobDebug';
+import type { FIRExport, Job, User } from '@/domain/types';
+
+/** Mock runner identity for FIR package when only job fields exist. */
+function mockRunnerFromJob(job: Job): User {
+  const id = job.runner_id ?? 'r-unknown';
+  return {
+    ...defaultUser,
+    id,
+    name: job.runner_name ?? 'Unknown Runner (mock)',
+    email: `mock.runner.${id}@vitstudent.ac.in`,
+    hostel_block: job.runner_hostel ?? 'MOCK-HOSTEL',
+    current_role: 'runner',
+  };
+}
+
+function mockSenderFromJob(job: Job, currentUser: User | null): User {
+  if (currentUser && currentUser.id === job.sender_id) return currentUser;
+  return {
+    ...defaultUser,
+    id: job.sender_id,
+    name: job.sender_name,
+    hostel_block: job.sender_hostel,
+    email:
+      job.sender_id === defaultUser.id
+        ? defaultUser.email
+        : `mock.sender.${job.sender_id}@vitstudent.ac.in`,
+  };
+}
 
 const TIMELINE_STEPS = [
   { key: 'OPEN', label: 'Finding Buddy', sub: 'Notifying runners...', icon: Radio },
@@ -78,6 +106,9 @@ export function TrackingPage() {
   const [devNoshowElapsed, setDevNoshowElapsed] = useState(false);
   /** Forces re-render when the real 10 min window unlocks. */
   const [, setNoshowTick] = useState(0);
+  /** Mock FIR support package preview (theft escalation only). */
+  const [firPackage, setFirPackage] = useState<FIRExport | null>(null);
+  const [firCopyHint, setFirCopyHint] = useState<string | null>(null);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
   const displayStep = simStep !== null ? simStep : stepIndex;
@@ -336,7 +367,7 @@ export function TrackingPage() {
         </AnimatePresence>
       </div>
 
-      {/* DISPUTED — ops / theft escalation (no FIR export yet) */}
+      {/* DISPUTED — ops / theft escalation + mock FIR support package */}
       {isDisputed && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -357,8 +388,8 @@ export function TrackingPage() {
             </p>
           )}
           {(jobTheftEscalation || disputedRunnerSuspended) && (
-            <div className="rounded-lg px-3 py-2.5" style={{ background: '#2A0F0F', border: '1px solid #3B1111' }}>
-              <p className="text-xs text-red-300 font-medium mb-1">
+            <div className="rounded-lg px-3 py-2.5 space-y-2" style={{ background: '#2A0F0F', border: '1px solid #3B1111' }}>
+              <p className="text-xs text-red-300 font-medium">
                 Theft escalation active
               </p>
               <p className="text-[11px]" style={{ color: '#94A3B8' }}>
@@ -367,10 +398,81 @@ export function TrackingPage() {
                   : 'Escalation logged; suspension pending.'}
               </p>
               {jobTheftEscalation && (
-                <p className="text-[11px] mt-2" style={{ color: '#F87171' }}>
-                  FIR support package available (mock) — export in next ops slice. Not a legal filing.
+                <>
+                  <p className="text-[10px]" style={{ color: '#64748B' }}>
+                    Mock / dev only — platform support package, not a legal FIR filing.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pkg = buildFirExport(
+                        job,
+                        mockRunnerFromJob(job),
+                        mockSenderFromJob(job, user),
+                        trustEvents,
+                      );
+                      setFirPackage(pkg);
+                      setFirCopyHint(null);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                    style={{ background: '#7F1D1D', border: '1px solid #991B1B' }}
+                  >
+                    <FileText size={14} />
+                    Generate FIR Support Package
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {jobTheftEscalation && firPackage && firPackage.job_id === job.id && (
+            <div className="rounded-lg p-3 space-y-2" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-medium text-cyan-300">
+                    FIR support package preview (mock)
+                  </p>
+                  <p className="text-[10px] mt-0.5" style={{ color: '#64748B' }}>
+                    {firPackage.package_label}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const text = JSON.stringify(firPackage, null, 2);
+                    try {
+                      if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(text);
+                        setFirCopyHint('Copied to clipboard (mock package).');
+                      } else {
+                        setFirCopyHint('Clipboard unavailable — select & copy the preview below.');
+                      }
+                    } catch {
+                      setFirCopyHint('Clipboard blocked — select & copy the preview below.');
+                    }
+                  }}
+                  className="shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] text-cyan-300 transition-colors"
+                  style={{ background: '#061620', border: '1px solid #0E2D3D' }}
+                >
+                  <Copy size={12} />
+                  Copy package
+                </button>
+              </div>
+              {firCopyHint && (
+                <p className="text-[10px]" style={{ color: '#94A3B8' }}>
+                  {firCopyHint}
                 </p>
               )}
+              <pre
+                className="text-[10px] overflow-auto max-h-56 rounded-md p-2 whitespace-pre-wrap break-all"
+                style={{
+                  background: '#020617',
+                  color: '#CBD5E1',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  border: '1px solid #1E2D45',
+                }}
+              >
+                {JSON.stringify(firPackage, null, 2)}
+              </pre>
             </div>
           )}
         </motion.div>
