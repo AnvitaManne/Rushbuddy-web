@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import type { Job, User } from '@/domain/types';
 import type { UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
+import { createPilotScenarioJobs } from '@/domain/demoScenarios';
 
 export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
@@ -218,7 +219,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.debug(`[RushBuddy dev] ${mockJobs.length} mock jobs loaded`);
     mockJobs.forEach(j => logJobTransition(j.id, '(new)', j.status));
 
-    return attachDevJobDebug({ setJobs, setActiveJob });
+    return attachDevJobDebug({
+      setJobs,
+      setActiveJob,
+      createPilotJobs: createPilotScenarioJobs,
+    });
   }, []);
 
   const handleSetUser = (u: User | null) => {

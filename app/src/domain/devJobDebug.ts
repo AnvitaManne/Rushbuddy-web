@@ -126,6 +126,8 @@ export function createSampleJob(overrides: SampleJobOverrides = {}): Job {
 export type DevJobDebugHandlers = {
   setJobs: (update: Job[] | ((prev: Job[]) => Job[])) => void;
   setActiveJob?: (job: Job | null) => void;
+  /** Provided by AppProvider to avoid a circular import with demoScenarios. */
+  createPilotJobs?: () => Job[];
 };
 
 export type RushBuddyDevGlobal = {
@@ -135,6 +137,11 @@ export type RushBuddyDevGlobal = {
   addJob: (overrides?: SampleJobOverrides) => Job;
   /** Updates status with transition logging. */
   transitionJob: (jobId: string, to: JobStatus) => void;
+  /**
+   * Loads Phase 8 dogfooding fixtures (`PILOT-01`…`PILOT-12`).
+   * Removes any prior `PILOT-*` jobs, then prepends the fresh set.
+   */
+  loadPilotScenarios: () => Job[];
 };
 
 declare global {
@@ -171,11 +178,30 @@ export function attachDevJobDebug(handlers: DevJobDebugHandlers): () => void {
         }),
       );
     },
+    loadPilotScenarios() {
+      const pilots = handlers.createPilotJobs?.() ?? [];
+      if (pilots.length === 0) {
+        console.warn(
+          '[RushBuddy dev] loadPilotScenarios() — no jobs (createPilotJobs not provided)',
+        );
+        return pilots;
+      }
+      handlers.setJobs(prev => {
+        const withoutPriorPilots = prev.filter(j => !j.id.startsWith('PILOT-'));
+        return [...pilots, ...withoutPriorPilots];
+      });
+      pilots.forEach(j => logJobTransition(j.id, '(new)', j.status));
+      console.info(
+        `[RushBuddy dev] loadPilotScenarios() — loaded ${pilots.length} pilot jobs:`,
+        pilots.map(j => `${j.id} (${j.status})`),
+      );
+      return pilots;
+    },
   };
 
   window.__rushbuddyDev = api;
   console.info(
-    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), logJobTransition(), createSampleJob()',
+    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), loadPilotScenarios(), logJobTransition(), createSampleJob()',
   );
 
   return () => {
