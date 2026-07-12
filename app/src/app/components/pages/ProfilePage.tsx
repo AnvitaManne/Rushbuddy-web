@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Shield, Star, TrendingUp, Package, Award, CheckCircle2,
-  AlertCircle, Clock, Zap, BarChart2, Activity, Calendar
+  AlertCircle, Zap, BarChart2, Activity, Calendar
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts';
@@ -35,10 +35,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function ProfilePage() {
-  const { user, jobs } = useApp();
+  const { user, jobs, runnerTrustRecords, trustEvents } = useApp();
   const [tab, setTab] = useState<'overview' | 'history' | 'trust'>('overview');
 
   const displayUser = user || {
+    id: 'u1',
     name: 'Aditi Krishnan',
     email: 'aditi.k@vitstudent.ac.in',
     hostel_block: 'MH-C Block',
@@ -50,10 +51,25 @@ export function ProfilePage() {
     acceptance_rate: 91,
     trust_score: 94,
     joined_at: '2026-03-01T00:00:00Z',
-    gender: 'female' as const,
+    no_show_count: 0,
+    suspension_status: 'active' as const,
     streak: 4,
     best_week_earnings: 450,
   };
+
+  const runnerId = displayUser.id;
+  const trustRecord = runnerTrustRecords[runnerId] ?? {
+    runner_id: runnerId,
+    no_show_count: displayUser.no_show_count ?? 0,
+    suspension_status: displayUser.suspension_status ?? 'active',
+    trust_score: displayUser.trust_score,
+  };
+  const isSuspended = trustRecord.suspension_status === 'suspended';
+  /** Events that affect this account as runner (not disputes they filed as sender). */
+  const runnerTargetEvents = [...trustEvents]
+    .filter((e) => e.target_user_id === runnerId)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const myTrustEvents = runnerTargetEvents.slice(0, 5);
 
   const myRunnerJobs = jobs.filter(j => j.runner_id === 'u1' && j.status === 'CLOSED');
   const mySenderJobs = jobs.filter(j => j.sender_id === 'u1' && j.status !== 'OPEN');
@@ -92,9 +108,12 @@ export function ProfilePage() {
               <span className="text-xs" style={{ color: '#64748B' }}>
                 Joined {new Date(displayUser.joined_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
               </span>
-              <span className="text-xs" style={{ color: '#64748B' }}>
-                {displayUser.gender === 'female' ? '♀ Female' : displayUser.gender === 'male' ? '♂ Male' : 'Prefer not to say'}
-              </span>
+              {isSuspended && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full text-red-300"
+                  style={{ background: '#1C0A0A', border: '1px solid #3B1111', fontFamily: 'JetBrains Mono, monospace' }}>
+                  SUSPENDED
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -184,7 +203,7 @@ export function ProfilePage() {
             <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
               {[
                 { label: 'Acceptance Rate', value: displayUser.acceptance_rate, max: 100, unit: '%', color: '#10B981', good: displayUser.acceptance_rate >= 80 },
-                { label: 'Trust Score', value: displayUser.trust_score, max: 100, unit: '', color: '#06B6D4', good: true },
+                { label: 'Trust Score', value: trustRecord.trust_score, max: 100, unit: '', color: '#06B6D4', good: true },
                 { label: 'On-Time Delivery', value: 96, max: 100, unit: '%', color: '#10B981', good: true },
                 { label: 'Condition Disputes', value: 2, max: 20, unit: ' disputes', color: '#F59E0B', good: true },
               ].map(({ label, value, max, unit, color, good }) => (
@@ -272,15 +291,120 @@ export function ProfilePage() {
       {/* Tab: Trust & Safety */}
       {tab === 'trust' && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+          {/* Live trust status (from runnerTrustRecords — no gender/KYC) */}
+          <div className="rounded-xl p-4 space-y-3" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+            <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+              RUNNER TRUST STATUS
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg p-2.5 text-center" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+                <div className="text-sm font-semibold text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  {trustRecord.trust_score}
+                </div>
+                <div className="text-[9px] mt-0.5" style={{ color: '#475569' }}>Trust score</div>
+              </div>
+              <div className="rounded-lg p-2.5 text-center" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+                <div className="text-sm font-semibold" style={{ color: trustRecord.no_show_count > 0 ? '#FBBF24' : '#E2E8F0', fontFamily: 'JetBrains Mono, monospace' }}>
+                  {trustRecord.no_show_count}
+                </div>
+                <div className="text-[9px] mt-0.5" style={{ color: '#475569' }}>No-shows</div>
+              </div>
+              <div className="rounded-lg p-2.5 text-center" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+                <div className="text-sm font-semibold" style={{ color: isSuspended ? '#F87171' : '#10B981', fontFamily: 'JetBrains Mono, monospace' }}>
+                  {isSuspended ? 'Suspended' : 'Active'}
+                </div>
+                <div className="text-[9px] mt-0.5" style={{ color: '#475569' }}>Status</div>
+              </div>
+            </div>
+            {isSuspended && (
+              <div className="rounded-lg px-3 py-2.5 flex items-start gap-2" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+                <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-red-300 font-medium">Account suspended</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#94A3B8' }}>
+                    {trustRecord.suspension_reason || 'Pending ops review (mock).'}
+                  </p>
+                </div>
+              </div>
+            )}
+            {trustRecord.last_incident_at && (
+              <p className="text-[10px]" style={{ color: '#475569' }}>
+                Last incident:{' '}
+                {new Date(trustRecord.last_incident_at).toLocaleString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                RECENT TRUST EVENTS (AS RUNNER)
+              </div>
+              <span className="text-[10px]" style={{ color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
+                {runnerTargetEvents.length} total
+              </span>
+            </div>
+            {myTrustEvents.length === 0 ? (
+              <p className="text-xs" style={{ color: '#475569' }}>
+                No runner-targeted trust events on this account. Disputes you file as sender appear on the other party&apos;s record.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {myTrustEvents.map((ev) => (
+                  <div
+                    key={ev.id}
+                    className="rounded-lg px-3 py-2"
+                    style={{ background: '#070B17', border: '1px solid #1A2535' }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-medium text-white" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                        {ev.type}
+                      </span>
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded"
+                        style={{
+                          color:
+                            ev.severity === 'critical'
+                              ? '#F87171'
+                              : ev.severity === 'warning'
+                                ? '#FBBF24'
+                                : '#94A3B8',
+                          background: '#0B1120',
+                          border: '1px solid #1E2D45',
+                        }}
+                      >
+                        {ev.severity}
+                      </span>
+                    </div>
+                    <p className="text-[11px] mt-1" style={{ color: '#94A3B8' }}>
+                      {ev.message}
+                    </p>
+                    <p className="text-[9px] mt-1" style={{ color: '#475569' }}>
+                      {new Date(ev.created_at).toLocaleString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
             <div className="text-xs mb-4" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-              IDENTITY VERIFICATION
+              IDENTITY (PUBLIC-SAFE)
             </div>
             {[
-              { label: 'VIT Email', value: displayUser.email, status: 'verified' },
-              { label: 'Student Status', value: 'Active · VIT Vellore', status: 'verified' },
-              { label: 'Gender', value: displayUser.gender === 'female' ? 'Female (Women\'s hostel eligible)' : 'Male', status: 'verified' },
-              { label: 'Aadhaar (V2)', value: 'Not required in beta', status: 'pending' },
+              { label: 'VIT Email', value: displayUser.email, status: 'verified' as const },
+              { label: 'Student Status', value: 'Active · VIT Vellore', status: 'verified' as const },
             ].map(({ label, value, status }) => (
               <div key={label} className="flex items-center justify-between py-2.5"
                 style={{ borderBottom: '1px solid #111E35' }}>
@@ -288,47 +412,15 @@ export function ProfilePage() {
                   <div className="text-xs text-white">{label}</div>
                   <div className="text-[10px] mt-0.5" style={{ color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px]"
-                  style={{ color: status === 'verified' ? '#10B981' : '#F59E0B' }}>
-                  {status === 'verified'
-                    ? <CheckCircle2 size={12} className="text-emerald-400" />
-                    : <Clock size={12} className="text-amber-400" />}
-                  {status === 'verified' ? 'Verified' : 'Pending V2'}
+                <div className="flex items-center gap-1.5 text-[10px]" style={{ color: '#10B981' }}>
+                  <CheckCircle2 size={12} className="text-emerald-400" />
+                  {status === 'verified' ? 'Verified' : 'Pending'}
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-            <div className="text-xs mb-4" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-              TRUST SCORE BREAKDOWN
-            </div>
-            {[
-              { factor: 'Acceptance Rate', score: 18, max: 20 },
-              { factor: 'On-Time Pickup', score: 20, max: 20 },
-              { factor: 'Condition Disputes', score: 18, max: 20 },
-              { factor: 'Sender Ratings', score: 19, max: 20 },
-              { factor: 'No-Show Count', score: 19, max: 20 },
-            ].map(({ factor, score, max }) => (
-              <div key={factor} className="mb-3">
-                <div className="flex justify-between text-xs mb-1">
-                  <span style={{ color: '#64748B' }}>{factor}</span>
-                  <span style={{ color: '#E2E8F0', fontFamily: 'JetBrains Mono, monospace' }}>{score}/{max}</span>
-                </div>
-                <div className="h-1.5 rounded-full" style={{ background: '#1E2D45' }}>
-                  <div className="h-1.5 rounded-full"
-                    style={{ width: `${(score / max) * 100}%`, background: score >= max * 0.8 ? '#10B981' : '#F59E0B' }} />
-                </div>
-              </div>
-            ))}
-            <div className="pt-3 mt-1" style={{ borderTop: '1px solid #1E2D45' }}>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-white">Total Trust Score</span>
-                <span className="font-bold text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.2rem' }}>
-                  {displayUser.trust_score}/100
-                </span>
-              </div>
-            </div>
+            <p className="text-[10px] mt-3" style={{ color: '#475569' }}>
+              Gender, phone, college ID, and Aadhaar are not shown on profile (privacy).
+            </p>
           </div>
 
           {/* Policies */}
@@ -340,7 +432,7 @@ export function ProfilePage() {
               'Items above ₹2,000 require ID-verified runners',
               'Women\'s hostel deliveries: female runners only',
               'Dispute window: 2 hours post-delivery',
-              'No-show ×3: automatic ops review + rating drop',
+              'No-show ×2: suspension eligibility (ops mock)',
               'Off-platform payment tracking: V2 escrow roadmap',
             ].map(p => (
               <div key={p} className="flex items-start gap-2 text-xs" style={{ color: '#64748B' }}>
