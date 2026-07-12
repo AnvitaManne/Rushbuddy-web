@@ -30,16 +30,23 @@ function assertHandoffToPendingRating(status: JobStatus) {
   return assertTransition('DELIVERED', 'PENDING_RATING');
 }
 
+const RUNNER_LIVE_STATUSES = ['MATCHED', 'IN_TRANSIT', 'ISSUE_REPORTED', 'PENDING_RATING', 'DISPUTED', 'CLOSED'] as const;
+
 export function ActiveDeliveryPage() {
   const { jobs, setJobs, activeJob: ctxActiveJob, user } = useApp();
   const navigate = useNavigate();
   const uid = user?.id ?? defaultUser.id;
 
+  const isRunnerLive = (status: string) =>
+    (RUNNER_LIVE_STATUSES as readonly string[]).includes(status);
+
+  // Prefer Home's selected job (incl. ISSUE_REPORTED hold-for-ops), then any live runner job.
   const activeJob =
-    (ctxActiveJob && ctxActiveJob.runner_id === uid && ['MATCHED', 'IN_TRANSIT'].includes(ctxActiveJob.status)
+    (ctxActiveJob && ctxActiveJob.runner_id === uid && isRunnerLive(ctxActiveJob.status)
       ? ctxActiveJob
       : null)
-    ?? jobs.find(j => j.runner_id === uid && ['MATCHED', 'IN_TRANSIT'].includes(j.status))
+    ?? jobs.find(j => j.runner_id === uid && (j.status === 'MATCHED' || j.status === 'IN_TRANSIT'))
+    ?? jobs.find(j => j.runner_id === uid && j.status === 'ISSUE_REPORTED')
     ?? null;
   // Keep working against the live job record so status/field patches are always current.
   const job = activeJob ? jobs.find(j => j.id === activeJob.id) ?? activeJob : null;
@@ -197,13 +204,40 @@ export function ActiveDeliveryPage() {
       <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
         <ShieldAlert size={32} className="text-amber-400 mx-auto mb-3" />
         <h3 className="text-white font-semibold mb-1">Held for Ops</h3>
+        <p className="text-sm mb-1 text-white/80" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</p>
         <p className="text-sm mb-4" style={{ color: '#64748B' }}>
-          {job.id} is flagged — sender unreachable, item held per fragile/valuable policy. Your payout is earned.
+          {job.pickup_location} → {job.drop_location}
+          <br />
+          Sender unreachable — item held per fragile/valuable policy. Your payout is earned.
         </p>
-        <button onClick={() => navigate('/runner/feed')}
+        <button type="button" onClick={() => navigate('/runner/feed')}
           className="px-4 py-2 rounded-lg text-sm text-cyan-400"
           style={{ background: '#061620', border: '1px solid #0E2D3D' }}>
           Browse Job Feed
+        </button>
+      </div>
+    );
+  }
+
+  if (job.status === 'PENDING_RATING' || job.status === 'CLOSED' || job.status === 'DISPUTED') {
+    return (
+      <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
+        <CheckCircle2 size={32} className="text-emerald-400 mx-auto mb-3" />
+        <h3 className="text-white font-semibold mb-1">
+          {job.status === 'DISPUTED' ? 'Under ops review' : job.status === 'CLOSED' ? 'Job closed' : 'Handoff complete'}
+        </h3>
+        <p className="text-sm mb-1 text-white/80" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</p>
+        <p className="text-sm mb-4" style={{ color: '#64748B' }}>
+          {job.status === 'PENDING_RATING'
+            ? 'Waiting on sender payment & rating.'
+            : job.status === 'DISPUTED'
+              ? 'Sender filed a dispute — ops will resolve (mock).'
+              : `Closed · payout ${job.runner_payout_status ?? 'n/a'}`}
+        </p>
+        <button type="button" onClick={() => navigate('/home')}
+          className="px-4 py-2 rounded-lg text-sm text-cyan-400"
+          style={{ background: '#061620', border: '1px solid #0E2D3D' }}>
+          Back to Home
         </button>
       </div>
     );

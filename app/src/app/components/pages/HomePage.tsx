@@ -69,30 +69,33 @@ export function HomePage() {
     setActiveJob(job);
     const iAmSender = job.sender_id === uid;
     const iAmRunner = job.runner_id === uid;
-    const inFlight = ['MATCHED', 'IN_TRANSIT'].includes(job.status);
 
     // Respect Home mode toggle — never force-switch role out from under the user.
     const preferRunner = isRunnerMode || (!isSenderMode && iAmRunner && !iAmSender);
     const preferSender = isSenderMode || (!isRunnerMode && iAmSender);
 
-    // Payment / dispute are sender actions (only when acting as sender).
-    if (preferSender && iAmSender && (job.status === 'PENDING_RATING' || job.status === 'DELIVERED' || job.status === 'ISSUE_REPORTED')) {
-      navigate('/rate', { state: { jobId: job.id } });
-      return;
-    }
-    if (preferSender && iAmSender && job.status === 'DISPUTED') {
-      navigate('/sender/tracking');
-      return;
-    }
-
-    if (inFlight && preferRunner && iAmRunner) {
-      navigate('/runner/active');
-      return;
-    }
-
+    // —— Sender mode ——
     if (preferSender && iAmSender) {
+      if (job.status === 'PENDING_RATING' || job.status === 'DELIVERED' || job.status === 'ISSUE_REPORTED') {
+        navigate('/rate', { state: { jobId: job.id } });
+        return;
+      }
       navigate('/sender/tracking');
       return;
+    }
+
+    // —— Runner mode ——
+    // MATCHED / IN_TRANSIT / ISSUE_REPORTED (hold-for-ops) all live on Active Delivery.
+    if (preferRunner && iAmRunner) {
+      if (job.status === 'MATCHED' || job.status === 'IN_TRANSIT' || job.status === 'ISSUE_REPORTED') {
+        navigate('/runner/active');
+        return;
+      }
+      // Delivery complete from runner POV — Active still shows resolved/hold copy when possible.
+      if (job.status === 'PENDING_RATING' || job.status === 'DISPUTED' || job.status === 'CLOSED') {
+        navigate('/runner/active');
+        return;
+      }
     }
 
     // Job doesn't match current mode (e.g. runner-only job while in Sender mode).
@@ -206,13 +209,15 @@ export function HomePage() {
               </div>
               <p className="text-sm text-white truncate">{activeJob.pickup_location} → {activeJob.drop_location}</p>
               <p className="text-xs mt-0.5" style={{ color: '#64748B' }}>
-                {activeJob.status === 'PENDING_RATING' && isSenderMode
+                {isSenderMode && (activeJob.status === 'PENDING_RATING' || activeJob.status === 'ISSUE_REPORTED')
                   ? 'Tap to confirm payment & rate'
-                  : isRunnerMode
-                    ? 'Tap to open active delivery'
-                    : isSenderMode
-                      ? 'Tap to open sender tracking'
-                      : `${activeJob.item_type} · ₹${activeJob.agreed_price ?? activeJob.posted_price}`}
+                  : isRunnerMode && activeJob.status === 'ISSUE_REPORTED'
+                    ? 'Tap to open hold-for-ops status'
+                    : isRunnerMode
+                      ? 'Tap to open active delivery'
+                      : isSenderMode
+                        ? 'Tap to open sender tracking'
+                        : `${activeJob.item_type} · ₹${activeJob.agreed_price ?? activeJob.posted_price}`}
               </p>
             </div>
             <ChevronRight size={16} className={activeJob.status === 'PENDING_RATING' ? 'text-amber-400' : 'text-emerald-400'} style={{ flexShrink: 0 }} />

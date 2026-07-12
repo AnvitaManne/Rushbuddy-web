@@ -140,6 +140,7 @@ Smoke:
 | Sender/Runner toggle always navigated to Post/Feed | Toggle only `setCurrentRole`; stay on Home |
 | Sender mode still **looked/acted like runner** (earnings, runner jobs, openJob forced runner) | Filter jobs + stats by `currentRole`; Sender → Tracking/Rate; Runner → Active; never override toggle in `openJob` |
 | DISPUTED Tracking only showed FIR — **no ops resolution mocks** (lost in 8.5 rewrite of Slice 7.6) | Restored Mock Ops Resolution panel: runner at fault / sender error / unclear → `CLOSED` + payout + optional unsuspend |
+| Runner Home active card (`ISSUE_REPORTED` / NEEDS REVIEW) tap did nothing | (1) `openJob` now routes ISSUE_REPORTED → `/runner/active`; (2) Active Delivery job lookup only allowed MATCHED/IN_TRANSIT — now includes ISSUE_REPORTED |
 | Circular import risk for pilot loader | AppContext injects `createPilotJobs` into DEV API |
 
 ---
