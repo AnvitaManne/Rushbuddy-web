@@ -1,5 +1,5 @@
 import type { LocationType, UserGender } from './enums';
-import type { Job, User } from './types';
+import type { Job, RunnerTrustRecord, User } from './types';
 
 /** Minimum fields required to validate a job before posting. */
 export type JobPostingDraft = Pick<Job, 'pickup_location_type' | 'drop_location_type'>;
@@ -42,17 +42,33 @@ function requiredRunnerGender(
 }
 
 /**
- * Whether a runner may see a job in the feed (accept eligibility is separate).
+ * True if User flag OR trust-ops record says suspended.
+ * Trust record wins for in-memory ops actions (dev suspend updates records, not User).
+ */
+export function isRunnerSuspended(
+  runner: Pick<User, 'suspension_status'>,
+  trustRecord?: Pick<RunnerTrustRecord, 'suspension_status'> | null,
+): boolean {
+  if (trustRecord?.suspension_status === 'suspended') return true;
+  return runner.suspension_status === 'suspended';
+}
+
+/**
+ * Whether a runner may see a job in the feed.
  *
- * - `suspension_status === 'suspended'` → never visible
+ * - suspended (User or RunnerTrustRecord) → never visible
  * - Conflicting mens/womens endpoints → never visible (invalid posting)
  * - `prefer_not_to_say` → hidden when either endpoint is a gendered hostel
  * - Women's hostel on pickup or drop → only `female` runners
  * - Men's hostel on pickup or drop → only `male` runners
  * - `general` on both ends → all active runners (subject to gender rules above)
  */
-export function canRunnerSeeJob(runner: User, job: Job): boolean {
-  if (runner.suspension_status === 'suspended') {
+export function canRunnerSeeJob(
+  runner: User,
+  job: Job,
+  trustRecord?: Pick<RunnerTrustRecord, 'suspension_status'> | null,
+): boolean {
+  if (isRunnerSuspended(runner, trustRecord)) {
     return false;
   }
 
@@ -75,6 +91,19 @@ export function canRunnerSeeJob(runner: User, job: Job): boolean {
   return runner.gender === required;
 }
 
+/**
+ * Accept-time guard: OPEN + visible under eligibility (incl. suspension).
+ * Call even if a UI button somehow remains clickable.
+ */
+export function canRunnerAcceptJob(
+  runner: User,
+  job: Job,
+  trustRecord?: Pick<RunnerTrustRecord, 'suspension_status'> | null,
+): boolean {
+  if (job.status !== 'OPEN') return false;
+  return canRunnerSeeJob(runner, job, trustRecord);
+}
+
 /*
  * --- Examples (no test runner) ---
  *
@@ -88,4 +117,6 @@ export function canRunnerSeeJob(runner: User, job: Job): boolean {
  * canRunnerSeeJob(preferNotSayRunner, generalJob)    // true
  * canRunnerSeeJob(preferNotSayRunner, mensHostelJob) // false
  * canRunnerSeeJob(suspendedRunner, anyJob)           // false
+ * canRunnerSeeJob(activeUser, job, suspendedTrust)   // false
+ * canRunnerAcceptJob(activeUser, openJob, suspendedTrust) // false
  */

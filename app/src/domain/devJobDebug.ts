@@ -8,7 +8,7 @@ import {
   resolveHandoffMode,
 } from './jobHelpers';
 import type { CreateTrustEventInput } from './trustOps';
-import { createTrustEvent, suspendRunner as applySuspendRunner } from './trustOps';
+import { createTrustEvent, suspendRunner as applySuspendRunner, unsuspendRunner as applyUnsuspendRunner } from './trustOps';
 
 /** Fields you may override when synthesizing mock / test jobs. */
 export type SampleJobOverrides = Partial<
@@ -153,6 +153,8 @@ export type RushBuddyDevGlobal = {
   addTrustEvent: (input: CreateTrustEventInput | TrustEvent) => TrustEvent;
   /** Suspend a runner record and log account_suspended. */
   suspendRunner: (runnerId: string, reason: string) => RunnerTrustRecord | undefined;
+  /** Clear suspension on a runner trust record (mock ops). */
+  unsuspendRunner: (runnerId: string) => RunnerTrustRecord | undefined;
 };
 
 declare global {
@@ -226,11 +228,24 @@ export function attachDevJobDebug(handlers: DevJobDebugHandlers): () => void {
       console.info(`[RushBuddy trust] suspended ${runnerId}: ${reason}`);
       return next;
     },
+    unsuspendRunner(runnerId) {
+      if (!handlers.updateRunnerTrustRecord) {
+        console.warn('[RushBuddy dev] updateRunnerTrustRecord not wired');
+        return undefined;
+      }
+      let next: RunnerTrustRecord | undefined;
+      handlers.updateRunnerTrustRecord(runnerId, (prev) => {
+        next = applyUnsuspendRunner(prev);
+        return next;
+      });
+      console.info(`[RushBuddy trust] unsuspended ${runnerId}`);
+      return next;
+    },
   };
 
   window.__rushbuddyDev = api;
   console.info(
-    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), trustEvents(), runnerTrustRecords(), addTrustEvent(), suspendRunner()',
+    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), trustEvents(), runnerTrustRecords(), addTrustEvent(), suspendRunner(), unsuspendRunner()',
   );
 
   return () => {

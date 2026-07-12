@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job, defaultUser } from '../../context/AppContext';
-import { canRunnerSeeJob } from '@/domain/runnerEligibility';
+import type { RunnerTrustRecord } from '@/domain/types';
 import {
-  Zap, MapPin, Package, Clock, Filter, Star, Shield,
-  AlertCircle, ChevronRight, Lock, RefreshCw, FileText, Coffee, Pill, Box
+  canRunnerAcceptJob,
+  canRunnerSeeJob,
+  isRunnerSuspended,
+} from '@/domain/runnerEligibility';
+import {
+  Zap, MapPin, Package, Clock, Filter, Shield,
+  AlertCircle, Lock, RefreshCw, FileText, Coffee, Pill, Box
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,7 +32,17 @@ const riskBadge = (risk: string) => {
   );
 };
 
-function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string) => void; accepted: boolean }) {
+function JobCard({
+  job,
+  onAccept,
+  accepted,
+  acceptDisabled,
+}: {
+  job: Job;
+  onAccept: (id: string) => void;
+  accepted: boolean;
+  acceptDisabled?: boolean;
+}) {
   const [accepting, setAccepting] = useState(false);
   const isWomensRestricted =
     job.pickup_location_type === 'womens_hostel' || job.drop_location_type === 'womens_hostel';
@@ -40,7 +55,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
   })();
 
   const handleAccept = async () => {
-    if (isWomensRestricted || accepting) return;
+    if (acceptDisabled || isWomensRestricted || accepting) return;
     setAccepting(true);
     await new Promise(r => setTimeout(r, 900));
     onAccept(job.id);
@@ -59,7 +74,6 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
         border: `1px solid ${accepted ? '#1A4020' : '#1E2D45'}`,
       }}
     >
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3"
         style={{ borderBottom: '1px solid #111E35' }}>
         <div className="flex items-center gap-2">
@@ -84,9 +98,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
         </div>
       </div>
 
-      {/* Body */}
       <div className="px-4 py-3">
-        {/* Route */}
         <div className="flex items-start gap-3 mb-3">
           <div className="flex flex-col items-center mt-1 gap-1 flex-shrink-0">
             <div className="w-2 h-2 rounded-full bg-cyan-400" />
@@ -105,7 +117,6 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
           </div>
         </div>
 
-        {/* Meta row */}
         <div className="flex items-center gap-3 mb-3 flex-wrap">
           <div className="flex items-center gap-1 text-[11px]" style={{ color: '#64748B' }}>
             <Clock size={11} />
@@ -138,7 +149,6 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
           </div>
         )}
 
-        {/* Accept row */}
         <div className="flex items-center justify-between">
           <div>
             <div className="text-white font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.1rem' }}>
@@ -155,11 +165,11 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
               </motion.div>
               Accepted
             </div>
-          ) : isWomensRestricted ? (
+          ) : acceptDisabled || isWomensRestricted ? (
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
               style={{ background: '#0D0D20', border: '1px solid #2D1E45', color: '#6B7280' }}>
               <Lock size={11} />
-              Restricted
+              {acceptDisabled ? 'Suspended' : 'Restricted'}
             </div>
           ) : (
             <button
@@ -187,30 +197,69 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
   );
 }
 
+function resolveTrustRecord(
+  runnerId: string,
+  records: Record<string, RunnerTrustRecord>,
+  runner: {
+    no_show_count: number;
+    suspension_status: RunnerTrustRecord['suspension_status'];
+    trust_score: number;
+  },
+): RunnerTrustRecord {
+  return (
+    records[runnerId] ?? {
+      runner_id: runnerId,
+      no_show_count: runner.no_show_count,
+      suspension_status: runner.suspension_status,
+      trust_score: runner.trust_score,
+    }
+  );
+}
+
 export function RunnerFeedPage() {
-  const { jobs, setJobs, setCurrentRole, user } = useApp();
+  const {
+    jobs,
+    setJobs,
+    setCurrentRole,
+    user,
+    runnerTrustRecords,
+  } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('All');
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
+  const [acceptBlockedMsg, setAcceptBlockedMsg] = useState<string | null>(null);
 
-  // HomePage already falls back when user is null (HMR / skipped verify); feed must too
-  // or `user && canRunnerSeeJob` hides every OPEN job.
   const runner = user ?? defaultUser;
-  const openJobs = jobs.filter(
-    j => j.status === 'OPEN' && canRunnerSeeJob(runner, j),
-  );
+  const trustRecord = resolveTrustRecord(runner.id, runnerTrustRecords, runner);
+  const suspended = isRunnerSuspended(runner, trustRecord);
+
+  const openJobs = suspended
+    ? []
+    : jobs.filter(
+        (j) => j.status === 'OPEN' && canRunnerSeeJob(runner, j, trustRecord),
+      );
   const filters = ['All', 'Document', 'Food', 'Medicine', 'Object'];
   const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);
 
   const handleAccept = (jobId: string) => {
+    const job = jobs.find((j) => j.id === jobId);
+    if (!job || !canRunnerAcceptJob(runner, job, trustRecord)) {
+      setAcceptBlockedMsg(
+        suspended
+          ? 'Access restricted pending ops review.'
+          : 'You cannot accept this job right now.',
+      );
+      return;
+    }
+    setAcceptBlockedMsg(null);
     setCurrentRole('runner');
     setAcceptedIds(prev => new Set(prev).add(jobId));
     setJobs(prev => prev.map(j => j.id === jobId ? {
       ...j,
       status: 'MATCHED',
-      runner_id: 'u1',
-      runner_name: 'You',
-      runner_rating: 4.8,
+      runner_id: runner.id,
+      runner_name: runner.name === defaultUser.name ? 'You' : runner.name,
+      runner_rating: runner.rating,
       matched_at: new Date().toISOString(),
       agreed_price: j.posted_price,
     } : j));
@@ -220,11 +269,10 @@ export function RunnerFeedPage() {
   return (
     <div className="p-4 md:p-6 pb-24 md:pb-6 space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
 
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-            RUNNER FEED · {openJobs.length} OPEN
+            RUNNER FEED · {suspended ? 'SUSPENDED' : `${openJobs.length} OPEN`}
           </div>
           <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>Job Listings</h1>
           <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
@@ -241,51 +289,87 @@ export function RunnerFeedPage() {
         </button>
       </div>
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Open Jobs', value: openJobs.length, color: '#06B6D4' },
-          { label: 'Potential', value: `₹${openJobs.reduce((s, j) => s + j.posted_price, 0)}`, color: '#10B981' },
-          { label: 'Avg ETA', value: '~11 min', color: '#F59E0B' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-            <div className="font-semibold text-sm" style={{ color, fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
-            <div className="text-[10px] mt-0.5" style={{ color: '#475569' }}>{label}</div>
+      {suspended && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-4"
+          style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: '#2A0F0F', border: '1px solid #3B1111' }}>
+              <Lock size={18} className="text-red-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs mb-1" style={{ color: '#F87171', fontFamily: 'JetBrains Mono, monospace' }}>
+                ACCOUNT SUSPENDED
+              </div>
+              <p className="text-sm text-white font-medium mb-1">
+                Access restricted pending ops review.
+              </p>
+              <p className="text-xs" style={{ color: '#94A3B8' }}>
+                You cannot view or accept jobs while suspended
+                {trustRecord.suspension_reason ? ` — ${trustRecord.suspension_reason}` : ''}.
+              </p>
+            </div>
           </div>
-        ))}
-      </div>
+        </motion.div>
+      )}
 
-      {/* Filters */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        <Filter size={13} className="text-slate-500 flex-shrink-0" />
-        {filters.map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs transition-all"
-            style={{
-              background: filter === f ? '#061620' : '#0B1120',
-              border: `1px solid ${filter === f ? '#06B6D4' : '#1E2D45'}`,
-              color: filter === f ? '#22D3EE' : '#64748B',
-            }}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
+      {!suspended && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Open Jobs', value: openJobs.length, color: '#06B6D4' },
+              { label: 'Potential', value: `₹${openJobs.reduce((s, j) => s + j.posted_price, 0)}`, color: '#10B981' },
+              { label: 'Avg ETA', value: '~11 min', color: '#F59E0B' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+                <div className="font-semibold text-sm" style={{ color, fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
+                <div className="text-[10px] mt-0.5" style={{ color: '#475569' }}>{label}</div>
+              </div>
+            ))}
+          </div>
 
-      {/* Women's hostel notice */}
-      <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
-        style={{ background: '#0D0D20', border: '1px solid #2D1E45' }}>
-        <Shield size={13} className="text-violet-400 flex-shrink-0 mt-0.5" />
-        <p className="text-[11px]" style={{ color: '#64748B' }}>
-          Jobs tagged <span className="text-violet-400">WOMEN ONLY</span> are restricted to verified female runners. This filter is automatic.
-        </p>
-      </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <Filter size={13} className="text-slate-500 flex-shrink-0" />
+            {filters.map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs transition-all"
+                style={{
+                  background: filter === f ? '#061620' : '#0B1120',
+                  border: `1px solid ${filter === f ? '#06B6D4' : '#1E2D45'}`,
+                  color: filter === f ? '#22D3EE' : '#64748B',
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
 
-      {/* Job cards */}
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
+            style={{ background: '#0D0D20', border: '1px solid #2D1E45' }}>
+            <Shield size={13} className="text-violet-400 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px]" style={{ color: '#64748B' }}>
+              Jobs tagged <span className="text-violet-400">WOMEN ONLY</span> are restricted to verified female runners. This filter is automatic.
+            </p>
+          </div>
+        </>
+      )}
+
+      {acceptBlockedMsg && (
+        <div className="rounded-lg px-3 py-2.5 flex items-start gap-2"
+          style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+          <AlertCircle size={12} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-[11px]" style={{ color: '#F87171' }}>{acceptBlockedMsg}</p>
+        </div>
+      )}
+
       <AnimatePresence>
-        {filteredJobs.length === 0 ? (
+        {suspended ? null : filteredJobs.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -307,14 +391,14 @@ export function RunnerFeedPage() {
                 job={job}
                 onAccept={handleAccept}
                 accepted={acceptedIds.has(job.id)}
+                acceptDisabled={suspended}
               />
             ))}
           </div>
         )}
       </AnimatePresence>
 
-      {/* Skip warning */}
-      {openJobs.length > 0 && (
+      {!suspended && openJobs.length > 0 && (
         <div className="rounded-lg px-3 py-2.5 flex items-start gap-2"
           style={{ background: '#1A1005', border: '1px solid #3B2A0A' }}>
           <AlertCircle size={12} className="text-amber-400 flex-shrink-0 mt-0.5" />

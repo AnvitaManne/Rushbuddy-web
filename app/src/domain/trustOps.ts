@@ -105,6 +105,15 @@ export function suspendRunner(
   };
 }
 
+/** Clears suspension (dev / ops mock). Keeps no_show_count and trust_score. */
+export function unsuspendRunner(record: RunnerTrustRecord): RunnerTrustRecord {
+  return {
+    ...record,
+    suspension_status: 'active',
+    suspension_reason: undefined,
+  };
+}
+
 function buildMockPartyIdentity(user: User): FirPartyIdentity {
   return {
     user_id: user.id,
