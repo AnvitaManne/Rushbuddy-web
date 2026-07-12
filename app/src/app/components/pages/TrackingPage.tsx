@@ -21,7 +21,15 @@ const TIMELINE_STEPS = [
 const PRE_PICKUP_NOSHOW_MS = 10 * 60 * 1000;
 
 function getStepIndex(status: string) {
-  const map: Record<string, number> = { OPEN: 0, MATCHED: 1, IN_TRANSIT: 2, DELIVERED: 3, CLOSED: 3, PENDING_RATING: 3 };
+  const map: Record<string, number> = {
+    OPEN: 0,
+    MATCHED: 1,
+    IN_TRANSIT: 2,
+    DELIVERED: 3,
+    CLOSED: 3,
+    PENDING_RATING: 3,
+    DISPUTED: 3,
+  };
   return map[status] ?? 0;
 }
 
@@ -33,6 +41,8 @@ export function TrackingPage() {
     user,
     appendTrustEvent,
     updateRunnerTrustRecord,
+    trustEvents,
+    runnerTrustRecords,
   } = useApp();
   const navigate = useNavigate();
 
@@ -45,7 +55,7 @@ export function TrackingPage() {
       return;
     }
     const live = jobs.find(j =>
-      j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status),
+      j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT', 'DISPUTED', 'DELIVERED', 'PENDING_RATING'].includes(j.status),
     );
     if (live) {
       setLocalJobId(live.id);
@@ -59,7 +69,7 @@ export function TrackingPage() {
 
   const job =
     jobs.find(j => j.id === localJobId && j.sender_id === 'u1') ||
-    jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(j.status)) ||
+    jobs.find(j => j.sender_id === 'u1' && ['OPEN', 'MATCHED', 'IN_TRANSIT', 'DISPUTED'].includes(j.status)) ||
     jobs.find(j => j.sender_id === 'u1');
 
   const [simStep, setSimStep] = useState<number | null>(null);
@@ -74,6 +84,16 @@ export function TrackingPage() {
 
   const isPrePickupMatched =
     !!job && job.status === 'MATCHED' && !job.pickup_confirmed_at;
+
+  const isDisputed = !!job && job.status === 'DISPUTED';
+  const jobTheftEscalation = isDisputed
+    ? trustEvents.some(
+        (e) => e.job_id === job.id && e.type === 'theft_escalation',
+      )
+    : false;
+  const disputedRunnerSuspended =
+    !!job?.runner_id &&
+    runnerTrustRecords[job.runner_id]?.suspension_status === 'suspended';
 
   const tenMinElapsed =
     isPrePickupMatched &&
@@ -105,11 +125,13 @@ export function TrackingPage() {
       setSimStep(idx);
       setJobs(prev => prev.map(j => j.id === job.id ? {
         ...j, status: ns,
-        runner_name: ns === 'MATCHED' ? 'Karthik R' : j.runner_name,
-        runner_rating: ns === 'MATCHED' ? 4.9 : j.runner_rating,
+        runner_id: ns === 'MATCHED' ? (j.runner_id ?? 'r-sim') : j.runner_id,
+        runner_name: ns === 'MATCHED' ? (j.runner_name ?? 'Karthik R') : j.runner_name,
+        runner_rating: ns === 'MATCHED' ? (j.runner_rating ?? 4.9) : j.runner_rating,
         matched_at: ns === 'MATCHED' ? new Date().toISOString() : j.matched_at,
         pickup_confirmed_at: ns === 'IN_TRANSIT' ? new Date().toISOString() : j.pickup_confirmed_at,
         delivered_at: ns === 'DELIVERED' ? new Date().toISOString() : j.delivered_at,
+        agreed_price: ns === 'MATCHED' ? (j.agreed_price ?? j.posted_price) : j.agreed_price,
       } : j));
       if (ns === 'DELIVERED') { await new Promise(r => setTimeout(r, 800)); navigate('/rate'); break; }
     }
@@ -289,7 +311,7 @@ export function TrackingPage() {
                 </p>
               </>
             )}
-            {displayStep === 3 && (
+            {displayStep === 3 && !isDisputed && (
               <>
                 <div className="text-3xl mb-2">✅</div>
                 <p className="text-white font-medium">Delivered!</p>
@@ -298,12 +320,64 @@ export function TrackingPage() {
                 </p>
               </>
             )}
+            {isDisputed && (
+              <>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
+                  style={{ background: '#1C0A0A', border: '2px solid #EF4444' }}>
+                  <AlertCircle size={22} className="text-red-400" />
+                </div>
+                <p className="text-white font-medium">Dispute filed</p>
+                <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+                  Payment on hold while ops reviews
+                </p>
+              </>
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
 
+      {/* DISPUTED — ops / theft escalation (no FIR export yet) */}
+      {isDisputed && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl p-4 space-y-3"
+          style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="text-red-400" />
+            <span className="text-sm font-medium text-red-300">Dispute under review</span>
+          </div>
+          <p className="text-xs" style={{ color: '#94A3B8' }}>
+            Ops notified{job.ops_notified ? ' ✓' : ''}. Case is under review (mock SLA: 4 hours).
+          </p>
+          {job.runner_payout_status === 'withheld' && (
+            <p className="text-xs" style={{ color: '#FBBF24' }}>
+              Runner payout withheld pending investigation.
+            </p>
+          )}
+          {(jobTheftEscalation || disputedRunnerSuspended) && (
+            <div className="rounded-lg px-3 py-2.5" style={{ background: '#2A0F0F', border: '1px solid #3B1111' }}>
+              <p className="text-xs text-red-300 font-medium mb-1">
+                Theft escalation active
+              </p>
+              <p className="text-[11px]" style={{ color: '#94A3B8' }}>
+                {disputedRunnerSuspended
+                  ? 'Runner account suspended pending investigation.'
+                  : 'Escalation logged; suspension pending.'}
+              </p>
+              {jobTheftEscalation && (
+                <p className="text-[11px] mt-2" style={{ color: '#F87171' }}>
+                  FIR support package available (mock) — export in next ops slice. Not a legal filing.
+                </p>
+              )}
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* Runner card (visible after matched) */}
-      {displayStep >= 1 && (
+      {displayStep >= 1 && !isDisputed && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -417,7 +491,7 @@ export function TrackingPage() {
       )}
 
       {/* Demo simulate button */}
-      {displayStep < 3 && (
+      {displayStep < 3 && !isDisputed && (
         <button
           onClick={simulateProgress}
           disabled={simulating}
@@ -438,7 +512,7 @@ export function TrackingPage() {
         </button>
       )}
 
-      {displayStep === 3 && (
+      {displayStep === 3 && !isDisputed && (
         <motion.button
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

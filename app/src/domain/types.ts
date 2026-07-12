@@ -144,6 +144,9 @@ export interface Job {
 
   tip_amount?: number;
   rating?: number;
+
+  /** Runner payout lifecycle for ops/trust (mock — no real wallet). */
+  runner_payout_status?: 'pending' | 'earned' | 'withheld' | 'paid';
 }
 
 /** Ops/trust event categories for no-shows, disputes, and FIR-ready logs. */

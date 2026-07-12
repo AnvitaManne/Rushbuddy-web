@@ -105,6 +105,20 @@ export function suspendRunner(
   };
 }
 
+/**
+ * Theft-like dispute types that trigger escalation + suspension.
+ * Matches RatingPage labels (e.g. "Not delivered").
+ */
+export function isTheftLikeDispute(disputeType: string): boolean {
+  const normalized = disputeType.trim().toLowerCase();
+  return (
+    normalized === 'not delivered' ||
+    normalized.includes('theft') ||
+    normalized.includes('misappropriat') ||
+    normalized.includes('stolen')
+  );
+}
+
 /** Clears suspension (dev / ops mock). Keeps no_show_count and trust_score. */
 export function unsuspendRunner(record: RunnerTrustRecord): RunnerTrustRecord {
   return {

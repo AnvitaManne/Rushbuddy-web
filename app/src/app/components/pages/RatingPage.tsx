@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { Star, AlertCircle, CheckCircle2, Shield, Smartphone, Banknote } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
+import { assertTransition } from '@/domain/jobTransitions';
+import { isTheftLikeDispute, suspendRunner } from '@/domain/trustOps';
+import { logJobTransition } from '@/domain/devJobDebug';
 
 const TIPS = [0, 5, 10, 20];
 const PAYMENT_METHODS = [
@@ -12,7 +15,14 @@ const PAYMENT_METHODS = [
 ];
 
 export function RatingPage() {
-  const { jobs, setJobs } = useApp();
+  const {
+    jobs,
+    setJobs,
+    setActiveJob,
+    user,
+    appendTrustEvent,
+    updateRunnerTrustRecord,
+  } = useApp();
   const navigate = useNavigate();
 
   const job = jobs.find(j => j.sender_id === 'u1' && j.status === 'DELIVERED')
@@ -28,6 +38,7 @@ export function RatingPage() {
   const [disputeDesc, setDisputeDesc] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submittedAsDispute, setSubmittedAsDispute] = useState(false);
 
   const runnerName = job?.runner_name && job.runner_name !== 'You' ? job.runner_name : 'Karthik R';
   const basePrice = job?.agreed_price ?? job?.posted_price ?? 40;
@@ -35,16 +46,105 @@ export function RatingPage() {
 
   const handleSubmit = async () => {
     if (stars === 0 && !disputeMode) return;
+    if (disputeMode && !disputeType) return;
+    if (!job) return;
+
     setLoading(true);
     await new Promise(r => setTimeout(r, 1200));
-    if (job) {
-      setJobs(prev => prev.map(j => j.id === job.id ? {
-        ...j,
-        status: disputeMode ? 'DISPUTED' : 'CLOSED',
-        rating: stars,
-        tip_amount: tip,
-      } : j));
+
+    if (disputeMode) {
+      const fromStatus = job.status;
+      if (fromStatus !== 'DELIVERED' && fromStatus !== 'PENDING_RATING') {
+        console.warn('[RushBuddy] dispute only from DELIVERED/PENDING_RATING, got', fromStatus);
+        setLoading(false);
+        return;
+      }
+
+      const transition = assertTransition(fromStatus, 'DISPUTED');
+      if (!transition.ok) {
+        console.warn('[RushBuddy] dispute transition:', transition.error);
+        setLoading(false);
+        return;
+      }
+      logJobTransition(job.id, fromStatus, 'DISPUTED');
+
+      const senderId = user?.id ?? job.sender_id;
+      const runnerId = job.runner_id;
+
+      appendTrustEvent({
+        type: 'dispute_filed',
+        job_id: job.id,
+        actor_user_id: senderId,
+        target_user_id: runnerId,
+        message: `Dispute filed: ${disputeType}`,
+        metadata: {
+          dispute_type: disputeType,
+          dispute_description: disputeDesc.trim() || null,
+          sender_id: senderId,
+          runner_id: runnerId ?? null,
+          mock: true,
+        },
+      });
+
+      const theftLike = isTheftLikeDispute(disputeType);
+      let payoutStatus = job.runner_payout_status;
+
+      if (theftLike) {
+        const targetRunner = runnerId ?? 'r-unknown';
+        appendTrustEvent({
+          type: 'theft_escalation',
+          job_id: job.id,
+          actor_user_id: senderId,
+          target_user_id: targetRunner,
+          message: 'Theft-like dispute — escalated for investigation (mock)',
+          metadata: {
+            dispute_type: disputeType,
+            fir_support_available: true,
+            mock: true,
+            runner_id_missing: !runnerId,
+          },
+        });
+
+        updateRunnerTrustRecord(targetRunner, (prev) =>
+          suspendRunner(prev, 'Theft escalation — pending investigation'),
+        );
+
+        appendTrustEvent({
+          type: 'account_suspended',
+          job_id: job.id,
+          actor_user_id: senderId,
+          target_user_id: targetRunner,
+          message: 'Runner suspended pending theft investigation (mock)',
+          metadata: { mock: true, dispute_type: disputeType },
+        });
+
+        payoutStatus = 'withheld';
+      }
+
+      const updated = {
+        ...job,
+        status: 'DISPUTED' as const,
+        ops_notified: true,
+        runner_payout_status: payoutStatus,
+        rating: stars || job.rating,
+      };
+
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? updated : j)));
+      setActiveJob(updated);
+      setSubmittedAsDispute(true);
+      setLoading(false);
+      setSubmitted(true);
+      await new Promise(r => setTimeout(r, 1500));
+      navigate('/sender/tracking');
+      return;
     }
+
+    setJobs(prev => prev.map(j => j.id === job.id ? {
+      ...j,
+      status: 'CLOSED',
+      rating: stars,
+      tip_amount: tip,
+    } : j));
     setLoading(false);
     setSubmitted(true);
     await new Promise(r => setTimeout(r, 1500));
@@ -66,10 +166,10 @@ export function RatingPage() {
             <CheckCircle2 size={38} className="text-emerald-400" />
           </div>
           <h2 className="text-white mb-2" style={{ fontWeight: 600, fontSize: '1.2rem' }}>
-            {disputeMode ? 'Dispute Filed' : 'Thanks for rating!'}
+            {submittedAsDispute ? 'Dispute Filed' : 'Thanks for rating!'}
           </h2>
           <p className="text-sm" style={{ color: '#64748B' }}>
-            {disputeMode
+            {submittedAsDispute
               ? 'Ops team will review within 4 hours.'
               : `You rated ${runnerName} ${stars} stars. Job closed.`}
           </p>
@@ -294,6 +394,9 @@ export function RatingPage() {
 
           <p className="text-[10px] mt-2" style={{ color: '#6B2121' }}>
             Ops will review within 4 hours. Dispute window: 2 hours post-delivery. After that, job auto-closes.
+            {disputeType === 'Not delivered' && (
+              <> Theft-like reports suspend the runner pending investigation (mock).</>
+            )}
           </p>
         </motion.div>
       )}
@@ -302,15 +405,15 @@ export function RatingPage() {
       <div className="space-y-3">
         <button
           onClick={handleSubmit}
-          disabled={loading || (!disputeMode && stars === 0)}
+          disabled={loading || (!disputeMode && stars === 0) || (disputeMode && !disputeType)}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
           style={{
-            background: loading || (!disputeMode && stars === 0)
+            background: loading || (!disputeMode && stars === 0) || (disputeMode && !disputeType)
               ? '#1E2D45'
               : disputeMode
                 ? 'linear-gradient(135deg, #EF4444, #DC2626)'
                 : 'linear-gradient(135deg, #06B6D4, #6366F1)',
-            color: (!disputeMode && stars === 0) ? '#475569' : 'white',
+            color: (!disputeMode && stars === 0) || (disputeMode && !disputeType) ? '#475569' : 'white',
           }}
         >
           {loading ? (

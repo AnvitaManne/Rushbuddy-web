@@ -73,6 +73,32 @@ export function HomePage() {
     navigate('/runner/active');
   };
 
+  const openRecentJob = (job: (typeof jobs)[number]) => {
+    setActiveJob(job);
+    const asSender = job.sender_id === 'u1';
+    const asRunner = job.runner_id === 'u1';
+
+    if (asSender && (job.status === 'DELIVERED' || job.status === 'PENDING_RATING')) {
+      setCurrentRole('sender');
+      navigate('/rate');
+      return;
+    }
+    if (asRunner && (job.status === 'MATCHED' || job.status === 'IN_TRANSIT')) {
+      setCurrentRole('runner');
+      navigate('/runner/active');
+      return;
+    }
+    if (asSender) {
+      setCurrentRole('sender');
+      navigate('/sender/tracking');
+      return;
+    }
+    if (asRunner) {
+      setCurrentRole('runner');
+      navigate('/runner/active');
+    }
+  };
+
   const displayUser = user || {
     name: 'Aditi Krishnan',
     hostel_block: 'MH-C Block',
@@ -323,6 +349,15 @@ export function HomePage() {
             {recentJobs.map((job, i) => (
               <div
                 key={job.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openRecentJob(job)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openRecentJob(job);
+                  }
+                }}
                 className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer"
                 style={{ borderBottom: i < recentJobs.length - 1 ? '1px solid #111E35' : 'none' }}
               >
