@@ -4,20 +4,35 @@ Vite + React app (`app/`). Design reference: [Figma — Next.js Web App Design](
 
 ## Running locally
 
+From this directory (`app/`):
+
 ```bash
 pnpm install
 pnpm dev
 ```
+
+Compile check:
+
+```bash
+pnpm build
+```
+
+Pilot QA docs (repo root): [docs/qa/scenario-test-matrix.md](../docs/qa/scenario-test-matrix.md), [internal-dogfooding-runbook.md](../docs/qa/internal-dogfooding-runbook.md), [pilot-readiness-checklist.md](../docs/qa/pilot-readiness-checklist.md).
+
+**Reminder:** no real money, no real KYC, no backend persistence (refresh resets state).
 
 ## Dev job helpers (domain verification)
 
 When `pnpm dev` is running, helpers attach to the browser console via `window.__rushbuddyDev` (see `src/domain/devJobDebug.ts`). Mock jobs in `AppContext` are built with `createSampleJob()`.
 
 1. Open the app and DevTools → Console.
-2. You should see: `[RushBuddy dev] Helpers on window.__rushbuddyDev`.
+2. You should see: `[RushBuddy dev] … window.__rushbuddyDev ready`.
 3. Examples:
 
 ```js
+// Seed PILOT-01…12 jobs for dogfooding / scenario QA
+__rushbuddyDev.loadPilotScenarios()
+
 // Log whether a transition is valid (uses jobTransitions rules)
 __rushbuddyDev.logJobTransition('JOB-2401', 'OPEN', 'MATCHED')
 
