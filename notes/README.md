@@ -31,4 +31,4 @@ Copy this into `notes/phase-N-summary.md`:
 
 Keep it short. Link companions (`docs/…`) instead of pasting whole specs.
 
-**On disk today:** `phase-1-summary.md`, `phase-8-summary.md`. Phases 2–7 notes were often missing — recover from chat or rewrite if needed before the next big refactor.
+**On disk today:** `phase-1-summary.md`, `phase-8-summary.md`, `phase-9-summary.md`. Phases 2–7 notes were often missing — recover from chat or rewrite if needed before the next big refactor.
