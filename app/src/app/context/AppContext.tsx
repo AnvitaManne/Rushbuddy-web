@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import type { Job, RunnerTrustRecord, TrustEvent, User } from '@/domain/types';
 import type { SuspensionStatus, UserGender, UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
 import { createPilotScenarioJobs } from '@/domain/demoScenarios';
+import { bindMockJobStore } from '@/services';
 
 export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
@@ -239,6 +240,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [runnerTrustRecords, setRunnerTrustRecords] = useState<Record<string, RunnerTrustRecord>>({
     u1: emptyTrustRecord('u1'),
   });
+
+  // Keep mock JobService / PaymentService pointed at live React job state.
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
+  useEffect(() => {
+    bindMockJobStore({
+      getJobs: () => jobsRef.current,
+      setJobs: (next) => setJobs(next),
+    });
+  }, []);
 
   const appendTrustEvent = (event: TrustEvent) => {
     setTrustEvents(prev => [event, ...prev]);

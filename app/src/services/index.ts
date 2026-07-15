@@ -37,6 +37,23 @@ function createJobStore(initial: Job[] = []): MockJobStore {
   };
 }
 
+/** Active job backing store — defaults internal; AppContext binds React state. */
+let activeJobStore: MockJobStore = createJobStore();
+
+/**
+ * Point job/payment mocks at AppContext `jobs` so accept/create updates the UI.
+ * Call once from AppProvider (store may use a ref for `getJobs`).
+ */
+export function bindMockJobStore(store: MockJobStore): void {
+  activeJobStore = store;
+}
+
+/** Store facade closed over by mock adapters; always delegates to `activeJobStore`. */
+const jobStoreFacade: MockJobStore = {
+  getJobs: () => activeJobStore.getJobs(),
+  setJobs: (next) => activeJobStore.setJobs(next),
+};
+
 /** Placeholder auth — session still lives in AppContext until a later wire. */
 function createStubAuthService(): AuthService {
   let pending: AuthSignupInput | null = null;
@@ -114,13 +131,12 @@ function createStubOrganizationService(
   };
 }
 
-/** Compose in-memory adapters. Jobs + payments share one store. */
+/** Compose in-memory adapters. Jobs + payments share `jobStoreFacade`. */
 export function createMockServices(): AppServices {
-  const jobStore = createJobStore();
   return {
     auth: createStubAuthService(),
-    jobs: createMockJobService(jobStore),
-    payments: createMockPaymentService(jobStore),
+    jobs: createMockJobService(jobStoreFacade),
+    payments: createMockPaymentService(jobStoreFacade),
     trust: createMockTrustService(),
     organizations: createStubOrganizationService(),
   };

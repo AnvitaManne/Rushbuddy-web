@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job, defaultUser } from '../../context/AppContext';
 import { canRunnerSeeJob } from '@/domain/runnerEligibility';
-import { assertTransition } from '@/domain/jobTransitions';
+import { services } from '@/services';
 import {
   Zap, MapPin, Package, Clock, Filter, Star, Shield,
   AlertCircle, ChevronRight, Lock, RefreshCw, FileText, Coffee, Pill, Box, Ban
@@ -191,7 +191,7 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
 }
 
 export function RunnerFeedPage() {
-  const { jobs, setJobs, setCurrentRole, user } = useApp();
+  const { jobs, setCurrentRole, user } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('All');
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
@@ -206,24 +206,19 @@ export function RunnerFeedPage() {
   const filters = ['All', 'Document', 'Food', 'Medicine', 'Object'];
   const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);
 
-  const handleAccept = (jobId: string) => {
+  const handleAccept = async (jobId: string) => {
     if (isSuspended) return;
-    const job = jobs.find(j => j.id === jobId);
-    if (!job) return;
-    const result = assertTransition(job.status, 'MATCHED');
-    if (!result.ok) return;
+
+    const updated = await services.jobs.acceptJob(jobId, {
+      id: runner.id,
+      name: runner.name,
+      rating: runner.rating,
+      hostel_block: runner.hostel_block,
+    });
+    if (!updated) return;
 
     setCurrentRole('runner');
     setAcceptedIds(prev => new Set(prev).add(jobId));
-    setJobs(prev => prev.map(j => j.id === jobId ? {
-      ...j,
-      status: 'MATCHED',
-      runner_id: runner.id,
-      runner_name: runner.name,
-      runner_rating: runner.rating,
-      matched_at: new Date().toISOString(),
-      agreed_price: j.posted_price,
-    } : j));
     setTimeout(() => navigate('/runner/active'), 1200);
   };
 
