@@ -1,6 +1,6 @@
 # RushBuddy — Database Schema v1 (plan)
 
-**Status:** Planning only. No SQL migrations or Supabase project wiring in Phase 9.
+**Status:** Implemented as SQL in Phase 11 (`supabase/migrations/0001_initial_schema.sql`). Local setup: [`supabase-local-setup.md`](./supabase-local-setup.md). Still no app Supabase client or RLS.
 
 **Companion:** [`docs/architecture/production-architecture.md`](../architecture/production-architecture.md)
 
@@ -88,6 +88,7 @@ slug: vit-vellore
 display_name: VIT Vellore
 email_domains: {vitstudent.ac.in}
 status: active
+settings: hostel_blocks + common_landmarks (sample labels; see supabase/seed.sql)
 ```
 
 ---
@@ -408,4 +409,4 @@ Exact Supabase policies are a later implementation slice.
 - [x] Org model with VIT as seed, not hardcode
 - [x] Tables listed: users, organizations (+ members), jobs, job_events, payments, trust_events, disputes, fir_exports, photos (+ minimal ratings)
 - [x] Frontend mapping called out for a later types change
-- [ ] SQL migrations — **not** Phase 9
+- [x] SQL migrations — Phase 11 (`supabase/migrations/0001_initial_schema.sql` + `seed.sql`)
