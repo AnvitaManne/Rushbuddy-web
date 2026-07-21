@@ -27,6 +27,8 @@ export type * from './types';
 export {
   createSupabaseAuthService,
   createSupabaseOrganizationService,
+  resolveOrganizationIdFromEmail,
+  VIT_VELLORE_SEED_ORG_ID,
   emailDomainAllowed,
   extractEmailDomain,
 } from './supabase';

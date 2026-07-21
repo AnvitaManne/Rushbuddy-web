@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import type { UserGender } from '@/domain/enums';
+import { services } from '@/services';
 import { Mail, ArrowRight, AlertCircle, Zap, Shield, Package } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -10,6 +11,8 @@ const GENDER_OPTIONS: { value: UserGender; label: string }[] = [
   { value: 'female', label: 'Female' },
   { value: 'prefer_not_to_say', label: 'Prefer not to say' },
 ];
+
+const isMockAdapter = (import.meta.env.VITE_DATA_ADAPTER ?? 'mock') !== 'supabase';
 
 export function AuthPage() {
   const { setPendingEmail, setPendingSignup } = useApp();
@@ -25,20 +28,42 @@ export function AuthPage() {
     e.preventDefault();
     setError('');
 
-    if (!email.endsWith('@vitstudent.ac.in')) {
-      setError('Only VIT email addresses are accepted during beta.');
-      return;
-    }
     if (!name.trim()) { setError('Full name is required.'); return; }
     if (!hostel.trim()) { setError('Hostel block is required.'); return; }
     if (!gender) { setError('Please select a gender — used only for hostel-matching.'); return; }
 
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setPendingEmail(email);
-    setPendingSignup({ email, name: name.trim(), hostel_block: hostel.trim(), gender });
-    setLoading(false);
-    navigate('/verify');
+    try {
+      const org = await services.organizations.getBySlug('vit-vellore');
+      if (!org) {
+        setError('Campus organization unavailable. Try again later.');
+        return;
+      }
+
+      const allowed = await services.organizations.isEmailAllowed(org.id, email.trim());
+      if (!allowed) {
+        setError('Only VIT email addresses are accepted during beta.');
+        return;
+      }
+
+      const signup = {
+        email: email.trim().toLowerCase(),
+        name: name.trim(),
+        hostel_block: hostel.trim(),
+        gender,
+      };
+
+      await services.auth.beginSignup(signup);
+
+      setPendingEmail(signup.email);
+      setPendingSignup(signup);
+      navigate('/verify');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not send OTP. Try again.';
+      setError(message.replace(/^AuthService\.beginSignup:\s*/i, ''));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -167,7 +192,7 @@ export function AuthPage() {
                     className="w-full pl-9 pr-4 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none transition-all"
                     style={{
                       background: '#060A14',
-                      border: `1px solid ${error && !email.endsWith('@vitstudent.ac.in') ? '#EF4444' : '#1E2D45'}`,
+                      border: `1px solid ${error && error.toLowerCase().includes('vit email') ? '#EF4444' : '#1E2D45'}`,
                       fontFamily: 'JetBrains Mono, monospace',
                     }}
                     onFocus={e => { e.target.style.borderColor = '#06B6D4'; e.target.style.boxShadow = '0 0 0 2px rgba(6,182,212,0.1)'; }}
@@ -277,14 +302,16 @@ export function AuthPage() {
               </button>
             </form>
 
-            {/* Demo hint */}
-            <div className="mt-5 px-3 py-2.5 rounded-lg text-xs" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
-              <span style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>DEMO → </span>
-              <span style={{ color: '#64748B' }}>use any </span>
-              <span className="text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>@vitstudent.ac.in</span>
-              <span style={{ color: '#64748B' }}> email. OTP is </span>
-              <span className="text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>123456</span>
-            </div>
+            {/* Demo hint — mock adapter only */}
+            {isMockAdapter && (
+              <div className="mt-5 px-3 py-2.5 rounded-lg text-xs" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+                <span style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>DEMO → </span>
+                <span style={{ color: '#64748B' }}>use any </span>
+                <span className="text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>@vitstudent.ac.in</span>
+                <span style={{ color: '#64748B' }}> email. OTP is </span>
+                <span className="text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>123456</span>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>

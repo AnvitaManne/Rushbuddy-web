@@ -17,6 +17,9 @@ import {
   type DbOrganizationRow,
 } from './mappers';
 
+/** Stable seed id from supabase/seed.sql — used when RLS blocks pre-auth org SELECT. */
+export const VIT_VELLORE_SEED_ORG_ID = '01000000-0000-4000-8000-000000000001';
+
 export function createSupabaseOrganizationService(client: SupabaseClient): OrganizationService {
   return {
     async getById(id) {
@@ -36,7 +39,21 @@ export function createSupabaseOrganizationService(client: SupabaseClient): Organ
         .eq('slug', slug)
         .maybeSingle();
       if (error) throw new Error(`OrganizationService.getBySlug: ${error.message}`);
-      return mapOrganizationRow(data as DbOrganizationRow | null);
+      const mapped = mapOrganizationRow(data as DbOrganizationRow | null);
+      if (mapped) return mapped;
+
+      // Pre-membership RLS hides orgs from anon. Beta signup still needs vit-vellore
+      // for isEmailAllowed (RPC compares against this stable seed id).
+      if (slug === 'vit-vellore') {
+        return {
+          id: VIT_VELLORE_SEED_ORG_ID,
+          slug: 'vit-vellore',
+          display_name: 'VIT Vellore',
+          email_domains: ['vitstudent.ac.in'],
+          status: 'active' as const,
+        };
+      }
+      return null;
     },
 
     async listOrganizations() {

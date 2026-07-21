@@ -1,8 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, defaultUser } from '../../context/AppContext';
+import { services } from '@/services';
 import { Shield, RefreshCw, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { motion } from 'motion/react';
+
+const isMockAdapter = (import.meta.env.VITE_DATA_ADAPTER ?? 'mock') !== 'supabase';
+
+function startResendTimer(
+  setTimer: React.Dispatch<React.SetStateAction<number>>,
+  setCanResend: React.Dispatch<React.SetStateAction<boolean>>,
+) {
+  setTimer(60);
+  setCanResend(false);
+  const interval = setInterval(() => {
+    setTimer((t) => {
+      if (t <= 1) {
+        setCanResend(true);
+        clearInterval(interval);
+        return 0;
+      }
+      return t - 1;
+    });
+  }, 1000);
+  return interval;
+}
 
 export function VerifyPage() {
   const { pendingEmail, pendingSignup, setUser, setIsAuthenticated } = useApp();
@@ -18,12 +40,7 @@ export function VerifyPage() {
 
   useEffect(() => {
     inputRefs.current[0]?.focus();
-    const interval = setInterval(() => {
-      setTimer(t => {
-        if (t <= 1) { setCanResend(true); clearInterval(interval); return 0; }
-        return t - 1;
-      });
-    }, 1000);
+    const interval = startResendTimer(setTimer, setCanResend);
     return () => clearInterval(interval);
   }, []);
 
@@ -48,49 +65,95 @@ export function VerifyPage() {
     }
   };
 
-  const handleVerify = async () => {
-    const code = otp.join('');
-    if (code.length < 6) { setError('Please enter all 6 digits.'); return; }
-
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-
-    if (code === '123456') {
-      setSuccess(true);
-      setIsAuthenticated(true);
-      setUser({
-        ...defaultUser,
-        email: pendingSignup?.email || pendingEmail || defaultUser.email,
-        name: pendingSignup?.name || defaultUser.name,
-        hostel_block: pendingSignup?.hostel_block || defaultUser.hostel_block,
-        gender: pendingSignup?.gender || defaultUser.gender,
-      });
-      await new Promise(r => setTimeout(r, 1200));
-      navigate('/home');
+  const failAttempt = (detail?: string) => {
+    const remaining = attempts - 1;
+    setAttempts(remaining);
+    if (remaining <= 0) {
+      setError(
+        isMockAdapter
+          ? 'Too many incorrect codes. Tap Resend code below to unlock and try again. (Demo lock — not a real 15‑minute ban.)'
+          : 'Too many incorrect codes. Tap Resend code below to unlock and try again.',
+      );
     } else {
-      const remaining = attempts - 1;
-      setAttempts(remaining);
-      if (remaining <= 0) {
-        setError('Too many incorrect codes. Tap Resend code below to unlock and try again. (Demo lock — not a real 15‑minute ban.)');
-      } else {
-        setError(`Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining. Demo OTP is 123456.`);
-      }
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
+      const demoHint = isMockAdapter ? ' Demo OTP is 123456.' : '';
+      const suffix = detail && !isMockAdapter ? ` (${detail})` : '';
+      setError(
+        `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.${demoHint}${suffix}`,
+      );
     }
-    setLoading(false);
+    setOtp(['', '', '', '', '', '']);
+    inputRefs.current[0]?.focus();
   };
 
-  const handleResend = () => {
+  const handleVerify = async () => {
+    const code = otp.join('');
+    if (code.length < 6) {
+      setError('Please enter all 6 digits.');
+      return;
+    }
+    if (!pendingSignup) {
+      setError('Signup session expired. Go back and enter your details again.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Mock adapter: keep demo OTP 123456; still apply via completeSignup for consistency.
+      if (isMockAdapter) {
+        await new Promise((r) => setTimeout(r, 600));
+        if (code !== '123456') {
+          failAttempt();
+          return;
+        }
+        const user = await services.auth.completeSignup(pendingSignup);
+        setSuccess(true);
+        setIsAuthenticated(true);
+        setUser({ ...defaultUser, ...user });
+        await new Promise((r) => setTimeout(r, 1200));
+        navigate('/home');
+        return;
+      }
+
+      const user = await services.auth.completeSignup({
+        ...pendingSignup,
+        otp: code,
+      });
+      setSuccess(true);
+      setIsAuthenticated(true);
+      setUser(user);
+      await new Promise((r) => setTimeout(r, 1200));
+      navigate('/home');
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : 'Verification failed.';
+      const cleaned = raw.replace(/^AuthService\.completeSignup:\s*/i, '');
+      failAttempt(cleaned);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
     setOtp(['', '', '', '', '', '']);
     setError('');
     setAttempts(3);
-    setTimer(60);
-    setCanResend(false);
     inputRefs.current[0]?.focus();
-    const interval = setInterval(() => {
-      setTimer(t => { if (t <= 1) { setCanResend(true); clearInterval(interval); return 0; } return t - 1; });
-    }, 1000);
+    startResendTimer(setTimer, setCanResend);
+
+    if (!pendingSignup) {
+      setError('Signup session expired. Go back and enter your details again.');
+      return;
+    }
+
+    if (isMockAdapter) return;
+
+    try {
+      await services.auth.beginSignup(pendingSignup);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not resend code.';
+      setError(message.replace(/^AuthService\.beginSignup:\s*/i, ''));
+    }
   };
 
   return (
@@ -103,7 +166,7 @@ export function VerifyPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-sm"
       >
-        {/* Back */}
+        {/* Wrong email / back */}
         <button
           onClick={() => navigate('/')}
           className="flex items-center gap-2 text-sm mb-6 transition-colors"
@@ -112,7 +175,7 @@ export function VerifyPage() {
           onMouseLeave={e => (e.currentTarget.style.color = '#475569')}
         >
           <ArrowLeft size={14} />
-          Back to login
+          Wrong email? Back to login
         </button>
 
         <div className="rounded-2xl p-8" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
@@ -151,7 +214,7 @@ export function VerifyPage() {
                   6-digit code sent to
                 </p>
                 <p className="text-sm text-cyan-400 mt-0.5" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                  {pendingEmail || 'your@vitstudent.ac.in'}
+                  {pendingEmail || pendingSignup?.email || 'your@vitstudent.ac.in'}
                 </p>
               </div>
 
@@ -246,6 +309,12 @@ export function VerifyPage() {
               <div className="mt-4 px-3 py-2 rounded-lg text-xs text-center"
                 style={{ background: '#070B17', border: '1px solid #1A2535', color: '#475569' }}>
                 Code valid for <span className="text-amber-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>10:00</span> minutes
+                {isMockAdapter && (
+                  <>
+                    {' · Demo OTP '}
+                    <span className="text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>123456</span>
+                  </>
+                )}
               </div>
             </>
           )}

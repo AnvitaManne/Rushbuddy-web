@@ -18,4 +18,5 @@ export { createSupabaseAuthService } from './supabaseAuthService';
 export {
   createSupabaseOrganizationService,
   resolveOrganizationIdFromEmail,
+  VIT_VELLORE_SEED_ORG_ID,
 } from './supabaseOrganizationService';
