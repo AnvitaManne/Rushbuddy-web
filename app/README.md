@@ -17,9 +17,21 @@ Compile check:
 pnpm build
 ```
 
+### Env (Supabase mode)
+
+Default data adapter is **mock** — no env file required for day-to-day UI work.
+
+For future Supabase auth/org adapters (`VITE_DATA_ADAPTER=supabase`):
+
+1. Copy `.env.example` → `.env.local` (do not commit `.env.local`).
+2. From the **repo root**, run `npx supabase status` and paste the API URL + `anon` key into `.env.local`.
+3. Set `VITE_DATA_ADAPTER=supabase`.
+
+See `src/lib/supabaseClient.ts` (`supabase` export). Missing URL/anon key throws a clear error only when adapter is `supabase`.
+
 Pilot QA docs (repo root): [docs/qa/scenario-test-matrix.md](../docs/qa/scenario-test-matrix.md), [internal-dogfooding-runbook.md](../docs/qa/internal-dogfooding-runbook.md), [pilot-readiness-checklist.md](../docs/qa/pilot-readiness-checklist.md).
 
-**Reminder:** no real money, no real KYC, no backend persistence (refresh resets state).
+**Reminder:** no real money, no real KYC; mock mode still has no backend persistence (refresh resets state).
 
 **Home mode:** Sender/Runner toggle on Command Centre stays on `/home` and filters the dashboard by role (Sender → your requests / Tracking; Runner → your runs / Active Delivery). Post and Feed are separate nav/quick actions.
 
