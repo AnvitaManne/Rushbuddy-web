@@ -3,7 +3,8 @@ import type { Job, RunnerTrustRecord, TrustEvent, User } from '@/domain/types';
 import type { SuspensionStatus, UserGender, UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
 import { createPilotScenarioJobs } from '@/domain/demoScenarios';
-import { bindMockJobStore } from '@/services';
+import { bindMockJobStore, services } from '@/services';
+import { supabase } from '@/lib/supabaseClient';
 
 export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
@@ -32,6 +33,8 @@ interface AppContextType {
   setPendingSignup: (signup: PendingSignup | null) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (v: boolean) => void;
+  /** False until mock boot or supabase session restore finishes. */
+  authReady: boolean;
   trustEvents: TrustEvent[];
   appendTrustEvent: (event: TrustEvent) => void;
   runnerTrustRecords: Record<string, RunnerTrustRecord>;
@@ -43,8 +46,32 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
+const isSupabaseAdapter = import.meta.env.VITE_DATA_ADAPTER === 'supabase';
+
 function emptyTrustRecord(runnerId: string): RunnerTrustRecord {
   return { runner_id: runnerId, no_show_count: 0, suspension_status: 'active' };
+}
+
+function SessionRestoreGate() {
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center gap-3"
+      style={{ background: '#060A14', fontFamily: 'Inter, sans-serif' }}
+    >
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center"
+        style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
+      >
+        <span className="text-white font-bold text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          RB
+        </span>
+      </div>
+      <div className="w-5 h-5 rounded-full border-2 border-cyan-400/30 border-t-cyan-400 animate-spin" />
+      <p className="text-sm" style={{ color: '#64748B' }}>
+        Restoring session…
+      </p>
+    </div>
+  );
 }
 
 export const mockJobs: Job[] = [
@@ -236,6 +263,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingSignup, setPendingSignup] = useState<PendingSignup | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authReady, setAuthReady] = useState(!isSupabaseAdapter);
   const [trustEvents, setTrustEvents] = useState<TrustEvent[]>([]);
   const [runnerTrustRecords, setRunnerTrustRecords] = useState<Record<string, RunnerTrustRecord>>({
     u1: emptyTrustRecord('u1'),
@@ -249,6 +277,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
       getJobs: () => jobsRef.current,
       setJobs: (next) => setJobs(next),
     });
+  }, []);
+
+  // Slice 12.7 — restore Supabase session; mock boots immediately (authReady already true).
+  useEffect(() => {
+    if (!isSupabaseAdapter || !supabase) {
+      setAuthReady(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const current = await services.auth.getCurrentUser();
+        if (cancelled) return;
+        if (current) {
+          setUser(current);
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        console.warn('[RushBuddy] session restore failed', err);
+      } finally {
+        if (!cancelled) setAuthReady(true);
+      }
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setIsAuthenticated(false);
+        setPendingSignup(null);
+        setPendingEmail('');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const appendTrustEvent = (event: TrustEvent) => {
@@ -299,14 +366,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSetUser = (u: User | null) => {
-    setUser(u || defaultUser);
-  };
+  if (!authReady) {
+    return <SessionRestoreGate />;
+  }
 
   return (
     <AppContext.Provider value={{
       user,
-      setUser: handleSetUser,
+      setUser,
       currentRole,
       setCurrentRole,
       jobs,
@@ -319,6 +386,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setPendingSignup,
       isAuthenticated,
       setIsAuthenticated,
+      authReady,
       trustEvents,
       appendTrustEvent,
       runnerTrustRecords,

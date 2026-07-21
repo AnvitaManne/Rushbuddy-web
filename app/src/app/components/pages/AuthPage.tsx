@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Navigate, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import type { UserGender } from '@/domain/enums';
 import { services } from '@/services';
@@ -15,7 +15,7 @@ const GENDER_OPTIONS: { value: UserGender; label: string }[] = [
 const isMockAdapter = (import.meta.env.VITE_DATA_ADAPTER ?? 'mock') !== 'supabase';
 
 export function AuthPage() {
-  const { setPendingEmail, setPendingSignup } = useApp();
+  const { setPendingEmail, setPendingSignup, isAuthenticated } = useApp();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -23,6 +23,10 @@ export function AuthPage() {
   const [gender, setGender] = useState<UserGender | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  if (isAuthenticated) {
+    return <Navigate to="/home" replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
