@@ -1,12 +1,18 @@
 /**
- * Service adapter registry (Phase 10).
- * Today: in-memory mocks. Later swap on env (e.g. DATA_ADAPTER === 'supabase').
+ * Service adapter registry (Phase 10–12).
+ * Default: in-memory mocks. Set VITE_DATA_ADAPTER=supabase for auth/org adapters
+ * (jobs / payments / trust stay mock until later phases).
  */
 
+import { supabase } from '@/lib/supabaseClient';
 import type { Job, User } from '@/domain/types';
 import { createMockJobService, type MockJobStore } from './mock/mockJobService';
 import { createMockPaymentService } from './mock/mockPaymentService';
 import { createMockTrustService } from './mock/mockTrustService';
+import {
+  createSupabaseAuthService,
+  createSupabaseOrganizationService,
+} from './supabase';
 import type {
   AppServices,
   AuthService,
@@ -17,6 +23,13 @@ import type {
 
 export type { AppServices } from './types';
 export type * from './types';
+
+export {
+  createSupabaseAuthService,
+  createSupabaseOrganizationService,
+  emailDomainAllowed,
+  extractEmailDomain,
+} from './supabase';
 
 /** VIT seed org (schema-v1) — stub until a dedicated mock org module exists. */
 const SEED_ORG: Organization = {
@@ -142,17 +155,27 @@ export function createMockServices(): AppServices {
   };
 }
 
-export {
-  createSupabaseAuthService,
-  createSupabaseOrganizationService,
-  emailDomainAllowed,
-  extractEmailDomain,
-} from './supabase';
+/**
+ * Hybrid: Supabase auth + organizations; mock jobs / payments / trust.
+ * Requires VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (see supabaseClient).
+ */
+export function createSupabaseServices(): AppServices {
+  if (!supabase) {
+    throw new Error(
+      'createSupabaseServices requires VITE_DATA_ADAPTER=supabase and a configured Supabase client. ' +
+        'Copy app/.env.example → app/.env.local and paste values from `npx supabase status`.',
+    );
+  }
+  return {
+    auth: createSupabaseAuthService(supabase),
+    jobs: createMockJobService(jobStoreFacade),
+    payments: createMockPaymentService(jobStoreFacade),
+    trust: createMockTrustService(),
+    organizations: createSupabaseOrganizationService(supabase),
+  };
+}
 
-// Later (page wiring / hybrid registry):
-// export const services =
-//   import.meta.env.VITE_DATA_ADAPTER === 'supabase'
-//     ? { ...createMockServices(), auth: createSupabaseAuthService(supabase!), organizations: createSupabaseOrganizationService(supabase!) }
-//     : createMockServices();
-
-export const services = createMockServices();
+export const services =
+  import.meta.env.VITE_DATA_ADAPTER === 'supabase'
+    ? createSupabaseServices()
+    : createMockServices();

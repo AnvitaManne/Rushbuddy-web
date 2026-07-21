@@ -229,7 +229,7 @@ sequenceDiagram
 | **B** | **Repository/service interfaces mirroring domain ops** | **Phase 10** |
 | **C** | **Mock adapters; AppContext remains backing store** | **Phase 10** |
 | C′ | Wire ≤1 small UI/context flow through services | Phase 10 |
-| D | Supabase Auth + membership | Later |
+| D | Supabase Auth + membership | **In progress (Phase 12)** — registry hybrid: auth/org on Supabase when `VITE_DATA_ADAPTER=supabase`; jobs/payments/trust still mock; Auth/Verify page wire pending |
 | E | Jobs + accept race + `job_events` | Later |
 | F | Photos / payments / disputes / FIR persistence | Later |
 | G | Real session replaces `defaultUser` | Later |
