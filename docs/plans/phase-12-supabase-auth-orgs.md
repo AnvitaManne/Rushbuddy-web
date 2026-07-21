@@ -44,8 +44,8 @@
 | **12.1** | This plan: slice map, auth flow, org resolution, mock boundaries, acceptance | **Done (this doc)** |
 | **12.2** | Auth trigger + RLS migration (`0002_auth_profile_and_rls.sql`) + local setup note | **Done (SQL/docs; no app)** |
 | **12.3** | Supabase browser client + env vars (`supabaseClient.ts`, `.env.example`) | **Done (client only; no adapters)** |
-| **12.4** | `OrganizationService` Supabase adapter: load orgs, `isEmailAllowed`, resolve org by email domain | Not started |
-| **12.5** | `AuthService` Supabase adapter: `beginSignup` → send OTP; `completeSignup` → verify OTP + profile/membership RPC | Not started |
+| **12.4** | Supabase `AuthService` + `OrganizationService` adapters + mappers (no page wiring) | **Done** |
+| **12.5** | Registry hybrid swap (`VITE_DATA_ADAPTER=supabase` → auth/org adapters) | Not started |
 | **12.6** | Wire `AuthPage` → `services.auth.beginSignup` (+ keep `pendingSignup` for MVP fields) | Not started |
 | **12.7** | Wire `VerifyPage` → `services.auth.completeSignup`; session hydrate; remove OTP `123456` | Not started |
 | **12.8** | Phase summary (`notes/phase-12-summary.md`) + acceptance pass | End of phase |

@@ -27,6 +27,8 @@ export interface AuthSignupInput {
   name: string;
   hostel_block: string;
   gender: UserGender;
+  /** Email OTP — required by Supabase `completeSignup`; unused by mock stub. */
+  otp?: string;
 }
 
 /** Payment intent recorded at rating time (still embedded on `Job` in the mock). */

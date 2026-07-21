@@ -142,10 +142,17 @@ export function createMockServices(): AppServices {
   };
 }
 
-// Later:
+export {
+  createSupabaseAuthService,
+  createSupabaseOrganizationService,
+  emailDomainAllowed,
+  extractEmailDomain,
+} from './supabase';
+
+// Later (page wiring / hybrid registry):
 // export const services =
 //   import.meta.env.VITE_DATA_ADAPTER === 'supabase'
-//     ? createSupabaseServices()
+//     ? { ...createMockServices(), auth: createSupabaseAuthService(supabase!), organizations: createSupabaseOrganizationService(supabase!) }
 //     : createMockServices();
 
 export const services = createMockServices();
