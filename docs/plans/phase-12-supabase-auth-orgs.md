@@ -42,12 +42,12 @@
 | Slice | Deliverable | Status |
 |-------|-------------|--------|
 | **12.1** | This plan: slice map, auth flow, org resolution, mock boundaries, acceptance | **Done (this doc)** |
-| **12.2** | Supabase browser client + env vars (`VITE_SUPABASE_URL`, anon key); registry can select auth/org adapters | Not started |
-| **12.3** | `OrganizationService` Supabase adapter: load orgs, `isEmailAllowed`, resolve org by email domain | Not started |
-| **12.4** | `AuthService` Supabase adapter: `beginSignup` → send OTP; `completeSignup` → verify OTP + upsert `public.users` + `organization_members` | Not started |
-| **12.5** | Wire `AuthPage` → `services.auth.beginSignup` (+ keep `pendingSignup` for MVP fields) | Not started |
-| **12.6** | Wire `VerifyPage` → `services.auth.completeSignup`; remove hardcoded OTP `123456` | Not started |
-| **12.7** | Session hydrate: `getCurrentUser` / `isAuthenticated` from Supabase session → profile; sign-out clears session + AppContext user | Not started |
+| **12.2** | Auth trigger + RLS migration (`0002_auth_profile_and_rls.sql`) + local setup note | **Done (SQL/docs; no app)** |
+| **12.3** | Supabase browser client + env vars; registry can select auth/org adapters | Not started |
+| **12.4** | `OrganizationService` Supabase adapter: load orgs, `isEmailAllowed`, resolve org by email domain | Not started |
+| **12.5** | `AuthService` Supabase adapter: `beginSignup` → send OTP; `completeSignup` → verify OTP + profile/membership RPC | Not started |
+| **12.6** | Wire `AuthPage` → `services.auth.beginSignup` (+ keep `pendingSignup` for MVP fields) | Not started |
+| **12.7** | Wire `VerifyPage` → `services.auth.completeSignup`; session hydrate; remove OTP `123456` | Not started |
 | **12.8** | Phase summary (`notes/phase-12-summary.md`) + acceptance pass | End of phase |
 
 **Do not start 12.2+ until 12.1 is reviewed.** Implementation slices may land as fewer PRs, but the map above is the canonical checklist.
@@ -183,13 +183,13 @@ Phase 12 **must not** edit `PostRequestPage` unless a regression forces a one-li
 
 ---
 
-## Implementation notes (for 12.2–12.7)
+## Implementation notes (for 12.3–12.7)
 
 1. **Client only in adapters** — pages import `@/services`, not `@supabase/*` directly.
-2. **Profile write path** — after `verifyOtp`, upsert `public.users` with `auth_user_id = auth.uid()`, profile fields from signup input, `verified = true`, `verified_at = now()`.
+2. **Profile write path (DB, Slice 12.2)** — `auth.users` INSERT trigger creates minimal `public.users` (`auth_user_id`, `email`, `verified`). After OTP, app UPDATEs `name` / `hostel_block` / `gender` (own row) or calls `complete_user_profile`, then `ensure_organization_membership`.
 3. **Id strategy** — prefer `public.users.id` as app `User.id`; store `auth_user_id` for the Auth link. Avoid inventing a second identity in AppContext.
-4. **RLS minimum** — if inserts fail without policies, add the **smallest** migration needed for: user reads/writes own `users` row; member reads own org; insert own membership. Full tenant RLS for jobs is a later phase.
-5. **No Auth DB trigger required in V1** if `completeSignup` writes profile + membership explicitly after OTP verify.
+4. **RLS minimum (Slice 12.2)** — own `users` SELECT/UPDATE; member SELECT org; SELECT own `organization_members`. Membership INSERT via SECURITY DEFINER RPCs (no broad INSERT policy). Full tenant RLS for jobs is a later phase.
+5. **Org resolve** — `resolve_organization_id_from_email` (SECURITY DEFINER; executable by `anon` + `authenticated`) for domain allowlist before/during signup.
 6. **Existing stub** — delete or stop exporting stub auth/org once Supabase adapters are the registry default for those two keys under a real env.
 
 ---
