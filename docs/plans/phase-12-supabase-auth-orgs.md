@@ -48,7 +48,7 @@
 | **12.5** | Registry hybrid swap (`VITE_DATA_ADAPTER=supabase` → auth/org adapters) | **Done** |
 | **12.6** | Wire Auth + Verify through services (org domain check, begin/completeSignup; mock keeps OTP `123456`) | **Done** |
 | **12.7** | Session hydrate on boot (`getCurrentUser`); sign-out clears Supabase session | **Done** |
-| **12.8** | Phase summary (`notes/phase-12-summary.md`) + acceptance pass | End of phase |
+| **12.8** | Phase summary (`notes/phase-12-summary.md`) + acceptance pass | **Done** |
 
 **Do not start 12.2+ until 12.1 is reviewed.** Implementation slices may land as fewer PRs, but the map above is the canonical checklist.
 
