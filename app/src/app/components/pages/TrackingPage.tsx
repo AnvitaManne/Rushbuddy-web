@@ -37,7 +37,7 @@ function getStepIndex(status: string) {
 const FIND_NEW_BUDDY_WAIT_MS = 10 * 60 * 1000;
 
 export function TrackingPage() {
-  const { jobs, setJobs, activeJob: ctxActiveJob, user, appendTrustEvent, updateRunnerTrustRecord } = useApp();
+  const { jobs, setJobs, activeJob: ctxActiveJob, user, trustEvents, runnerTrustRecords, appendTrustEvent, updateRunnerTrustRecord } = useApp();
   const navigate = useNavigate();
   const uid = user?.id ?? defaultUser.id;
 
@@ -238,6 +238,14 @@ export function TrackingPage() {
 
   const runnerName = job.runner_name && job.runner_name !== 'You' ? job.runner_name : 'Karthik R';
 
+  // Theft escalation is a distinct, visible track: a theft-like dispute logs a
+  // `theft_escalation` event and suspends the runner. FIR is gated behind it.
+  const jobTheftEscalation =
+    job.status === 'DISPUTED' &&
+    trustEvents.some(e => e.job_id === job.id && e.type === 'theft_escalation');
+  const disputedRunnerSuspended =
+    !!job.runner_id && runnerTrustRecords[job.runner_id]?.suspension_status === 'suspended';
+
   return (
     <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
@@ -429,33 +437,58 @@ export function TrackingPage() {
         </motion.button>
       )}
 
-      {/* DISPUTED — FIR support package + mock ops resolution */}
+      {/* DISPUTED — theft escalation banner + (theft-only) FIR + mock ops resolution */}
       {job.status === 'DISPUTED' && (
         <div className="space-y-3">
-          <div className="rounded-xl p-4 space-y-3" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
-            <div className="flex items-center gap-2">
-              <FileWarning size={14} className="text-red-400" />
-              <span className="text-sm text-red-300 font-medium">Dispute — FIR Support Package</span>
+          {/* Theft escalation — only for theft-like disputes */}
+          {(jobTheftEscalation || disputedRunnerSuspended) && (
+            <div className="rounded-xl p-4 space-y-3" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+              <div className="flex items-center gap-2">
+                <Shield size={14} className="text-red-400" />
+                <span className="text-sm text-red-300 font-medium">Theft escalation active</span>
+              </div>
+              <p className="text-[11px]" style={{ color: '#F87171' }}>
+                {disputedRunnerSuspended
+                  ? `Runner account suspended pending investigation (${job.dispute_type ?? 'theft-like dispute'}).`
+                  : 'Escalation logged; suspension pending.'}
+              </p>
+
+              <div className="pt-1 space-y-2">
+                <p className="text-[11px]" style={{ color: '#F87171' }}>
+                  Mock / dev only — platform support package, not a legal FIR filing.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleGenerateFir}
+                  className="w-full py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)' }}
+                >
+                  {firCopied ? <Check size={14} /> : <Copy size={14} />}
+                  Generate FIR Support Package
+                </button>
+                {firData && (
+                  <pre className="text-[10px] p-3 rounded-lg overflow-auto max-h-56" style={{ background: '#0D0303', border: '1px solid #3B1111', color: '#F87171' }}>
+                    {JSON.stringify(firData, null, 2)}
+                  </pre>
+                )}
+                {firCopied && <p className="text-[10px] text-emerald-400">Copied JSON to clipboard.</p>}
+              </div>
             </div>
-            <p className="text-[11px]" style={{ color: '#F87171' }}>
-              Mock export only — not a real police filing. Generate/copy for process practice.
-            </p>
-            <button
-              type="button"
-              onClick={handleGenerateFir}
-              className="w-full py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)' }}
-            >
-              {firCopied ? <Check size={14} /> : <Copy size={14} />}
-              Generate FIR Support Package
-            </button>
-            {firData && (
-              <pre className="text-[10px] p-3 rounded-lg overflow-auto max-h-56" style={{ background: '#0D0303', border: '1px solid #3B1111', color: '#F87171' }}>
-                {JSON.stringify(firData, null, 2)}
-              </pre>
-            )}
-            {firCopied && <p className="text-[10px] text-emerald-400">Copied JSON to clipboard.</p>}
-          </div>
+          )}
+
+          {/* Non-theft dispute notice */}
+          {!jobTheftEscalation && !disputedRunnerSuspended && (
+            <div className="rounded-xl p-4 space-y-2" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+              <div className="flex items-center gap-2">
+                <FileWarning size={14} className="text-red-400" />
+                <span className="text-sm text-red-300 font-medium">Dispute under review</span>
+              </div>
+              <p className="text-[11px]" style={{ color: '#F87171' }}>
+                {job.dispute_type ?? 'Issue'} reported — no theft escalation. Resolve with mock ops below.
+                Theft-like reports ("Not delivered" / stolen) also suspend the runner and unlock the FIR package.
+              </p>
+            </div>
+          )}
 
           <div className="rounded-xl p-4 space-y-3" style={{ background: '#0D1120', border: '1px solid #1E2D45' }}>
             <div className="text-xs" style={{ color: '#94A3B8', fontFamily: 'JetBrains Mono, monospace' }}>

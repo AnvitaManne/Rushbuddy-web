@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { useApp, defaultUser } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
 import { getAllowedPaymentMethods } from '@/domain/paymentPolicy';
-import { createTrustEvent, suspendRunner } from '@/domain/trustOps';
+import { createTrustEvent, isTheftLikeDispute, suspendRunner } from '@/domain/trustOps';
 import type { PaymentMethod } from '@/domain/enums';
 import { Star, AlertCircle, CheckCircle2, Shield, Smartphone, Banknote, CreditCard } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -98,15 +98,20 @@ export function RatingPage() {
       disputed_at: new Date().toISOString(),
     } : j));
 
-    if (disputeType === 'Not delivered' && job.runner_id) {
-      const event = createTrustEvent({
+    if (isTheftLikeDispute(disputeType) && job.runner_id) {
+      appendTrustEvent(createTrustEvent({
         runner_id: job.runner_id,
         job_id: job.id,
         type: 'theft_escalation',
-        description: `Sender reported "Not delivered" on ${job.id} — runner suspended pending review.`,
-      });
-      appendTrustEvent(event);
-      updateRunnerTrustRecord(job.runner_id, prev => suspendRunner(prev, 'Theft escalation: "Not delivered" dispute'));
+        description: `Theft-like dispute "${disputeType}" on ${job.id} — escalated for investigation (mock).`,
+      }));
+      appendTrustEvent(createTrustEvent({
+        runner_id: job.runner_id,
+        job_id: job.id,
+        type: 'suspension',
+        description: `Runner suspended pending theft investigation on ${job.id} (mock).`,
+      }));
+      updateRunnerTrustRecord(job.runner_id, prev => suspendRunner(prev, `Theft escalation: "${disputeType}" dispute`));
     }
 
     setLoading(false);
@@ -140,8 +145,8 @@ export function RatingPage() {
           </h2>
           <p className="text-sm" style={{ color: '#64748B' }}>
             {disputeMode
-              ? disputeType === 'Not delivered'
-                ? 'Runner suspended pending review. Ops team will review within 4 hours.'
+              ? isTheftLikeDispute(disputeType)
+                ? 'Theft escalation logged — runner suspended pending review. Ops team will review within 4 hours.'
                 : 'Ops team will review within 4 hours.'
               : `You rated ${runnerName} ${stars} stars. Job closed.`}
           </p>
@@ -391,9 +396,9 @@ export function RatingPage() {
             style={{ background: '#0D0303', border: '1px solid #3B1111' }}
           />
 
-          {disputeType === 'Not delivered' && (
+          {isTheftLikeDispute(disputeType) && (
             <p className="text-[10px] mt-2 text-red-300">
-              Reporting "Not delivered" immediately suspends the runner pending ops review.
+              Theft-like reports ("{disputeType}") immediately suspend the runner and open a theft escalation pending ops review.
             </p>
           )}
 

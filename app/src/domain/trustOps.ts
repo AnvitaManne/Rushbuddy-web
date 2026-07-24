@@ -89,6 +89,20 @@ export function buildFirExport(job: Job): FIRExport {
   };
 }
 
+/**
+ * True when a dispute type indicates a theft-like report that must escalate
+ * (immediate runner suspension + FIR support package). Matches RatingPage labels.
+ */
+export function isTheftLikeDispute(disputeType: string): boolean {
+  const normalized = disputeType.trim().toLowerCase();
+  return (
+    normalized === 'not delivered' ||
+    normalized.includes('theft') ||
+    normalized.includes('misappropriat') ||
+    normalized.includes('stolen')
+  );
+}
+
 /** Mock ops outcomes for DISPUTED → CLOSED (Tracking DEV panel). */
 export type DisputeResolutionOutcome = 'runner_at_fault' | 'sender_error' | 'unclear';
 
