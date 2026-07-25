@@ -20,3 +20,15 @@ export {
   resolveOrganizationIdFromEmail,
   VIT_VELLORE_SEED_ORG_ID,
 } from './supabaseOrganizationService';
+export { createSupabaseJobService } from './supabaseJobService';
+export { createSupabasePaymentService } from './supabasePaymentService';
+export { createSupabaseTrustService } from './supabaseTrustService';
+export {
+  hashConfirmationCode,
+  verifyConfirmationCode,
+  mapJobRow,
+  mapJobToInsert,
+  mapJobPatchToDb,
+  JOB_COLUMNS,
+  JOB_COLUMNS_WITH_CODE,
+} from './jobMappers';

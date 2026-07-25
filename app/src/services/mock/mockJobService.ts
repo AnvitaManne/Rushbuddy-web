@@ -14,7 +14,7 @@ import {
   markRunnerPayoutEarnedPatch,
   requiresOpsHold,
 } from '@/domain/failureHandling';
-import type { JobService } from '../types';
+import type { JobService, ReportNoAnswerInput } from '../types';
 
 /** Mutable job list accessors — typically AppContext `jobs` / `setJobs` later. */
 export interface MockJobStore {
@@ -53,19 +53,10 @@ function patchJob(store: MockJobStore, id: string, patch: Partial<Job>): Job | n
   return updated;
 }
 
-/** No-answer resolution payloads for `reportNoAnswer`. */
-export type ReportNoAnswerInput =
-  | { kind: 'contact_attempt' }
-  | { kind: 'secure_drop'; location?: string }
-  | { kind: 'hold_for_ops' };
+export type { ReportNoAnswerInput } from '../types';
 
-/** JobService plus lifecycle helpers used by the active-delivery / tracking flows. */
-export interface MockJobService extends JobService {
-  acknowledgePickup(jobId: string, options?: { photo_url?: string }): Promise<Job | null>;
-  completeHandoff(jobId: string, confirmationCode: string): Promise<Job | null>;
-  reportNoAnswer(jobId: string, input: ReportNoAnswerInput): Promise<Job | null>;
-  closeJob(jobId: string): Promise<Job | null>;
-}
+/** Lifecycle methods now live on the base JobService interface (Phase 14). */
+export type MockJobService = JobService;
 
 export function createMockJobService(
   storeOrJobs: MockJobStore | Job[] = [],
@@ -182,6 +173,42 @@ export function createMockJobService(
         ops_notified: true,
         no_answer_resolution: 'hold_for_ops',
         ...markRunnerPayoutEarnedPatch(),
+      });
+    },
+
+    async reportIssue(jobId) {
+      const job = store.getJobs().find((j) => j.id === jobId);
+      if (!job) return null;
+      const result = assertTransition(job.status, 'ISSUE_REPORTED');
+      if (!result.ok) return null;
+      return patchJob(store, jobId, {
+        status: 'ISSUE_REPORTED',
+        ops_notified: true,
+      });
+    },
+
+    async fileDispute(jobId, input) {
+      const job = store.getJobs().find((j) => j.id === jobId);
+      if (!job) return null;
+      const result = assertTransition(job.status, 'DISPUTED');
+      if (!result.ok) return null;
+      return patchJob(store, jobId, {
+        status: 'DISPUTED',
+        dispute_type: input.dispute_type || 'Not specified',
+        dispute_description: input.description,
+        disputed_at: new Date().toISOString(),
+      });
+    },
+
+    async resolveDispute(jobId, input) {
+      const job = store.getJobs().find((j) => j.id === jobId);
+      if (!job) return null;
+      const result = assertTransition(job.status, 'CLOSED');
+      if (!result.ok) return null;
+      return patchJob(store, jobId, {
+        status: 'CLOSED',
+        closed_at: new Date().toISOString(),
+        runner_payout_status: input.outcome === 'runner_at_fault' ? 'withheld' : 'earned',
       });
     },
 

@@ -191,10 +191,11 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
 }
 
 export function RunnerFeedPage() {
-  const { jobs, setCurrentRole, user } = useApp();
+  const { jobs, setJobs, setActiveJob, setCurrentRole, user } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('All');
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
+  const [raceNotice, setRaceNotice] = useState<string | null>(null);
 
   // Demo fallback: Home / mocks use u1 even when session user is briefly null.
   const runner = user ?? defaultUser;
@@ -208,6 +209,7 @@ export function RunnerFeedPage() {
 
   const handleAccept = async (jobId: string) => {
     if (isSuspended) return;
+    setRaceNotice(null);
 
     const updated = await services.jobs.acceptJob(jobId, {
       id: runner.id,
@@ -215,8 +217,22 @@ export function RunnerFeedPage() {
       rating: runner.rating,
       hostel_block: runner.hostel_block,
     });
-    if (!updated) return;
 
+    // Lost the accept race (or job no longer OPEN) — refresh so it drops off the feed.
+    if (!updated) {
+      setRaceNotice('That job was just taken by another runner.');
+      try {
+        const fresh = await services.jobs.listJobs();
+        setJobs(fresh);
+      } catch (err) {
+        console.warn('[RushBuddy] feed refresh after race failed', err);
+      }
+      return;
+    }
+
+    // Reflect the MATCHED job locally (preserve display-only hints like eta/distance).
+    setJobs(prev => prev.map(j => (j.id === updated.id ? { ...j, ...updated } : j)));
+    setActiveJob(updated);
     setCurrentRole('runner');
     setAcceptedIds(prev => new Set(prev).add(jobId));
     setTimeout(() => navigate('/runner/active'), 1200);
@@ -233,6 +249,15 @@ export function RunnerFeedPage() {
           <p className="text-xs" style={{ color: '#F87171' }}>
             Your runner account is suspended and cannot accept new jobs. Contact ops to appeal.
           </p>
+        </div>
+      )}
+
+      {/* Accept-race notice */}
+      {raceNotice && (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
+          style={{ background: '#1A1005', border: '1px solid #3B2A0A' }}>
+          <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs" style={{ color: '#FBBF24' }}>{raceNotice}</p>
         </div>
       )}
 

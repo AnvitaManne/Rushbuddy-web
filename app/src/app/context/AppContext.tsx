@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import type { Job, RunnerTrustRecord, TrustEvent, User } from '@/domain/types';
 import type { SuspensionStatus, UserGender, UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
@@ -8,6 +8,50 @@ import { supabase } from '@/lib/supabaseClient';
 
 export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
+
+/**
+ * Fields that only live in local state today (payment + dispute persist in Phase 15).
+ * The background refetch re-applies these so it doesn't wipe them.
+ */
+const LOCAL_ONLY_JOB_FIELDS: (keyof Job)[] = [
+  'payment_method', 'payment_status', 'paid_at', 'tip_amount', 'rating',
+  'dispute_type', 'dispute_description', 'disputed_at',
+];
+
+const JOB_STATUS_RANK: Record<string, number> = {
+  OPEN: 0, MATCHED: 1, IN_TRANSIT: 2, DELIVERED: 3, ISSUE_REPORTED: 3,
+  PENDING_RATING: 4, DISPUTED: 5, CLOSED: 6,
+};
+
+/**
+ * Merge freshly fetched server jobs with the local copy so not-yet-persisted
+ * state (dispute filed, payment recorded, mock-ops close) survives the poll.
+ * Keeps the further-along status and re-applies local-only fields.
+ */
+function mergeServerJobs(local: Job[], server: Job[]): Job[] {
+  const localById = new Map(local.map((j) => [j.id, j]));
+  const merged = server.map((s) => {
+    const l = localById.get(s.id);
+    if (!l) return s;
+    const next: Job = { ...s };
+    for (const f of LOCAL_ONLY_JOB_FIELDS) {
+      if (next[f] === undefined && l[f] !== undefined) {
+        (next as Record<keyof Job, unknown>)[f] = l[f];
+      }
+    }
+    if ((JOB_STATUS_RANK[l.status] ?? 0) > (JOB_STATUS_RANK[s.status] ?? 0)) {
+      next.status = l.status;
+      next.closed_at = l.closed_at ?? next.closed_at;
+      next.runner_payout_status = l.runner_payout_status ?? next.runner_payout_status;
+    }
+    return next;
+  });
+  const serverIds = new Set(server.map((s) => s.id));
+  for (const l of local) {
+    if (!serverIds.has(l.id)) merged.push(l);
+  }
+  return merged;
+}
 
 /** Fields collected on Auth, applied onto `User` at Verify. */
 export interface PendingSignup {
@@ -42,6 +86,8 @@ interface AppContextType {
     runnerId: string,
     updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
   ) => void;
+  /** Re-pull jobs + own suspension + trust from the backend (supabase mode; no-op on mock). */
+  refreshData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -258,7 +304,8 @@ const defaultUser: User = {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole>(null);
-  const [jobs, setJobs] = useState<Job[]>(mockJobs);
+  // Supabase mode hydrates real jobs after login; mock mode seeds demo jobs.
+  const [jobs, setJobs] = useState<Job[]>(isSupabaseAdapter ? [] : mockJobs);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingSignup, setPendingSignup] = useState<PendingSignup | null>(null);
@@ -317,6 +364,87 @@ export function AppProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Slice 13.6 / 14.4 / 15.4 — pull jobs (+ own suspension + trust) from the backend
+  // and keep them fresh across accounts via focus + light polling. We refetch through
+  // `listJobs` (privacy-safe: other users' confirmation codes are never returned)
+  // instead of a Realtime subscription, which would broadcast full rows (codes).
+  const refreshData = useCallback(async () => {
+    if (!isSupabaseAdapter || !user?.id) return;
+    try {
+      const list = await services.jobs.listJobs();
+      setJobs((prev) => mergeServerJobs(prev, list));
+
+      // Refresh the signed-in user's suspension so the runner feed gate stays current.
+      try {
+        const me = await services.auth.getCurrentUser();
+        if (me) {
+          setUser((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  suspension_status: me.suspension_status,
+                  no_show_count: me.no_show_count,
+                  trust_score: me.trust_score,
+                  rating: me.rating,
+                }
+              : prev,
+          );
+        }
+      } catch (err) {
+        console.warn('[RushBuddy] user refresh failed', err);
+      }
+
+      // Load trust events/records for runners on the user's jobs (sender-side banners).
+      const runnerIds = Array.from(
+        new Set(list.map((j) => j.runner_id).filter((id): id is string => !!id)),
+      );
+      if (runnerIds.length) {
+        const eventLists = await Promise.all(
+          runnerIds.map((id) => services.trust.getEventsForRunner(id).catch(() => [])),
+        );
+        setTrustEvents(eventLists.flat());
+        const records = await Promise.all(
+          runnerIds.map((id) =>
+            services.trust.getRunnerRecord(id).catch(() => emptyTrustRecord(id)),
+          ),
+        );
+        setRunnerTrustRecords((prev) => {
+          const next = { ...prev };
+          records.forEach((rec) => {
+            next[rec.runner_id] = rec;
+          });
+          return next;
+        });
+      }
+    } catch (err) {
+      console.warn('[RushBuddy] job refresh failed', err);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!isSupabaseAdapter) return;
+    if (!user?.id) {
+      setJobs([]);
+      return;
+    }
+
+    void refreshData();
+
+    const onFocus = () => void refreshData();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshData();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    const interval = window.setInterval(() => void refreshData(), 20_000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(interval);
+    };
+  }, [user?.id, refreshData]);
 
   const appendTrustEvent = (event: TrustEvent) => {
     setTrustEvents(prev => [event, ...prev]);
@@ -391,6 +519,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       appendTrustEvent,
       runnerTrustRecords,
       updateRunnerTrustRecord,
+      refreshData,
     }}>
       {children}
     </AppContext.Provider>

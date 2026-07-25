@@ -13,6 +13,7 @@ import {
   type DisputeResolutionOutcome,
 } from '@/domain/trustOps';
 import { logJobTransition } from '@/domain/devJobDebug';
+import { services, isSupabaseAdapter } from '@/services';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
   AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio, KeyRound, Users, FileWarning, Copy, Check
@@ -37,7 +38,7 @@ function getStepIndex(status: string) {
 const FIND_NEW_BUDDY_WAIT_MS = 10 * 60 * 1000;
 
 export function TrackingPage() {
-  const { jobs, setJobs, activeJob: ctxActiveJob, user, trustEvents, runnerTrustRecords, appendTrustEvent, updateRunnerTrustRecord } = useApp();
+  const { jobs, setJobs, activeJob: ctxActiveJob, user, trustEvents, runnerTrustRecords, appendTrustEvent, updateRunnerTrustRecord, refreshData } = useApp();
   const navigate = useNavigate();
   const uid = user?.id ?? defaultUser.id;
 
@@ -173,7 +174,7 @@ export function TrackingPage() {
     unclear: 'Unclear / goodwill',
   };
 
-  const handleResolveDispute = (outcome: DisputeResolutionOutcome) => {
+  const handleResolveDispute = async (outcome: DisputeResolutionOutcome) => {
     if (!job || job.status !== 'DISPUTED') return;
 
     const transition = assertTransition(job.status, 'CLOSED');
@@ -189,6 +190,18 @@ export function TrackingPage() {
 
     logJobTransition(job.id, job.status, 'CLOSED');
 
+    // Persist resolution: DISPUTED → CLOSED, dispute record, payout, and (server-side)
+    // trust events + optional unsuspend. Null means it didn't persist (usually an
+    // expired session) — surface it instead of faking a close the runner won't see.
+    const resolved = await services.jobs.resolveDispute(job.id, {
+      outcome,
+      unsuspend: opsUnsuspendRunner,
+    });
+    if (!resolved) {
+      setOpsResolveHint('Could not sync resolution to the server — sign out/in and retry (the runner won\'t see it until this succeeds).');
+      return;
+    }
+
     setJobs(prev => prev.map(j => j.id === job.id ? {
       ...j,
       status: 'CLOSED',
@@ -197,25 +210,30 @@ export function TrackingPage() {
     } : j));
 
     if (runnerId) {
-      appendTrustEvent(createTrustEvent({
-        runner_id: runnerId,
-        job_id: job.id,
-        type: 'ops_note_added',
-        description: `Mock ops resolved ${job.id} as "${label}" · payout=${payout}`,
-      }));
-
-      if (outcome === 'runner_at_fault') {
-        updateRunnerTrustRecord(runnerId, prev => applyDisputeRunnerFaultPenalty(prev));
-      }
-
-      if (opsUnsuspendRunner) {
-        updateRunnerTrustRecord(runnerId, prev => unsuspendRunner(prev));
+      if (isSupabaseAdapter) {
+        // Server RPC already logged trust events + suspension changes; pull them in.
+        await refreshData();
+      } else {
         appendTrustEvent(createTrustEvent({
           runner_id: runnerId,
           job_id: job.id,
-          type: 'unsuspension',
-          description: `Mock ops unsuspended runner after resolving ${job.id}`,
+          type: 'ops_note_added',
+          description: `Mock ops resolved ${job.id} as "${label}" · payout=${payout}`,
         }));
+
+        if (outcome === 'runner_at_fault') {
+          updateRunnerTrustRecord(runnerId, prev => applyDisputeRunnerFaultPenalty(prev));
+        }
+
+        if (opsUnsuspendRunner) {
+          updateRunnerTrustRecord(runnerId, prev => unsuspendRunner(prev));
+          appendTrustEvent(createTrustEvent({
+            runner_id: runnerId,
+            job_id: job.id,
+            type: 'unsuspension',
+            description: `Mock ops unsuspended runner after resolving ${job.id}`,
+          }));
+        }
       }
     }
 

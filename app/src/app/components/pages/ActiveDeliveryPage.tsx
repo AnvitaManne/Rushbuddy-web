@@ -1,16 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, defaultUser } from '../../context/AppContext';
-import { assertTransition } from '@/domain/jobTransitions';
-import type { JobStatus } from '@/domain/enums';
-import { computeDisputeWindowEndsAt } from '@/domain/paymentPolicy';
+import type { Job } from '@/domain/types';
 import {
   canMarkSenderUnreachable,
   canUseSecureDrop,
-  createMockDropoffEvidence,
-  markRunnerPayoutEarnedPatch,
   requiresOpsHold,
 } from '@/domain/failureHandling';
+import { services } from '@/services';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, AlertCircle, Phone,
   Clock, ArrowRight, KeyRound, PhoneMissed, ShieldAlert
@@ -18,17 +15,6 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 type DeliveryPhase = 'going_pickup' | 'condition_ack' | 'in_transit' | 'resolved';
-
-/**
- * Handoff completion is a single user action (correct code / secure drop) that the state
- * machine models as two hops: IN_TRANSIT → DELIVERED → PENDING_RATING. Validates both hops
- * with `assertTransition` before the caller applies the final `PENDING_RATING` patch.
- */
-function assertHandoffToPendingRating(status: JobStatus) {
-  const toDelivered = assertTransition(status, 'DELIVERED');
-  if (!toDelivered.ok) return toDelivered;
-  return assertTransition('DELIVERED', 'PENDING_RATING');
-}
 
 const RUNNER_LIVE_STATUSES = ['MATCHED', 'IN_TRANSIT', 'ISSUE_REPORTED', 'PENDING_RATING', 'DISPUTED', 'CLOSED'] as const;
 
@@ -85,30 +71,33 @@ export function ActiveDeliveryPage() {
 
   const canAckCondition = job?.risk === 'Low' || photoCaptured;
 
-  const handleConditionAck = async () => {
-    if (!job || !canAckCondition) return;
-    const result = assertTransition(job.status, 'IN_TRANSIT');
-    if (!result.ok) { return; }
-    setCondAckLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    setJobs(prev => prev.map(j => j.id === job.id ? {
-      ...j,
-      status: 'IN_TRANSIT',
-      pickup_confirmed_at: new Date().toISOString(),
-      condition_acknowledged: true,
-      photo_url: photoCaptured ? `mock://pickup/${j.id}.jpg` : j.photo_url,
-    } : j));
-    setPhase('in_transit');
-    setCondAckLoading(false);
+  // Merge a service-returned job into local state (preserves display-only + local
+  // fields the backend doesn't persist, e.g. photo_url/eta). Returns false on null.
+  const applyJob = (updated: Job | null, localPatch: Partial<Job> = {}) => {
+    if (!updated) return false;
+    setJobs(prev => prev.map(j => (j.id === updated.id ? { ...j, ...updated, ...localPatch } : j)));
+    return true;
   };
 
-  const handleConfirmCode = () => {
+  const handleConditionAck = async () => {
+    if (!job || !canAckCondition) return;
+    setCondAckLoading(true);
+    const localPhotoUrl = photoCaptured ? `mock://pickup/${job.id}.jpg` : undefined;
+    const updated = await services.jobs.acknowledgePickup(job.id, { photo_url: localPhotoUrl });
+    setCondAckLoading(false);
+    if (!applyJob(updated, localPhotoUrl ? { photo_url: localPhotoUrl } : {})) return;
+    setPhase('in_transit');
+  };
+
+  const handleConfirmCode = async () => {
     if (!job) return;
     if (codeAttemptsLeft <= 0) {
       setCodeError('Handoff code locked after 3 wrong tries. Use “Sender not answering?” or Report an Issue.');
       return;
     }
-    if (codeInput.trim() !== job.confirmation_code) {
+    // Server verifies the code against the stored value; null = wrong code.
+    const updated = await services.jobs.completeHandoff(job.id, codeInput.trim());
+    if (!updated) {
       const left = codeAttemptsLeft - 1;
       setCodeAttemptsLeft(left);
       setCodeInput('');
@@ -119,69 +108,37 @@ export function ActiveDeliveryPage() {
       }
       return;
     }
-    const result = assertHandoffToPendingRating(job.status);
-    if (!result.ok) { setCodeError(result.error); return; }
-    const delivered_at = new Date().toISOString();
-    setJobs(prev => prev.map(j => j.id === job.id ? {
-      ...j,
-      status: 'PENDING_RATING',
-      delivered_at,
-      dispute_window_ends_at: computeDisputeWindowEndsAt(delivered_at),
-      ...markRunnerPayoutEarnedPatch(),
-    } : j));
+    applyJob(updated);
     setCodeError('');
-    setPhase('resolved');
-    navigate('/rate', { state: { jobId: job.id } });
-  };
-
-  const handleLogContactAttempt = () => {
-    if (!job) return;
-    setJobs(prev => prev.map(j => j.id === job.id ? {
-      ...j,
-      no_answer_contact_attempts: (j.no_answer_contact_attempts ?? 0) + 1,
-      no_answer_at: j.no_answer_at ?? new Date().toISOString(),
-    } : j));
-  };
-
-  const handleSecureDrop = () => {
-    if (!job) return;
-    const result = assertHandoffToPendingRating(job.status);
-    if (!result.ok) return;
-    const delivered_at = new Date().toISOString();
-    const evidence = createMockDropoffEvidence(job.id);
-    setJobs(prev => prev.map(j => j.id === job.id ? {
-      ...j,
-      status: 'PENDING_RATING',
-      delivered_at,
-      dispute_window_ends_at: computeDisputeWindowEndsAt(delivered_at),
-      no_answer_resolution: 'secure_drop',
-      dropoff_secure_location: secureLocation || 'Left at door / reception, per policy',
-      ...evidence,
-      ...markRunnerPayoutEarnedPatch(),
-    } : j));
-    navigate('/rate', { state: { jobId: job.id } });
-  };
-
-  const handleHoldForOps = () => {
-    if (!job) return;
-    const result = assertTransition(job.status, 'ISSUE_REPORTED');
-    if (!result.ok) return;
-    setJobs(prev => prev.map(j => j.id === job.id ? {
-      ...j,
-      status: 'ISSUE_REPORTED',
-      ops_notified: true,
-      no_answer_resolution: 'hold_for_ops',
-      ...markRunnerPayoutEarnedPatch(),
-    } : j));
+    // Runner stays on the "Handoff complete" screen; the SENDER pays/rates on their side.
     setPhase('resolved');
   };
 
-  const handleIssue = () => {
+  const handleLogContactAttempt = async () => {
     if (!job) return;
-    const result = assertTransition(job.status, 'ISSUE_REPORTED');
-    if (result.ok) {
-      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'ISSUE_REPORTED', ops_notified: true } : j));
-    }
+    applyJob(await services.jobs.reportNoAnswer(job.id, { kind: 'contact_attempt' }));
+  };
+
+  const handleSecureDrop = async () => {
+    if (!job) return;
+    const updated = await services.jobs.reportNoAnswer(job.id, {
+      kind: 'secure_drop',
+      location: secureLocation,
+    });
+    if (!applyJob(updated)) return;
+    // Delivery is done from the runner's side; the sender handles payment/rating.
+    setPhase('resolved');
+  };
+
+  const handleHoldForOps = async () => {
+    if (!job) return;
+    if (!applyJob(await services.jobs.reportNoAnswer(job.id, { kind: 'hold_for_ops' }))) return;
+    setPhase('resolved');
+  };
+
+  const handleIssue = async () => {
+    if (!job) return;
+    applyJob(await services.jobs.reportIssue(job.id));
     setShowIssuePanel(false);
   };
 

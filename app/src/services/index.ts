@@ -11,7 +11,10 @@ import { createMockPaymentService } from './mock/mockPaymentService';
 import { createMockTrustService } from './mock/mockTrustService';
 import {
   createSupabaseAuthService,
+  createSupabaseJobService,
   createSupabaseOrganizationService,
+  createSupabasePaymentService,
+  createSupabaseTrustService,
 } from './supabase';
 import type {
   AppServices,
@@ -158,7 +161,7 @@ export function createMockServices(): AppServices {
 }
 
 /**
- * Hybrid: Supabase auth + organizations; mock jobs / payments / trust.
+ * Hybrid: Supabase auth + organizations + jobs; mock payments / trust.
  * Requires VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (see supabaseClient).
  */
 export function createSupabaseServices(): AppServices {
@@ -170,14 +173,16 @@ export function createSupabaseServices(): AppServices {
   }
   return {
     auth: createSupabaseAuthService(supabase),
-    jobs: createMockJobService(jobStoreFacade),
-    payments: createMockPaymentService(jobStoreFacade),
-    trust: createMockTrustService(),
+    jobs: createSupabaseJobService(supabase),
+    payments: createSupabasePaymentService(supabase),
+    trust: createSupabaseTrustService(supabase),
     organizations: createSupabaseOrganizationService(supabase),
   };
 }
 
-export const services =
-  import.meta.env.VITE_DATA_ADAPTER === 'supabase'
-    ? createSupabaseServices()
-    : createMockServices();
+/** True when the app is running against Supabase (vs. in-memory mocks). */
+export const isSupabaseAdapter = import.meta.env.VITE_DATA_ADAPTER === 'supabase';
+
+export const services = isSupabaseAdapter
+  ? createSupabaseServices()
+  : createMockServices();

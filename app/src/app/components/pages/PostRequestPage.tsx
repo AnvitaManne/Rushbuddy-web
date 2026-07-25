@@ -10,6 +10,7 @@ import {
 } from '@/domain/jobHelpers';
 import { validatePostRequestDraft } from '@/domain/postingValidation';
 import { DECLARED_VALUE_MAX_INR } from '@/domain/constants';
+import { services } from '@/services';
 import {
   FileText, Coffee, Pill, Box, ChevronRight, AlertTriangle,
   MapPin, AlertCircle, Info, Package, Clock, CalendarClock, Route
@@ -175,7 +176,6 @@ export function PostRequestPage() {
     if (validationErrors.length) { setFormErrors(validationErrors); return; }
 
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
 
     const created_at = new Date().toISOString();
 
@@ -211,11 +211,26 @@ export function PostRequestPage() {
       distance: jobType === 'intercity' ? 'corridor' : '0.8 km',
     };
 
-    setJobs(prev => [newJob, ...prev]);
-    setActiveJob(newJob);
-    setCurrentRole('sender');
-    setLoading(false);
-    navigate('/sender/tracking');
+    try {
+      // Mock adapter updates AppContext `jobs` via the bound store; the Supabase
+      // adapter inserts the row and returns it with a real id + confirmation code.
+      const created = await services.jobs.createJob(newJob);
+      // Upsert into jobs so Tracking finds it in both modes (idempotent for mock).
+      setJobs(prev =>
+        prev.some(j => j.id === created.id)
+          ? prev.map(j => (j.id === created.id ? created : j))
+          : [created, ...prev],
+      );
+      setActiveJob(created);
+      setCurrentRole('sender');
+      navigate('/sender/tracking');
+    } catch (err) {
+      setFormErrors([
+        err instanceof Error ? err.message : 'Could not post request. Please try again.',
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

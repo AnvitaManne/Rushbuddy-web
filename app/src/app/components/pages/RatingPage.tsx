@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useApp, defaultUser } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
 import { getAllowedPaymentMethods } from '@/domain/paymentPolicy';
 import { createTrustEvent, isTheftLikeDispute, suspendRunner } from '@/domain/trustOps';
+import { services, isSupabaseAdapter } from '@/services';
 import type { PaymentMethod } from '@/domain/enums';
 import { Star, AlertCircle, CheckCircle2, Shield, Smartphone, Banknote, CreditCard } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -18,7 +19,7 @@ const PAYMENT_LABELS: Record<PaymentMethod, { label: string; icon: React.ReactNo
 const DISPUTE_TYPES = ['Item damaged', 'Not delivered', 'Wrong item'];
 
 export function RatingPage() {
-  const { jobs, setJobs, user, appendTrustEvent, updateRunnerTrustRecord } = useApp();
+  const { jobs, setJobs, user, appendTrustEvent, updateRunnerTrustRecord, refreshData } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const jobId = (location.state as { jobId?: string } | null)?.jobId;
@@ -31,6 +32,13 @@ export function RatingPage() {
     || jobs.find(j => j.sender_id === uid && j.status === 'PENDING_RATING')
     || jobs.find(j => j.sender_id === uid && j.status === 'DELIVERED')
     || jobs.find(j => j.sender_id === uid && j.status === 'ISSUE_REPORTED');
+
+  // Payment & rating are the sender's job. A runner who reaches this route (e.g. an
+  // old link) is bounced back to their active-delivery view.
+  const isSender = !job || job.sender_id === uid;
+  useEffect(() => {
+    if (job && !isSender) navigate('/runner/active', { replace: true });
+  }, [job, isSender, navigate]);
 
   const allowedMethods = job ? getAllowedPaymentMethods(job) : (['upi', 'phonepe', 'cash'] as PaymentMethod[]);
 
@@ -52,8 +60,13 @@ export function RatingPage() {
 
   const canDispute = job ? assertTransition(job.status, 'DISPUTED').ok : false;
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
     if (!job) return;
+    try {
+      await services.payments.recordPayment(job.id, { method: paymentMethod, tip_amount: tip });
+    } catch (err) {
+      console.warn('[RushBuddy] recordPayment failed', err);
+    }
     setJobs(prev => prev.map(j => j.id === job.id ? {
       ...j,
       payment_method: paymentMethod,
@@ -69,7 +82,13 @@ export function RatingPage() {
     const result = assertTransition(job.status, 'CLOSED');
     if (!result.ok) return;
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
+    // Persist rating (+ payment upsert) then the terminal close so both accounts sync.
+    try {
+      await services.payments.recordPayment(job.id, { method: paymentMethod, tip_amount: tip, rating: stars });
+    } catch (err) {
+      console.warn('[RushBuddy] rating persist failed', err);
+    }
+    await services.jobs.closeJob(job.id);
     setJobs(prev => prev.map(j => j.id === job.id ? {
       ...j,
       status: 'CLOSED',
@@ -88,30 +107,45 @@ export function RatingPage() {
     const result = assertTransition(job.status, 'DISPUTED');
     if (!result.ok) { setDisputeError(result.error); return; }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
+
+    // Persist the dispute (supabase RPC also suspends the runner on theft-like types).
+    const updated = await services.jobs.fileDispute(job.id, {
+      dispute_type: disputeType || 'Not specified',
+      description: disputeDesc,
+    });
+    if (!updated) {
+      setLoading(false);
+      setDisputeError('Could not file the dispute — check you are signed in and retry.');
+      return;
+    }
 
     setJobs(prev => prev.map(j => j.id === job.id ? {
       ...j,
-      status: 'DISPUTED',
+      ...updated,
       dispute_type: disputeType || 'Not specified',
       dispute_description: disputeDesc,
       disputed_at: new Date().toISOString(),
     } : j));
 
     if (isTheftLikeDispute(disputeType) && job.runner_id) {
-      appendTrustEvent(createTrustEvent({
-        runner_id: job.runner_id,
-        job_id: job.id,
-        type: 'theft_escalation',
-        description: `Theft-like dispute "${disputeType}" on ${job.id} — escalated for investigation (mock).`,
-      }));
-      appendTrustEvent(createTrustEvent({
-        runner_id: job.runner_id,
-        job_id: job.id,
-        type: 'suspension',
-        description: `Runner suspended pending theft investigation on ${job.id} (mock).`,
-      }));
-      updateRunnerTrustRecord(job.runner_id, prev => suspendRunner(prev, `Theft escalation: "${disputeType}" dispute`));
+      if (isSupabaseAdapter) {
+        // Server-side RPC already logged escalation + suspension; pull the truth in.
+        await refreshData();
+      } else {
+        appendTrustEvent(createTrustEvent({
+          runner_id: job.runner_id,
+          job_id: job.id,
+          type: 'theft_escalation',
+          description: `Theft-like dispute "${disputeType}" on ${job.id} — escalated for investigation (mock).`,
+        }));
+        appendTrustEvent(createTrustEvent({
+          runner_id: job.runner_id,
+          job_id: job.id,
+          type: 'suspension',
+          description: `Runner suspended pending theft investigation on ${job.id} (mock).`,
+        }));
+        updateRunnerTrustRecord(job.runner_id, prev => suspendRunner(prev, `Theft escalation: "${disputeType}" dispute`));
+      }
     }
 
     setLoading(false);

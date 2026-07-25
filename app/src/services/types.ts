@@ -16,6 +16,7 @@ import type {
   SuspensionStatus,
   UserGender,
 } from '@/domain/enums';
+import type { DisputeResolutionOutcome } from '@/domain/trustOps';
 
 // ---------------------------------------------------------------------------
 // Supporting DTOs (colocated until domain types catch up — Phase 9 checklist)
@@ -74,6 +75,12 @@ export interface AuthService {
   signOut(): Promise<void>;
 }
 
+/** No-answer resolution payloads for `JobService.reportNoAnswer`. */
+export type ReportNoAnswerInput =
+  | { kind: 'contact_attempt' }
+  | { kind: 'secure_drop'; location?: string }
+  | { kind: 'hold_for_ops' };
+
 /** Job lifecycle persistence (today: `jobs` array in AppContext). */
 export interface JobService {
   listJobs(): Promise<Job[]>;
@@ -83,6 +90,27 @@ export interface JobService {
   /** Atomic accept when a real backend exists; mock updates MATCHED fields. */
   acceptJob(jobId: string, runner: Pick<User, 'id' | 'name' | 'rating' | 'hostel_block'>): Promise<Job | null>;
   removeJob(id: string): Promise<boolean>;
+
+  // --- Lifecycle (Phase 14): persisted transitions + server-side handoff verify ---
+  /** MATCHED → IN_TRANSIT. `photo_url` persistence is deferred (Storage phase). */
+  acknowledgePickup(jobId: string, options?: { photo_url?: string }): Promise<Job | null>;
+  /** IN_TRANSIT → PENDING_RATING. Returns null when the code is wrong. */
+  completeHandoff(jobId: string, confirmationCode: string): Promise<Job | null>;
+  /** No-answer protocol: contact attempt / secure drop (Low) / hold for ops (Fragile/Valuable). */
+  reportNoAnswer(jobId: string, input: ReportNoAnswerInput): Promise<Job | null>;
+  /** Generic runner issue → ISSUE_REPORTED. */
+  reportIssue(jobId: string): Promise<Job | null>;
+  /** Sender closes a finished/held job → CLOSED. */
+  closeJob(jobId: string): Promise<Job | null>;
+
+  // --- Disputes (Phase 15): persisted so they sync across accounts ---
+  /** Sender files a dispute → PENDING_RATING → DISPUTED (theft-like also suspends runner). */
+  fileDispute(jobId: string, input: { dispute_type: string; description: string }): Promise<Job | null>;
+  /** Sender/ops resolves a dispute → CLOSED with payout + optional unsuspend. */
+  resolveDispute(
+    jobId: string,
+    input: { outcome: DisputeResolutionOutcome; unsuspend?: boolean },
+  ): Promise<Job | null>;
 }
 
 /** Off-platform payment intent + tip/rating at close (today: fields on `Job`). */
