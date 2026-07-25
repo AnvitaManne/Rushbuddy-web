@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp, Job } from '../../context/AppContext';
+import { useApp, Job, defaultUser } from '../../context/AppContext';
 import { canRunnerSeeJob } from '@/domain/runnerEligibility';
+import { services } from '@/services';
 import {
   Zap, MapPin, Package, Clock, Filter, Star, Shield,
-  AlertCircle, ChevronRight, Lock, RefreshCw, FileText, Coffee, Pill, Box
+  AlertCircle, ChevronRight, Lock, RefreshCw, FileText, Coffee, Pill, Box, Ban
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,9 +28,11 @@ const riskBadge = (risk: string) => {
   );
 };
 
-function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string) => void; accepted: boolean }) {
+function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (id: string) => void; accepted: boolean; disabled?: boolean }) {
   const [accepting, setAccepting] = useState(false);
-  const isWomensRestricted =
+  // Informational only — the feed is already filtered by `canRunnerSeeJob`, so any job
+  // shown here is one this runner is eligible to accept.
+  const isWomensOnly =
     job.pickup_location_type === 'womens_hostel' || job.drop_location_type === 'womens_hostel';
   const timeSince = (() => {
     const diff = Date.now() - new Date(job.created_at).getTime();
@@ -40,7 +43,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
   })();
 
   const handleAccept = async () => {
-    if (isWomensRestricted || accepting) return;
+    if (accepting || disabled) return;
     setAccepting(true);
     await new Promise(r => setTimeout(r, 900));
     onAccept(job.id);
@@ -74,7 +77,7 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
         </div>
         <div className="flex items-center gap-2">
           {riskBadge(job.risk)}
-          {isWomensRestricted && (
+          {isWomensOnly && (
             <span className="text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1"
               style={{ background: '#1A0F2E', color: '#A78BFA', fontFamily: 'JetBrains Mono, monospace' }}>
               <Lock size={8} />
@@ -155,23 +158,23 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
               </motion.div>
               Accepted
             </div>
-          ) : isWomensRestricted ? (
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs"
-              style={{ background: '#0D0D20', border: '1px solid #2D1E45', color: '#6B7280' }}>
-              <Lock size={11} />
-              Restricted
-            </div>
           ) : (
             <button
               onClick={handleAccept}
-              disabled={accepting}
+              disabled={accepting || disabled}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
-              style={{ background: accepting ? '#0A2030' : 'linear-gradient(135deg, #06B6D4, #0EA5E9)', minWidth: 110 }}
+              style={{ background: disabled ? '#1E2D45' : accepting ? '#0A2030' : 'linear-gradient(135deg, #06B6D4, #0EA5E9)', minWidth: 110 }}
+              title={disabled ? 'Account suspended — cannot accept' : `Accept for ₹${job.posted_price}`}
             >
               {accepting ? (
                 <>
                   <div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                   Accepting...
+                </>
+              ) : disabled ? (
+                <>
+                  <Ban size={13} />
+                  Suspended
                 </>
               ) : (
                 <>
@@ -188,34 +191,75 @@ function JobCard({ job, onAccept, accepted }: { job: Job; onAccept: (id: string)
 }
 
 export function RunnerFeedPage() {
-  const { jobs, setJobs, setCurrentRole, user } = useApp();
+  const { jobs, setJobs, setActiveJob, setCurrentRole, user } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('All');
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
+  const [raceNotice, setRaceNotice] = useState<string | null>(null);
+
+  // Demo fallback: Home / mocks use u1 even when session user is briefly null.
+  const runner = user ?? defaultUser;
+  const isSuspended = runner.suspension_status === 'suspended';
 
   const openJobs = jobs.filter(
-    j => j.status === 'OPEN' && user && canRunnerSeeJob(user, j),
+    j => j.status === 'OPEN' && canRunnerSeeJob(runner, j),
   );
   const filters = ['All', 'Document', 'Food', 'Medicine', 'Object'];
   const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);
 
-  const handleAccept = (jobId: string) => {
+  const handleAccept = async (jobId: string) => {
+    if (isSuspended) return;
+    setRaceNotice(null);
+
+    const updated = await services.jobs.acceptJob(jobId, {
+      id: runner.id,
+      name: runner.name,
+      rating: runner.rating,
+      hostel_block: runner.hostel_block,
+    });
+
+    // Lost the accept race (or job no longer OPEN) — refresh so it drops off the feed.
+    if (!updated) {
+      setRaceNotice('That job was just taken by another runner.');
+      try {
+        const fresh = await services.jobs.listJobs();
+        setJobs(fresh);
+      } catch (err) {
+        console.warn('[RushBuddy] feed refresh after race failed', err);
+      }
+      return;
+    }
+
+    // Reflect the MATCHED job locally (preserve display-only hints like eta/distance).
+    setJobs(prev => prev.map(j => (j.id === updated.id ? { ...j, ...updated } : j)));
+    setActiveJob(updated);
     setCurrentRole('runner');
     setAcceptedIds(prev => new Set(prev).add(jobId));
-    setJobs(prev => prev.map(j => j.id === jobId ? {
-      ...j,
-      status: 'MATCHED',
-      runner_id: 'u1',
-      runner_name: 'You',
-      runner_rating: 4.8,
-      matched_at: new Date().toISOString(),
-      agreed_price: j.posted_price,
-    } : j));
     setTimeout(() => navigate('/runner/active'), 1200);
   };
 
   return (
     <div className="p-4 md:p-6 pb-24 md:pb-6 space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+
+      {/* Suspension banner */}
+      {isSuspended && (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
+          style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+          <Ban size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs" style={{ color: '#F87171' }}>
+            Your runner account is suspended and cannot accept new jobs. Contact ops to appeal.
+          </p>
+        </div>
+      )}
+
+      {/* Accept-race notice */}
+      {raceNotice && (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
+          style={{ background: '#1A1005', border: '1px solid #3B2A0A' }}>
+          <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs" style={{ color: '#FBBF24' }}>{raceNotice}</p>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -290,10 +334,14 @@ export function RunnerFeedPage() {
           >
             <Zap size={28} className="text-slate-600 mx-auto mb-3" />
             <p className="text-sm" style={{ color: '#475569' }}>
-              No open jobs {filter !== 'All' ? `for ${filter}` : ''} right now.
+              {isSuspended
+                ? 'Feed locked while suspended.'
+                : `No open jobs ${filter !== 'All' ? `for ${filter}` : ''} right now.`}
             </p>
             <p className="text-xs mt-1" style={{ color: '#334155' }}>
-              New requests show up in real time.
+              {isSuspended
+                ? 'Resolve the suspension to browse jobs again.'
+                : 'Post a request as Sender, or run __rushbuddyDev.loadPilotScenarios() in the console.'}
             </p>
           </motion.div>
         ) : (
@@ -304,6 +352,7 @@ export function RunnerFeedPage() {
                 job={job}
                 onAccept={handleAccept}
                 accepted={acceptedIds.has(job.id)}
+                disabled={isSuspended}
               />
             ))}
           </div>

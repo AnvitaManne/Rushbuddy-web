@@ -1,54 +1,163 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { useApp } from '../../context/AppContext';
-import { Star, AlertCircle, CheckCircle2, Shield, Smartphone, Banknote } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
+import { useApp, defaultUser } from '../../context/AppContext';
+import { assertTransition } from '@/domain/jobTransitions';
+import { getAllowedPaymentMethods } from '@/domain/paymentPolicy';
+import { createTrustEvent, isTheftLikeDispute, suspendRunner } from '@/domain/trustOps';
+import { services, isSupabaseAdapter } from '@/services';
+import type { PaymentMethod } from '@/domain/enums';
+import { Star, AlertCircle, CheckCircle2, Shield, Smartphone, Banknote, CreditCard } from 'lucide-react';
+import { motion } from 'motion/react';
 
 const TIPS = [0, 5, 10, 20];
-const PAYMENT_METHODS = [
-  { id: 'upi', label: 'UPI', icon: <Smartphone size={14} /> },
-  { id: 'phonepe', label: 'PhonePe', icon: <Smartphone size={14} /> },
-  { id: 'cash', label: 'Cash', icon: <Banknote size={14} /> },
-];
+const PAYMENT_LABELS: Record<PaymentMethod, { label: string; icon: React.ReactNode }> = {
+  upi: { label: 'UPI', icon: <Smartphone size={14} /> },
+  phonepe: { label: 'PhonePe', icon: <CreditCard size={14} /> },
+  cash: { label: 'Cash', icon: <Banknote size={14} /> },
+};
+
+const DISPUTE_TYPES = ['Item damaged', 'Not delivered', 'Wrong item'];
 
 export function RatingPage() {
-  const { jobs, setJobs } = useApp();
+  const { jobs, setJobs, user, appendTrustEvent, updateRunnerTrustRecord, refreshData } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const jobId = (location.state as { jobId?: string } | null)?.jobId;
+  const uid = user?.id ?? defaultUser.id;
 
-  const job = jobs.find(j => j.sender_id === 'u1' && j.status === 'DELIVERED')
-    || jobs.find(j => j.sender_id === 'u1' && ['CLOSED', 'PENDING_RATING', 'DELIVERED'].includes(j.status))
-    || jobs.find(j => j.sender_id === 'u1');
+  // Prefer explicit jobId from navigation (simulate / home / tracking).
+  // Fall back by sender + payable status — never require user to be non-null.
+  const job =
+    (jobId ? jobs.find(j => j.id === jobId) : undefined)
+    || jobs.find(j => j.sender_id === uid && j.status === 'PENDING_RATING')
+    || jobs.find(j => j.sender_id === uid && j.status === 'DELIVERED')
+    || jobs.find(j => j.sender_id === uid && j.status === 'ISSUE_REPORTED');
+
+  // Payment & rating are the sender's job. A runner who reaches this route (e.g. an
+  // old link) is bounced back to their active-delivery view.
+  const isSender = !job || job.sender_id === uid;
+  useEffect(() => {
+    if (job && !isSender) navigate('/runner/active', { replace: true });
+  }, [job, isSender, navigate]);
+
+  const allowedMethods = job ? getAllowedPaymentMethods(job) : (['upi', 'phonepe', 'cash'] as PaymentMethod[]);
 
   const [stars, setStars] = useState(0);
   const [hoveredStar, setHoveredStar] = useState(0);
   const [tip, setTip] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState('upi');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(allowedMethods[0] ?? 'upi');
+  const [paymentConfirmed, setPaymentConfirmed] = useState(job?.payment_status === 'paid');
   const [disputeMode, setDisputeMode] = useState(false);
   const [disputeType, setDisputeType] = useState('');
   const [disputeDesc, setDisputeDesc] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [disputeError, setDisputeError] = useState('');
 
   const runnerName = job?.runner_name && job.runner_name !== 'You' ? job.runner_name : 'Karthik R';
   const basePrice = job?.agreed_price ?? job?.posted_price ?? 40;
   const total = basePrice + tip;
 
-  const handleSubmit = async () => {
-    if (stars === 0 && !disputeMode) return;
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    if (job) {
-      setJobs(prev => prev.map(j => j.id === job.id ? {
-        ...j,
-        status: disputeMode ? 'DISPUTED' : 'CLOSED',
-        rating: stars,
-        tip_amount: tip,
-      } : j));
+  const canDispute = job ? assertTransition(job.status, 'DISPUTED').ok : false;
+
+  const handleConfirmPayment = async () => {
+    if (!job) return;
+    try {
+      await services.payments.recordPayment(job.id, { method: paymentMethod, tip_amount: tip });
+    } catch (err) {
+      console.warn('[RushBuddy] recordPayment failed', err);
     }
+    setJobs(prev => prev.map(j => j.id === job.id ? {
+      ...j,
+      payment_method: paymentMethod,
+      payment_status: 'paid',
+      paid_at: new Date().toISOString(),
+      tip_amount: tip,
+    } : j));
+    setPaymentConfirmed(true);
+  };
+
+  const handleRateAndClose = async () => {
+    if (!job || stars === 0) return;
+    const result = assertTransition(job.status, 'CLOSED');
+    if (!result.ok) return;
+    setLoading(true);
+    // Persist rating (+ payment upsert) then the terminal close so both accounts sync.
+    try {
+      await services.payments.recordPayment(job.id, { method: paymentMethod, tip_amount: tip, rating: stars });
+    } catch (err) {
+      console.warn('[RushBuddy] rating persist failed', err);
+    }
+    await services.jobs.closeJob(job.id);
+    setJobs(prev => prev.map(j => j.id === job.id ? {
+      ...j,
+      status: 'CLOSED',
+      rating: stars,
+      tip_amount: tip,
+      closed_at: new Date().toISOString(),
+    } : j));
     setLoading(false);
     setSubmitted(true);
     await new Promise(r => setTimeout(r, 1500));
     navigate('/home');
+  };
+
+  const handleDispute = async () => {
+    if (!job) return;
+    const result = assertTransition(job.status, 'DISPUTED');
+    if (!result.ok) { setDisputeError(result.error); return; }
+    setLoading(true);
+
+    // Persist the dispute (supabase RPC also suspends the runner on theft-like types).
+    const updated = await services.jobs.fileDispute(job.id, {
+      dispute_type: disputeType || 'Not specified',
+      description: disputeDesc,
+    });
+    if (!updated) {
+      setLoading(false);
+      setDisputeError('Could not file the dispute — check you are signed in and retry.');
+      return;
+    }
+
+    setJobs(prev => prev.map(j => j.id === job.id ? {
+      ...j,
+      ...updated,
+      dispute_type: disputeType || 'Not specified',
+      dispute_description: disputeDesc,
+      disputed_at: new Date().toISOString(),
+    } : j));
+
+    if (isTheftLikeDispute(disputeType) && job.runner_id) {
+      if (isSupabaseAdapter) {
+        // Server-side RPC already logged escalation + suspension; pull the truth in.
+        await refreshData();
+      } else {
+        appendTrustEvent(createTrustEvent({
+          runner_id: job.runner_id,
+          job_id: job.id,
+          type: 'theft_escalation',
+          description: `Theft-like dispute "${disputeType}" on ${job.id} — escalated for investigation (mock).`,
+        }));
+        appendTrustEvent(createTrustEvent({
+          runner_id: job.runner_id,
+          job_id: job.id,
+          type: 'suspension',
+          description: `Runner suspended pending theft investigation on ${job.id} (mock).`,
+        }));
+        updateRunnerTrustRecord(job.runner_id, prev => suspendRunner(prev, `Theft escalation: "${disputeType}" dispute`));
+      }
+    }
+
+    setLoading(false);
+    setSubmitted(true);
+    await new Promise(r => setTimeout(r, 1500));
+    navigate('/home');
+  };
+
+  const handleSubmit = () => {
+    if (disputeMode) handleDispute();
+    else if (!paymentConfirmed) handleConfirmPayment();
+    else handleRateAndClose();
   };
 
   const ratingLabels = ['', 'Poor', 'Below Average', 'Average', 'Good', 'Excellent'];
@@ -70,7 +179,9 @@ export function RatingPage() {
           </h2>
           <p className="text-sm" style={{ color: '#64748B' }}>
             {disputeMode
-              ? 'Ops team will review within 4 hours.'
+              ? isTheftLikeDispute(disputeType)
+                ? 'Theft escalation logged — runner suspended pending review. Ops team will review within 4 hours.'
+                : 'Ops team will review within 4 hours.'
               : `You rated ${runnerName} ${stars} stars. Job closed.`}
           </p>
           <div className="mt-4 flex justify-center gap-1">
@@ -84,17 +195,37 @@ export function RatingPage() {
     );
   }
 
+  if (!job) {
+    return (
+      <div className="p-6 text-center space-y-3" style={{ fontFamily: 'Inter, sans-serif' }}>
+        <p className="text-sm" style={{ color: '#64748B' }}>No delivery ready to rate yet.</p>
+        <button
+          onClick={() => navigate('/home')}
+          className="px-4 py-2 rounded-lg text-sm text-cyan-400"
+          style={{ background: '#061620', border: '1px solid #0E2D3D' }}
+        >
+          Back to Home
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-md space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
 
       {/* Header */}
       <div>
         <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-          FLOW 5 · RATING & PAYMENT
+          {paymentConfirmed ? 'STEP 2 · RATE YOUR BUDDY' : 'STEP 1 · CONFIRM PAYMENT'}
         </div>
         <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
-          Rate your Buddy
+          {paymentConfirmed ? 'How was the delivery?' : 'Pay your Buddy'}
         </h1>
+        <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+          {paymentConfirmed
+            ? 'Stars only — tip and payment were already confirmed.'
+            : 'Choose tip + payment method first. Rating comes next.'}
+        </p>
       </div>
 
       {/* Runner card */}
@@ -117,13 +248,13 @@ export function RatingPage() {
               Trust Score: 96 · 47 deliveries
             </div>
             <div className="text-xs mt-0.5" style={{ color: '#64748B' }}>
-              {job?.item_type} · {job?.pickup_location?.split(',')[0]} → {job?.drop_location?.split(',')[0]}
+              {job.item_type} · {job.pickup_location?.split(',')[0]} → {job.drop_location?.split(',')[0]}
             </div>
           </div>
         </div>
 
         {/* Stars */}
-        {!disputeMode && (
+        {!disputeMode && paymentConfirmed && (
           <div>
             <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
               HOW WAS YOUR DELIVERY?
@@ -157,13 +288,19 @@ export function RatingPage() {
             )}
           </div>
         )}
+
+        {!disputeMode && !paymentConfirmed && (
+          <div className="text-xs" style={{ color: '#475569' }}>
+            Tip + payment method below — then confirm. Rating is the next step.
+          </div>
+        )}
       </div>
 
-      {/* Tip selector */}
-      {!disputeMode && (
+      {/* Tip — part of payment (before confirm), not during rating */}
+      {!disputeMode && !paymentConfirmed && (
         <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
           <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
-            ADD A TIP
+            ADD A TIP (OPTIONAL)
           </div>
           <div className="grid grid-cols-4 gap-2">
             {TIPS.map(t => (
@@ -182,27 +319,17 @@ export function RatingPage() {
               </button>
             ))}
           </div>
-          {tip > 0 && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-[11px] mt-2"
-              style={{ color: '#64748B' }}
-            >
-              RushBuddy shows runners when a tip is added — it's a meaningful nudge. 💚
-            </motion.p>
-          )}
         </div>
       )}
 
       {/* Payment method */}
-      {!disputeMode && (
+      {!disputeMode && !paymentConfirmed && (
         <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
           <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
             PAYMENT METHOD
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {PAYMENT_METHODS.map(({ id, label, icon }) => (
+            {allowedMethods.map(id => (
               <button
                 key={id}
                 onClick={() => setPaymentMethod(id)}
@@ -213,11 +340,16 @@ export function RatingPage() {
                   color: paymentMethod === id ? '#22D3EE' : '#64748B',
                 }}
               >
-                {icon}
-                {label}
+                {PAYMENT_LABELS[id].icon}
+                {PAYMENT_LABELS[id].label}
               </button>
             ))}
           </div>
+          {job.handoff_mode === 'mode_2_landmark' && (
+            <p className="text-[10px] mt-2" style={{ color: '#475569' }}>
+              Cash is hidden for intercity (Mode 2) jobs — the receiver is off-campus and unverified in person.
+            </p>
+          )}
           {paymentMethod === 'cash' && (
             <p className="text-[10px] mt-2" style={{ color: '#475569' }}>
               Cash payments are recorded as intent but not verified. UPI escrow is coming in v2.
@@ -247,6 +379,12 @@ export function RatingPage() {
             <span className="text-sm font-medium text-white">Total</span>
             <span className="font-semibold text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.1rem' }}>₹{total}</span>
           </div>
+          {paymentConfirmed && (
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-400">
+              <CheckCircle2 size={11} />
+              Payment confirmed via {PAYMENT_LABELS[job.payment_method ?? paymentMethod].label}
+            </div>
+          )}
         </div>
       )}
 
@@ -266,7 +404,7 @@ export function RatingPage() {
           <div className="mb-3">
             <div className="text-xs mb-2" style={{ color: '#F87171' }}>Issue type</div>
             <div className="grid grid-cols-3 gap-2">
-              {['Item damaged', 'Not delivered', 'Wrong item'].map(t => (
+              {DISPUTE_TYPES.map(t => (
                 <button
                   key={t}
                   onClick={() => setDisputeType(t)}
@@ -292,6 +430,18 @@ export function RatingPage() {
             style={{ background: '#0D0303', border: '1px solid #3B1111' }}
           />
 
+          {isTheftLikeDispute(disputeType) && (
+            <p className="text-[10px] mt-2 text-red-300">
+              Theft-like reports ("{disputeType}") immediately suspend the runner and open a theft escalation pending ops review.
+            </p>
+          )}
+
+          {disputeError && (
+            <p className="text-[11px] mt-2 text-red-300 flex items-center gap-1">
+              <AlertCircle size={10} />{disputeError}
+            </p>
+          )}
+
           <p className="text-[10px] mt-2" style={{ color: '#6B2121' }}>
             Ops will review within 4 hours. Dispute window: 2 hours post-delivery. After that, job auto-closes.
           </p>
@@ -302,15 +452,15 @@ export function RatingPage() {
       <div className="space-y-3">
         <button
           onClick={handleSubmit}
-          disabled={loading || (!disputeMode && stars === 0)}
+          disabled={loading || (!disputeMode && paymentConfirmed && stars === 0) || (disputeMode && !canDispute)}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
           style={{
-            background: loading || (!disputeMode && stars === 0)
+            background: loading || (!disputeMode && paymentConfirmed && stars === 0) || (disputeMode && !canDispute)
               ? '#1E2D45'
               : disputeMode
                 ? 'linear-gradient(135deg, #EF4444, #DC2626)'
                 : 'linear-gradient(135deg, #06B6D4, #6366F1)',
-            color: (!disputeMode && stars === 0) ? '#475569' : 'white',
+            color: (!disputeMode && paymentConfirmed && stars === 0) ? '#475569' : 'white',
           }}
         >
           {loading ? (
@@ -320,13 +470,22 @@ export function RatingPage() {
             </>
           ) : disputeMode ? (
             'Submit Dispute'
+          ) : !paymentConfirmed ? (
+            `Confirm Payment · ₹${total}`
+          ) : stars === 0 ? (
+            'Pick a star rating to close'
           ) : (
-            `Confirm Payment & Rate · ₹${total}`
+            'Submit rating & close job'
           )}
         </button>
+        {!disputeMode && paymentConfirmed && stars === 0 && (
+          <p className="text-[10px] text-center" style={{ color: '#64748B' }}>
+            Button unlocks after you select 1–5 stars.
+          </p>
+        )}
 
         <button
-          onClick={() => { setDisputeMode(d => !d); setStars(0); }}
+          onClick={() => { setDisputeMode(d => !d); setStars(0); setDisputeError(''); }}
           className="w-full py-2.5 rounded-lg text-sm border transition-all"
           style={{
             background: '#0B1120',

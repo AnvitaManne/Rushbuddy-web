@@ -1,10 +1,65 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { Job, User } from '@/domain/types';
-import type { UserRole } from '@/domain/enums';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import type { Job, RunnerTrustRecord, TrustEvent, User } from '@/domain/types';
+import type { SuspensionStatus, UserGender, UserRole } from '@/domain/enums';
 import { createSampleJob, attachDevJobDebug, logJobTransition } from '@/domain/devJobDebug';
+import { createPilotScenarioJobs } from '@/domain/demoScenarios';
+import { bindMockJobStore, services } from '@/services';
+import { supabase } from '@/lib/supabaseClient';
 
 export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
+
+/**
+ * Fields that only live in local state today (payment + dispute persist in Phase 15).
+ * The background refetch re-applies these so it doesn't wipe them.
+ */
+const LOCAL_ONLY_JOB_FIELDS: (keyof Job)[] = [
+  'payment_method', 'payment_status', 'paid_at', 'tip_amount', 'rating',
+  'dispute_type', 'dispute_description', 'disputed_at',
+];
+
+const JOB_STATUS_RANK: Record<string, number> = {
+  OPEN: 0, MATCHED: 1, IN_TRANSIT: 2, DELIVERED: 3, ISSUE_REPORTED: 3,
+  PENDING_RATING: 4, DISPUTED: 5, CLOSED: 6,
+};
+
+/**
+ * Merge freshly fetched server jobs with the local copy so not-yet-persisted
+ * state (dispute filed, payment recorded, mock-ops close) survives the poll.
+ * Keeps the further-along status and re-applies local-only fields.
+ */
+function mergeServerJobs(local: Job[], server: Job[]): Job[] {
+  const localById = new Map(local.map((j) => [j.id, j]));
+  const merged = server.map((s) => {
+    const l = localById.get(s.id);
+    if (!l) return s;
+    const next: Job = { ...s };
+    for (const f of LOCAL_ONLY_JOB_FIELDS) {
+      if (next[f] === undefined && l[f] !== undefined) {
+        (next as Record<keyof Job, unknown>)[f] = l[f];
+      }
+    }
+    if ((JOB_STATUS_RANK[l.status] ?? 0) > (JOB_STATUS_RANK[s.status] ?? 0)) {
+      next.status = l.status;
+      next.closed_at = l.closed_at ?? next.closed_at;
+      next.runner_payout_status = l.runner_payout_status ?? next.runner_payout_status;
+    }
+    return next;
+  });
+  const serverIds = new Set(server.map((s) => s.id));
+  for (const l of local) {
+    if (!serverIds.has(l.id)) merged.push(l);
+  }
+  return merged;
+}
+
+/** Fields collected on Auth, applied onto `User` at Verify. */
+export interface PendingSignup {
+  email: string;
+  name: string;
+  hostel_block: string;
+  gender: UserGender;
+}
 
 interface AppContextType {
   user: User | null;
@@ -15,13 +70,55 @@ interface AppContextType {
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
   activeJob: Job | null;
   setActiveJob: (job: Job | null) => void;
+  /** @deprecated kept for backward compat — prefer `pendingSignup`. */
   pendingEmail: string;
   setPendingEmail: (email: string) => void;
+  pendingSignup: PendingSignup | null;
+  setPendingSignup: (signup: PendingSignup | null) => void;
   isAuthenticated: boolean;
   setIsAuthenticated: (v: boolean) => void;
+  /** False until mock boot or supabase session restore finishes. */
+  authReady: boolean;
+  trustEvents: TrustEvent[];
+  appendTrustEvent: (event: TrustEvent) => void;
+  runnerTrustRecords: Record<string, RunnerTrustRecord>;
+  updateRunnerTrustRecord: (
+    runnerId: string,
+    updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
+  ) => void;
+  /** Re-pull jobs + own suspension + trust from the backend (supabase mode; no-op on mock). */
+  refreshData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
+
+const isSupabaseAdapter = import.meta.env.VITE_DATA_ADAPTER === 'supabase';
+
+function emptyTrustRecord(runnerId: string): RunnerTrustRecord {
+  return { runner_id: runnerId, no_show_count: 0, suspension_status: 'active' };
+}
+
+function SessionRestoreGate() {
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center gap-3"
+      style={{ background: '#060A14', fontFamily: 'Inter, sans-serif' }}
+    >
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center"
+        style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
+      >
+        <span className="text-white font-bold text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          RB
+        </span>
+      </div>
+      <div className="w-5 h-5 rounded-full border-2 border-cyan-400/30 border-t-cyan-400 animate-spin" />
+      <p className="text-sm" style={{ color: '#64748B' }}>
+        Restoring session…
+      </p>
+    </div>
+  );
+}
 
 export const mockJobs: Job[] = [
   createSampleJob({
@@ -207,10 +304,180 @@ const defaultUser: User = {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole>(null);
-  const [jobs, setJobs] = useState<Job[]>(mockJobs);
+  // Supabase mode hydrates real jobs after login; mock mode seeds demo jobs.
+  const [jobs, setJobs] = useState<Job[]>(isSupabaseAdapter ? [] : mockJobs);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingSignup, setPendingSignup] = useState<PendingSignup | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authReady, setAuthReady] = useState(!isSupabaseAdapter);
+  const [trustEvents, setTrustEvents] = useState<TrustEvent[]>([]);
+  const [runnerTrustRecords, setRunnerTrustRecords] = useState<Record<string, RunnerTrustRecord>>({
+    u1: emptyTrustRecord('u1'),
+  });
+
+  // Keep mock JobService / PaymentService pointed at live React job state.
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
+  useEffect(() => {
+    bindMockJobStore({
+      getJobs: () => jobsRef.current,
+      setJobs: (next) => setJobs(next),
+    });
+  }, []);
+
+  // Slice 12.7 — restore Supabase session; mock boots immediately (authReady already true).
+  useEffect(() => {
+    if (!isSupabaseAdapter || !supabase) {
+      setAuthReady(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const current = await services.auth.getCurrentUser();
+        if (cancelled) return;
+        if (current) {
+          setUser(current);
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        console.warn('[RushBuddy] session restore failed', err);
+      } finally {
+        if (!cancelled) setAuthReady(true);
+      }
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setIsAuthenticated(false);
+        setPendingSignup(null);
+        setPendingEmail('');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Slice 13.6 / 14.4 / 15.4 — pull jobs (+ own suspension + trust) from the backend
+  // and keep them fresh across accounts via focus + light polling. We refetch through
+  // `listJobs` (privacy-safe: other users' confirmation codes are never returned)
+  // instead of a Realtime subscription, which would broadcast full rows (codes).
+  const refreshData = useCallback(async () => {
+    if (!isSupabaseAdapter || !user?.id) return;
+    try {
+      const list = await services.jobs.listJobs();
+      setJobs((prev) => mergeServerJobs(prev, list));
+
+      // Refresh the signed-in user's suspension so the runner feed gate stays current.
+      try {
+        const me = await services.auth.getCurrentUser();
+        if (me) {
+          setUser((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  suspension_status: me.suspension_status,
+                  no_show_count: me.no_show_count,
+                  trust_score: me.trust_score,
+                  rating: me.rating,
+                }
+              : prev,
+          );
+        }
+      } catch (err) {
+        console.warn('[RushBuddy] user refresh failed', err);
+      }
+
+      // Load trust events/records for runners on the user's jobs (sender-side banners).
+      const runnerIds = Array.from(
+        new Set(list.map((j) => j.runner_id).filter((id): id is string => !!id)),
+      );
+      if (runnerIds.length) {
+        const eventLists = await Promise.all(
+          runnerIds.map((id) => services.trust.getEventsForRunner(id).catch(() => [])),
+        );
+        setTrustEvents(eventLists.flat());
+        const records = await Promise.all(
+          runnerIds.map((id) =>
+            services.trust.getRunnerRecord(id).catch(() => emptyTrustRecord(id)),
+          ),
+        );
+        setRunnerTrustRecords((prev) => {
+          const next = { ...prev };
+          records.forEach((rec) => {
+            next[rec.runner_id] = rec;
+          });
+          return next;
+        });
+      }
+    } catch (err) {
+      console.warn('[RushBuddy] job refresh failed', err);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!isSupabaseAdapter) return;
+    if (!user?.id) {
+      setJobs([]);
+      return;
+    }
+
+    void refreshData();
+
+    const onFocus = () => void refreshData();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshData();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    const interval = window.setInterval(() => void refreshData(), 20_000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(interval);
+    };
+  }, [user?.id, refreshData]);
+
+  const appendTrustEvent = (event: TrustEvent) => {
+    setTrustEvents(prev => [event, ...prev]);
+  };
+
+  const updateRunnerTrustRecord = (
+    runnerId: string,
+    updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
+  ) => {
+    setRunnerTrustRecords(prev => {
+      const current = prev[runnerId] ?? emptyTrustRecord(runnerId);
+      const next = updater(current);
+      setUser(prevUser =>
+        prevUser && prevUser.id === runnerId
+          ? { ...prevUser, suspension_status: next.suspension_status }
+          : prevUser,
+      );
+      return { ...prev, [runnerId]: next };
+    });
+  };
+
+  const setRunnerSuspension = (
+    runnerId: string,
+    status: SuspensionStatus,
+    reason?: string,
+  ) => {
+    updateRunnerTrustRecord(runnerId, prev => ({
+      ...prev,
+      suspension_status: status,
+      suspended_at: status === 'suspended' ? new Date().toISOString() : undefined,
+      suspension_reason: status === 'suspended' ? reason : undefined,
+    }));
+  };
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -218,17 +485,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.debug(`[RushBuddy dev] ${mockJobs.length} mock jobs loaded`);
     mockJobs.forEach(j => logJobTransition(j.id, '(new)', j.status));
 
-    return attachDevJobDebug({ setJobs, setActiveJob });
+    return attachDevJobDebug({
+      setJobs,
+      setActiveJob,
+      createPilotJobs: createPilotScenarioJobs,
+      setRunnerSuspension,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSetUser = (u: User | null) => {
-    setUser(u || defaultUser);
-  };
+  if (!authReady) {
+    return <SessionRestoreGate />;
+  }
 
   return (
     <AppContext.Provider value={{
       user,
-      setUser: handleSetUser,
+      setUser,
       currentRole,
       setCurrentRole,
       jobs,
@@ -237,8 +510,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveJob,
       pendingEmail,
       setPendingEmail,
+      pendingSignup,
+      setPendingSignup,
       isAuthenticated,
       setIsAuthenticated,
+      authReady,
+      trustEvents,
+      appendTrustEvent,
+      runnerTrustRecords,
+      updateRunnerTrustRecord,
+      refreshData,
     }}>
       {children}
     </AppContext.Provider>

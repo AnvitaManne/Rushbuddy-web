@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router';
+import { NavLink, Outlet, useNavigate, useLocation, Navigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
+import { services } from '@/services';
 import {
   LayoutDashboard, Package, Zap, User, ChevronRight,
-  Shield, Star, TrendingUp, Bell, Menu, X, Activity,
-  LogOut, Settings, Layers, Radio
+  Shield, Bell, Menu, X, Activity,
+  LogOut, Layers, Radio
 } from 'lucide-react';
+
 
 const navItems = [
   { to: '/home', icon: LayoutDashboard, label: 'Command Center', desc: 'Overview' },
@@ -16,10 +18,35 @@ const navItems = [
 ];
 
 export function AppShell() {
-  const { user, currentRole } = useApp();
+  const {
+    user,
+    currentRole,
+    isAuthenticated,
+    setUser,
+    setIsAuthenticated,
+    setPendingSignup,
+    setPendingEmail,
+  } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await services.auth.signOut();
+    } catch (err) {
+      console.warn('[RushBuddy] signOut failed', err);
+    }
+    setUser(null);
+    setIsAuthenticated(false);
+    setPendingSignup(null);
+    setPendingEmail('');
+    navigate('/');
+  };
 
   const roleColor = currentRole === 'sender'
     ? 'text-violet-400 bg-violet-400/10 border-violet-400/30'
@@ -123,8 +150,9 @@ export function AppShell() {
               <span className="text-[10px] truncate" style={{ color: '#475569' }}>{user?.hostel_block || 'MH-C Block'}</span>
             </div>
             <button
-              onClick={() => navigate('/')}
+              onClick={handleSignOut}
               className="text-slate-600 hover:text-slate-400 transition-colors"
+              title="Sign out"
             >
               <LogOut size={13} />
             </button>

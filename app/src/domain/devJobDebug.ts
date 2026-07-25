@@ -1,4 +1,4 @@
-import type { JobStatus } from './enums';
+import type { JobStatus, SuspensionStatus } from './enums';
 import type { Job } from './types';
 import { assertTransition } from './jobTransitions';
 import {
@@ -7,6 +7,7 @@ import {
   generateConfirmationCode,
   resolveHandoffMode,
 } from './jobHelpers';
+import { _devFlags } from './failureHandling';
 
 /** Fields you may override when synthesizing mock / test jobs. */
 export type SampleJobOverrides = Partial<
@@ -112,6 +113,21 @@ export function createSampleJob(overrides: SampleJobOverrides = {}): Job {
     dropoff_photo_url: overrides.dropoff_photo_url,
     no_answer_at: overrides.no_answer_at,
     ops_notified: overrides.ops_notified,
+    no_answer_contact_attempts: overrides.no_answer_contact_attempts,
+    sender_response_at: overrides.sender_response_at,
+    no_answer_resolution: overrides.no_answer_resolution,
+    dropoff_secure_location: overrides.dropoff_secure_location,
+    dropoff_geotag: overrides.dropoff_geotag,
+    runner_payout_status: overrides.runner_payout_status,
+    payment_method: overrides.payment_method,
+    payment_status: overrides.payment_status,
+    paid_at: overrides.paid_at,
+    dispute_window_ends_at: overrides.dispute_window_ends_at,
+    closed_at: overrides.closed_at,
+    dispute_type: overrides.dispute_type,
+    dispute_description: overrides.dispute_description,
+    disputed_at: overrides.disputed_at,
+    declared_value: overrides.declared_value,
     created_at,
     matched_at: overrides.matched_at,
     pickup_confirmed_at: overrides.pickup_confirmed_at,
@@ -126,6 +142,14 @@ export function createSampleJob(overrides: SampleJobOverrides = {}): Job {
 export type DevJobDebugHandlers = {
   setJobs: (update: Job[] | ((prev: Job[]) => Job[])) => void;
   setActiveJob?: (job: Job | null) => void;
+  /** Provided by AppProvider to avoid a circular import with demoScenarios. */
+  createPilotJobs?: () => Job[];
+  /** Provided by AppProvider to suspend/unsuspend a runner's trust record + User.suspension_status. */
+  setRunnerSuspension?: (
+    runnerId: string,
+    status: SuspensionStatus,
+    reason?: string,
+  ) => void;
 };
 
 export type RushBuddyDevGlobal = {
@@ -135,6 +159,17 @@ export type RushBuddyDevGlobal = {
   addJob: (overrides?: SampleJobOverrides) => Job;
   /** Updates status with transition logging. */
   transitionJob: (jobId: string, to: JobStatus) => void;
+  /**
+   * Loads Phase 8 dogfooding fixtures (`PILOT-01`…`PILOT-12`).
+   * Removes any prior `PILOT-*` jobs, then prepends the fresh set.
+   */
+  loadPilotScenarios: () => Job[];
+  /** Toggles the no-answer wait-gate bypass (P0-04/P0-05 testing). */
+  bypassNoAnswerWait: (enabled: boolean) => void;
+  /** Suspends a runner (mock ops action / P0-06 testing). */
+  suspendRunner: (runnerId: string, reason?: string) => void;
+  /** Lifts a runner suspension. */
+  unsuspendRunner: (runnerId: string) => void;
 };
 
 declare global {
@@ -171,11 +206,47 @@ export function attachDevJobDebug(handlers: DevJobDebugHandlers): () => void {
         }),
       );
     },
+    loadPilotScenarios() {
+      const pilots = handlers.createPilotJobs?.() ?? [];
+      if (pilots.length === 0) {
+        console.warn(
+          '[RushBuddy dev] loadPilotScenarios() — no jobs (createPilotJobs not provided)',
+        );
+        return pilots;
+      }
+      handlers.setJobs(prev => {
+        const withoutPriorPilots = prev.filter(j => !j.id.startsWith('PILOT-'));
+        return [...pilots, ...withoutPriorPilots];
+      });
+      pilots.forEach(j => logJobTransition(j.id, '(new)', j.status));
+      console.info(
+        `[RushBuddy dev] loadPilotScenarios() — loaded ${pilots.length} pilot jobs:`,
+        pilots.map(j => `${j.id} (${j.status})`),
+      );
+      return pilots;
+    },
+    bypassNoAnswerWait(enabled) {
+      _devFlags.bypassNoAnswerWait = enabled;
+      console.info(`[RushBuddy dev] bypassNoAnswerWait(${enabled})`);
+    },
+    suspendRunner(runnerId, reason = 'Manual dev suspension') {
+      handlers.setRunnerSuspension?.(runnerId, 'suspended', reason);
+      console.info(`[RushBuddy dev] suspendRunner(${runnerId}) — ${reason}`);
+    },
+    unsuspendRunner(runnerId) {
+      handlers.setRunnerSuspension?.(runnerId, 'active');
+      console.info(`[RushBuddy dev] unsuspendRunner(${runnerId})`);
+    },
   };
 
   window.__rushbuddyDev = api;
   console.info(
-    '[RushBuddy dev] Helpers on window.__rushbuddyDev — addJob(), transitionJob(), logJobTransition(), createSampleJob()',
+    `[RushBuddy dev] window.__rushbuddyDev ready
+  loadPilotScenarios()     — seed PILOT-01…12 jobs for dogfooding
+  bypassNoAnswerWait(true) — skip 20-min no-answer wait
+  suspendRunner('u1') / unsuspendRunner('u1')
+  addJob({ ... }) / transitionJob(id, status)
+  Tip: soft-refresh clears all in-memory state`,
   );
 
   return () => {

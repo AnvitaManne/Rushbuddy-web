@@ -4,6 +4,8 @@ import type {
   JobStatus,
   JobType,
   LocationType,
+  PaymentMethod,
+  PaymentStatus,
   PurchaseType,
   RiskLevel,
   SuspensionStatus,
@@ -18,6 +20,8 @@ export type {
   JobStatus,
   JobType,
   LocationType,
+  PaymentMethod,
+  PaymentStatus,
   PurchaseType,
   RiskLevel,
   SuspensionStatus,
@@ -133,6 +137,36 @@ export interface Job {
   no_answer_at?: string;
   ops_notified?: boolean;
 
+  /** Number of contact attempts logged by the runner when the sender is unreachable at drop-off. */
+  no_answer_contact_attempts?: number;
+  /** Set when the sender responds after a no-answer attempt (clears the unreachable path). */
+  sender_response_at?: string;
+  /** How an unreachable-sender delivery was resolved. `Low` risk → secure_drop; Fragile/Valuable → hold_for_ops. */
+  no_answer_resolution?: 'secure_drop' | 'hold_for_ops';
+  /** Free-text description of where the item was left for a secure drop. */
+  dropoff_secure_location?: string;
+  /** Mock geotag captured with drop-off evidence. */
+  dropoff_geotag?: { lat: number; lng: number; accuracy_m: number; captured_at: string };
+
+  /** Runner payout lifecycle, independent of sender payment status. */
+  runner_payout_status?: 'pending' | 'earned' | 'withheld' | 'paid';
+
+  /** Off-platform payment intent, recorded at rating time. Cash is hidden for Mode 2 (intercity) jobs. */
+  payment_method?: PaymentMethod;
+  payment_status?: PaymentStatus;
+  paid_at?: string;
+
+  /** ISO timestamp after which the job may auto-close without a filed dispute. */
+  dispute_window_ends_at?: string;
+  closed_at?: string;
+
+  dispute_type?: string;
+  dispute_description?: string;
+  disputed_at?: string;
+
+  /** Sender-declared item value (INR), capped at `DECLARED_VALUE_MAX_INR`. */
+  declared_value?: number;
+
   created_at: string;
   matched_at?: string;
   pickup_confirmed_at?: string;
@@ -144,4 +178,56 @@ export interface Job {
 
   tip_amount?: number;
   rating?: number;
+}
+
+/** Category of trust/safety event logged against a runner. */
+export type TrustEventType =
+  | 'no_show'
+  | 'theft_escalation'
+  | 'dispute_filed'
+  | 'suspension'
+  | 'unsuspension'
+  | 'ops_note_added';
+
+/** Immutable trust/safety log entry, attributable to a runner and (optionally) a job. */
+export interface TrustEvent {
+  id: string;
+  runner_id: string;
+  job_id?: string;
+  type: TrustEventType;
+  description: string;
+  created_at: string;
+}
+
+/** Aggregate per-runner trust/safety state, separate from the display `User.trust_score`. */
+export interface RunnerTrustRecord {
+  runner_id: string;
+  no_show_count: number;
+  suspension_status: SuspensionStatus;
+  suspended_at?: string;
+  suspension_reason?: string;
+}
+
+/** Mock First Information Report export bundle for a disputed job, generated for ops/police handoff. */
+export interface FIRExport {
+  job_id: string;
+  generated_at: string;
+  sender_name: string;
+  sender_hostel: string;
+  runner_id: string;
+  runner_name: string;
+  item_description: string;
+  declared_value?: number;
+  pickup_location: string;
+  drop_location: string;
+  dispute_type?: string;
+  dispute_description?: string;
+  confirmation_code: string;
+  timeline: {
+    created_at: string;
+    matched_at?: string;
+    pickup_confirmed_at?: string;
+    delivered_at?: string;
+    disputed_at?: string;
+  };
 }

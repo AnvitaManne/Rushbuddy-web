@@ -92,9 +92,6 @@ export function ProfilePage() {
               <span className="text-xs" style={{ color: '#64748B' }}>
                 Joined {new Date(displayUser.joined_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
               </span>
-              <span className="text-xs" style={{ color: '#64748B' }}>
-                {displayUser.gender === 'female' ? '♀ Female' : displayUser.gender === 'male' ? '♂ Male' : 'Prefer not to say'}
-              </span>
             </div>
           </div>
         </div>
@@ -279,7 +276,6 @@ export function ProfilePage() {
             {[
               { label: 'VIT Email', value: displayUser.email, status: 'verified' },
               { label: 'Student Status', value: 'Active · VIT Vellore', status: 'verified' },
-              { label: 'Gender', value: displayUser.gender === 'female' ? 'Female (Women\'s hostel eligible)' : 'Male', status: 'verified' },
               { label: 'Aadhaar (V2)', value: 'Not required in beta', status: 'pending' },
             ].map(({ label, value, status }) => (
               <div key={label} className="flex items-center justify-between py-2.5"

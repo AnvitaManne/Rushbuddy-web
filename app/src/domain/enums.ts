@@ -31,3 +31,9 @@ export type ItemType = 'Document' | 'Food' | 'Medicine' | 'Object';
 export type WeightTier = 'Light' | 'Medium' | 'Heavy';
 
 export type RiskLevel = 'Low' | 'Fragile' | 'Valuable';
+
+/** Off-platform payment method recorded at rating time. */
+export type PaymentMethod = 'upi' | 'phonepe' | 'cash';
+
+/** Payment intent status recorded on the Job (not verified/escrowed in V1). */
+export type PaymentStatus = 'unpaid' | 'paid' | 'disputed';
