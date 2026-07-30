@@ -9,6 +9,7 @@ import { RunnerFeedPage } from './components/pages/RunnerFeedPage';
 import { ActiveDeliveryPage } from './components/pages/ActiveDeliveryPage';
 import { RatingPage } from './components/pages/RatingPage';
 import { ProfilePage } from './components/pages/ProfilePage';
+import { OpsPage } from './components/pages/OpsPage';
 
 function RedirectToHome() {
   return <Navigate to="/home" replace />;
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
       { path: '/runner/active', Component: ActiveDeliveryPage },
       { path: '/rate', Component: RatingPage },
       { path: '/profile', Component: ProfilePage },
+      { path: '/ops', Component: OpsPage },
     ],
   },
 

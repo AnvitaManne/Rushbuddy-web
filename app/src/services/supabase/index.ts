@@ -23,6 +23,8 @@ export {
 export { createSupabaseJobService } from './supabaseJobService';
 export { createSupabasePaymentService } from './supabasePaymentService';
 export { createSupabaseTrustService } from './supabaseTrustService';
+export { createSupabasePhotoService } from './supabasePhotoService';
+export { createSupabaseFirService } from './supabaseFirService';
 export {
   hashConfirmationCode,
   verifyConfirmationCode,

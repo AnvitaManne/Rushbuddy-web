@@ -8,6 +8,7 @@ import {
   requiresOpsHold,
 } from '@/domain/failureHandling';
 import { services } from '@/services';
+import { PhotoCapture } from '../PhotoCapture';
 import {
   MapPin, Package, CheckCircle2, AlertTriangle, AlertCircle, Phone,
   Clock, ArrowRight, KeyRound, PhoneMissed, ShieldAlert
@@ -42,7 +43,10 @@ export function ActiveDeliveryPage() {
   const [showIssuePanel, setShowIssuePanel] = useState(false);
   const [issueText, setIssueText] = useState('');
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [photoCaptured, setPhotoCaptured] = useState(false);
+  const [photoCaptured, setPhotoCaptured] = useState(!!job?.photo_url);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [dropoffPhotoCaptured, setDropoffPhotoCaptured] = useState(!!job?.dropoff_photo_url);
+  const [dropoffUploading, setDropoffUploading] = useState(false);
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [codeAttemptsLeft, setCodeAttemptsLeft] = useState(3);
@@ -60,7 +64,17 @@ export function ActiveDeliveryPage() {
     setCodeAttemptsLeft(3);
     setCodeInput('');
     setCodeError('');
+    setPhotoCaptured(!!job?.photo_url);
+    setDropoffPhotoCaptured(!!job?.dropoff_photo_url);
   }, [job?.id]);
+
+  useEffect(() => {
+    if (job?.photo_url) setPhotoCaptured(true);
+  }, [job?.photo_url]);
+
+  useEffect(() => {
+    if (job?.dropoff_photo_url) setDropoffPhotoCaptured(true);
+  }, [job?.dropoff_photo_url]);
 
   useEffect(() => {
     const t = setInterval(() => setElapsedSec(s => s + 1), 1000);
@@ -79,13 +93,57 @@ export function ActiveDeliveryPage() {
     return true;
   };
 
+  const handlePickupPhoto = async (file: File) => {
+    if (!job || photoUploading) return;
+    setPhotoUploading(true);
+    try {
+      const uploaded = await services.photos.uploadJobPhoto({
+        jobId: job.id,
+        kind: 'pickup',
+        blob: file,
+      });
+      setJobs((prev) =>
+        prev.map((j) => (j.id === job.id ? { ...j, photo_url: uploaded.url } : j)),
+      );
+      setPhotoCaptured(true);
+    } catch (err) {
+      console.warn('[RushBuddy] pickup photo upload failed', err);
+      // Soft-fail: still unlock Low-risk ack; Fragile stays gated until success.
+      if (job.risk === 'Low') setPhotoCaptured(true);
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const handleDropoffPhoto = async (file: File) => {
+    if (!job || dropoffUploading) return;
+    setDropoffUploading(true);
+    try {
+      const uploaded = await services.photos.uploadJobPhoto({
+        jobId: job.id,
+        kind: 'dropoff_secure',
+        blob: file,
+        geotag: { lat: 12.9698, lng: 79.1559, accuracy_m: 12, captured_at: new Date().toISOString() },
+      });
+      setJobs((prev) =>
+        prev.map((j) => (j.id === job.id ? { ...j, dropoff_photo_url: uploaded.url } : j)),
+      );
+      setDropoffPhotoCaptured(true);
+    } catch (err) {
+      console.warn('[RushBuddy] secure-drop photo upload failed', err);
+    } finally {
+      setDropoffUploading(false);
+    }
+  };
+
   const handleConditionAck = async () => {
     if (!job || !canAckCondition) return;
     setCondAckLoading(true);
-    const localPhotoUrl = photoCaptured ? `mock://pickup/${job.id}.jpg` : undefined;
-    const updated = await services.jobs.acknowledgePickup(job.id, { photo_url: localPhotoUrl });
+    const updated = await services.jobs.acknowledgePickup(job.id, {
+      photo_url: job.photo_url,
+    });
     setCondAckLoading(false);
-    if (!applyJob(updated, localPhotoUrl ? { photo_url: localPhotoUrl } : {})) return;
+    if (!applyJob(updated)) return;
     setPhase('in_transit');
   };
 
@@ -121,6 +179,10 @@ export function ActiveDeliveryPage() {
 
   const handleSecureDrop = async () => {
     if (!job) return;
+    if (!dropoffPhotoCaptured && !job.dropoff_photo_url) {
+      // Require evidence photo before completing a secure drop.
+      return;
+    }
     const updated = await services.jobs.reportNoAnswer(job.id, {
       kind: 'secure_drop',
       location: secureLocation,
@@ -356,19 +418,15 @@ export function ActiveDeliveryPage() {
                     📸 Required: Photograph item at pickup
                   </p>
                   <p className="text-[11px] mb-3" style={{ color: '#64748B' }}>
-                    Risk level is <span className="text-amber-400">{job.risk}</span>. A photo is required before you can acknowledge condition.
+                    Risk level is <span className="text-amber-400">{job.risk}</span>. Take a photo with your camera or choose from gallery — you’ll see a preview below.
                   </p>
-                  <button
-                    onClick={() => setPhotoCaptured(true)}
-                    className="text-xs px-3 py-1.5 rounded-lg transition-all"
-                    style={{
-                      background: photoCaptured ? '#0A2010' : '#0B1120',
-                      border: `1px solid ${photoCaptured ? '#1A4020' : '#1E2D45'}`,
-                      color: photoCaptured ? '#10B981' : '#64748B',
-                    }}
-                  >
-                    {photoCaptured ? '✓ Photo captured' : 'Capture photo (simulated)'}
-                  </button>
+                  <PhotoCapture
+                    label="Take / choose photo"
+                    uploading={photoUploading}
+                    captured={photoCaptured}
+                    previewUrl={job.photo_url}
+                    onFileSelected={handlePickupPhoto}
+                  />
                 </div>
               )}
 
@@ -537,10 +595,28 @@ export function ActiveDeliveryPage() {
                               className="w-full px-3 py-2 rounded-lg text-xs text-white placeholder-slate-600 outline-none"
                               style={{ background: '#060A14', border: '1px solid #1E2D45' }}
                             />
+                            <div>
+                              <p className="text-[11px] mb-2" style={{ color: '#94A3B8' }}>
+                                Photo of the secure drop is required.
+                              </p>
+                              <PhotoCapture
+                                label="Take / choose dropoff photo"
+                                uploading={dropoffUploading}
+                                captured={dropoffPhotoCaptured}
+                                previewUrl={job.dropoff_photo_url}
+                                onFileSelected={handleDropoffPhoto}
+                              />
+                            </div>
                             <button
                               onClick={handleSecureDrop}
+                              disabled={!dropoffPhotoCaptured && !job.dropoff_photo_url}
                               className="w-full py-2 rounded-lg text-xs font-semibold text-white"
-                              style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
+                              style={{
+                                background: (dropoffPhotoCaptured || job.dropoff_photo_url)
+                                  ? 'linear-gradient(135deg, #10B981, #059669)'
+                                  : '#1E2D45',
+                                color: (dropoffPhotoCaptured || job.dropoff_photo_url) ? 'white' : '#64748B',
+                              }}
                             >
                               Confirm Secure Drop — Complete Delivery
                             </button>

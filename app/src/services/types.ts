@@ -9,6 +9,7 @@ import type {
   RunnerTrustRecord,
   TrustEvent,
   User,
+  FIRExport,
 } from '@/domain/types';
 import type {
   PaymentMethod,
@@ -152,6 +153,28 @@ export interface OrganizationService {
   isEmailAllowed(organizationId: string, email: string): Promise<boolean>;
 }
 
+/** Photo kinds that map to public.photo_kind (Phase 16). */
+export type JobPhotoKind = 'pickup' | 'dropoff_secure' | 'other';
+
+/** Job evidence photos (Supabase Storage + public.photos). */
+export interface PhotoService {
+  /** Upload a blob, register it on the job, return a display URL (signed or mock). */
+  uploadJobPhoto(input: {
+    jobId: string;
+    kind: JobPhotoKind;
+    blob: Blob;
+    geotag?: Record<string, unknown>;
+  }): Promise<{ photo_id: string; url: string; storage_path: string }>;
+  /** Best-effort signed URL for a storage path (null when unavailable). */
+  getSignedUrl(storagePath: string): Promise<string | null>;
+}
+
+/** Persisted FIR support packages (public.fir_exports). */
+export interface FirService {
+  generate(jobId: string): Promise<FIRExport | null>;
+  getLatest(jobId: string): Promise<FIRExport | null>;
+}
+
 /** Composition root shape for `getServices()` (Slice 10.4). */
 export interface AppServices {
   auth: AuthService;
@@ -159,4 +182,6 @@ export interface AppServices {
   payments: PaymentService;
   trust: TrustService;
   organizations: OrganizationService;
+  photos: PhotoService;
+  fir: FirService;
 }

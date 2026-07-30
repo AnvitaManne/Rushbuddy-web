@@ -14,6 +14,7 @@ import {
 } from '@/domain/trustOps';
 import { logJobTransition } from '@/domain/devJobDebug';
 import { services, isSupabaseAdapter } from '@/services';
+import type { FIRExport } from '@/domain/types';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
   AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio, KeyRound, Users, FileWarning, Copy, Check
@@ -61,7 +62,7 @@ export function TrackingPage() {
 
   const [simStep, setSimStep] = useState<number | null>(null);
   const [simulating, setSimulating] = useState(false);
-  const [firData, setFirData] = useState<ReturnType<typeof buildFirExport> | null>(null);
+  const [firData, setFirData] = useState<FIRExport | null>(null);
   const [firCopied, setFirCopied] = useState(false);
   const [opsUnsuspendRunner, setOpsUnsuspendRunner] = useState(false);
   const [opsResolveHint, setOpsResolveHint] = useState<string | null>(null);
@@ -71,6 +72,23 @@ export function TrackingPage() {
     setOpsResolveHint(null);
     setFirData(null);
     setFirCopied(false);
+  }, [job?.id, job?.status]);
+
+  // Load a previously persisted FIR when viewing a disputed job.
+  useEffect(() => {
+    if (!job || job.status !== 'DISPUTED') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const existing = await services.fir.getLatest(job.id);
+        if (!cancelled && existing) setFirData(existing);
+      } catch (err) {
+        console.warn('[RushBuddy] fir load failed', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [job?.id, job?.status]);
 
   const stepIndex = job ? getStepIndex(job.status) : 0;
@@ -157,14 +175,19 @@ export function TrackingPage() {
 
   const handleGenerateFir = async () => {
     if (!job) return;
-    const fir = buildFirExport(job);
-    setFirData(fir);
-    setFirCopied(false);
     try {
-      await navigator.clipboard.writeText(JSON.stringify(fir, null, 2));
-      setFirCopied(true);
-    } catch {
-      // clipboard unavailable — FIR JSON still shown inline below
+      const fir = (await services.fir.generate(job.id)) ?? buildFirExport(job);
+      setFirData(fir);
+      setFirCopied(false);
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(fir, null, 2));
+        setFirCopied(true);
+      } catch {
+        // clipboard unavailable — FIR JSON still shown inline below
+      }
+    } catch (err) {
+      console.warn('[RushBuddy] fir generate failed', err);
+      setFirData(buildFirExport(job));
     }
   };
 
