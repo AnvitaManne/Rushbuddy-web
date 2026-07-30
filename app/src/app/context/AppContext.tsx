@@ -16,6 +16,7 @@ export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
 const LOCAL_ONLY_JOB_FIELDS: (keyof Job)[] = [
   'payment_method', 'payment_status', 'paid_at', 'tip_amount', 'rating',
   'dispute_type', 'dispute_description', 'disputed_at',
+  'photo_url', 'dropoff_photo_url',
 ];
 
 const JOB_STATUS_RANK: Record<string, number> = {

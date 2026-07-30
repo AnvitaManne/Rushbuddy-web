@@ -14,6 +14,7 @@ const navItems = [
   { to: '/sender/post', icon: Package, label: 'Post Request', desc: 'Sender' },
   { to: '/runner/feed', icon: Zap, label: 'Job Feed', desc: 'Runner' },
   { to: '/runner/active', icon: Radio, label: 'Active Delivery', desc: 'Live ops' },
+  { to: '/ops', icon: Shield, label: 'Ops Queue', desc: 'Disputes / holds' },
   { to: '/profile', icon: User, label: 'Profile', desc: 'Account' },
 ];
 

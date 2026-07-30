@@ -25,7 +25,7 @@ import type {
 
 /** Feed / list projection — never includes confirmation_code_hash. */
 export const JOB_COLUMNS =
-  'id, organization_id, status, sender_id, sender_name, sender_hostel, runner_id, runner_name, runner_rating, runner_hostel, job_type, handoff_mode, item_type, weight, risk, purchase_type, pickup_location, drop_location, pickup_location_type, drop_location_type, description, price_floor, posted_price, agreed_price, corridor_landmark, receiver_phone, scheduled_window_start, scheduled_window_end, travel_date, expires_at, condition_acknowledged, no_answer_at, ops_notified, no_answer_contact_attempts, sender_response_at, no_answer_resolution, dropoff_secure_location, dropoff_geotag, runner_payout_status, dispute_window_ends_at, declared_value, matched_at, pickup_confirmed_at, delivered_at, closed_at, created_at, updated_at' as const;
+  'id, organization_id, status, sender_id, sender_name, sender_hostel, runner_id, runner_name, runner_rating, runner_hostel, job_type, handoff_mode, item_type, weight, risk, purchase_type, pickup_location, drop_location, pickup_location_type, drop_location_type, description, price_floor, posted_price, agreed_price, corridor_landmark, receiver_phone, scheduled_window_start, scheduled_window_end, travel_date, expires_at, condition_acknowledged, no_answer_at, ops_notified, no_answer_contact_attempts, sender_response_at, no_answer_resolution, dropoff_secure_location, dropoff_geotag, runner_payout_status, dispute_window_ends_at, declared_value, matched_at, pickup_confirmed_at, delivered_at, closed_at, pickup_photo_id, dropoff_photo_id, created_at, updated_at' as const;
 
 /** Sender-only detail projection — adds the plaintext code column. */
 export const JOB_COLUMNS_WITH_CODE = `${JOB_COLUMNS}, confirmation_code_hash` as const;
@@ -77,8 +77,13 @@ export interface DbJobRow {
   pickup_confirmed_at: string | null;
   delivered_at: string | null;
   closed_at: string | null;
+  pickup_photo_id?: string | null;
+  dropoff_photo_id?: string | null;
   created_at: string;
   updated_at?: string | null;
+  /** Joined from photos when selecting with embed. */
+  pickup_photo?: { storage_path: string } | null;
+  dropoff_photo?: { storage_path: string } | null;
 }
 
 function num(value: number | string | null | undefined): number {

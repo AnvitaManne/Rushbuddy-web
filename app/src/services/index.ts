@@ -9,11 +9,14 @@ import type { Job, User } from '@/domain/types';
 import { createMockJobService, type MockJobStore } from './mock/mockJobService';
 import { createMockPaymentService } from './mock/mockPaymentService';
 import { createMockTrustService } from './mock/mockTrustService';
+import { createMockFirService, createMockPhotoService } from './mock/mockPhotoFirService';
 import {
   createSupabaseAuthService,
+  createSupabaseFirService,
   createSupabaseJobService,
   createSupabaseOrganizationService,
   createSupabasePaymentService,
+  createSupabasePhotoService,
   createSupabaseTrustService,
 } from './supabase';
 import type {
@@ -157,11 +160,13 @@ export function createMockServices(): AppServices {
     payments: createMockPaymentService(jobStoreFacade),
     trust: createMockTrustService(),
     organizations: createStubOrganizationService(),
+    photos: createMockPhotoService(),
+    fir: createMockFirService(jobStoreFacade),
   };
 }
 
 /**
- * Hybrid: Supabase auth + organizations + jobs; mock payments / trust.
+ * Hybrid: Supabase auth + organizations + jobs + payments + trust + photos + fir.
  * Requires VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (see supabaseClient).
  */
 export function createSupabaseServices(): AppServices {
@@ -177,6 +182,8 @@ export function createSupabaseServices(): AppServices {
     payments: createSupabasePaymentService(supabase),
     trust: createSupabaseTrustService(supabase),
     organizations: createSupabaseOrganizationService(supabase),
+    photos: createSupabasePhotoService(supabase),
+    fir: createSupabaseFirService(supabase),
   };
 }
 

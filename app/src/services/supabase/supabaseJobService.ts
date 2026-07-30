@@ -42,6 +42,33 @@ async function currentAppUserOrgId(client: SupabaseClient): Promise<string | nul
 }
 
 export function createSupabaseJobService(client: SupabaseClient): JobService {
+  async function signedUrlForPath(path: string): Promise<string | null> {
+    const { data, error } = await client.storage
+      .from('job-photos')
+      .createSignedUrl(path, 60 * 60);
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+  }
+
+  /** Attach photo_url / dropoff_photo_url from photos FKs (best-effort). */
+  async function withPhotoUrls(job: Job, row: DbJobRow): Promise<Job> {
+    const next = { ...job };
+    const ids = [row.pickup_photo_id, row.dropoff_photo_id].filter(Boolean) as string[];
+    if (!ids.length) return next;
+
+    const { data: photos } = await client
+      .from('photos')
+      .select('id, storage_path, kind')
+      .in('id', ids);
+    for (const p of photos ?? []) {
+      const url = await signedUrlForPath(p.storage_path as string);
+      if (!url) continue;
+      if (p.kind === 'pickup' || p.id === row.pickup_photo_id) next.photo_url = url;
+      if (p.kind === 'dropoff_secure' || p.id === row.dropoff_photo_id) next.dropoff_photo_url = url;
+    }
+    return next;
+  }
+
   async function fetchJob(id: string, includeCode: boolean): Promise<Job | null> {
     const { data, error } = await client
       .from('jobs')
@@ -50,7 +77,9 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
       .maybeSingle();
     if (error) throw new Error(`JobService.getJob: ${error.message}`);
     if (!data) return null;
-    return mapJobRow(data as unknown as DbJobRow, { includeConfirmationCode: includeCode });
+    const row = data as unknown as DbJobRow;
+    const job = mapJobRow(row, { includeConfirmationCode: includeCode });
+    return withPhotoUrls(job, row);
   }
 
   /** Run a lifecycle RPC (returns job id), then re-fetch the runner view (no code). */
@@ -81,9 +110,13 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
       const { data: others, error: othersError } = await othersQuery;
       if (othersError) throw new Error(`JobService.listJobs: ${othersError.message}`);
 
-      const jobs = (others ?? []).map((r) =>
-        mapJobRow(r as unknown as DbJobRow, { includeConfirmationCode: false }),
-      );
+      const jobs: Job[] = [];
+      for (const r of others ?? []) {
+        const row = r as unknown as DbJobRow;
+        jobs.push(
+          await withPhotoUrls(mapJobRow(row, { includeConfirmationCode: false }), row),
+        );
+      }
 
       if (me) {
         const { data: mine, error: mineError } = await client
@@ -93,7 +126,10 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
           .order('created_at', { ascending: false });
         if (mineError) throw new Error(`JobService.listJobs(own): ${mineError.message}`);
         for (const r of mine ?? []) {
-          jobs.push(mapJobRow(r as unknown as DbJobRow, { includeConfirmationCode: true }));
+          const row = r as unknown as DbJobRow;
+          jobs.push(
+            await withPhotoUrls(mapJobRow(row, { includeConfirmationCode: true }), row),
+          );
         }
       }
 
