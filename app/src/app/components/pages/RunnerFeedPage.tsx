@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, Job, defaultUser } from '../../context/AppContext';
 import { canRunnerSeeJob } from '@/domain/runnerEligibility';
+import { formatJobScheduleHint, isOpenJobExpired } from '@/domain/jobHelpers';
 import { services } from '@/services';
 import {
   Zap, MapPin, Package, Clock, Filter, Star, Shield,
@@ -124,7 +125,7 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
             <Package size={11} />
             {job.weight}
           </div>
-          {job.eta && (
+          {job.eta && job.job_type === 'campus_immediate' && (
             <div className="text-[11px] px-1.5 py-0.5 rounded"
               style={{ background: '#0A1A10', color: '#10B981', fontFamily: 'JetBrains Mono, monospace' }}>
               ~{job.eta}
@@ -134,6 +135,37 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
             by {job.sender_name}
           </div>
         </div>
+
+        {job.job_type === 'campus_scheduled' && job.scheduled_window && (
+          <div
+            className="mb-3 px-2.5 py-2 rounded-md space-y-0.5"
+            style={{ background: '#0A1520', border: '1px solid #0E2D3D' }}
+          >
+            <div className="text-[10px] font-medium text-cyan-300" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              CAMPUS SCHEDULED · LIVE NOW
+            </div>
+            <p className="text-[11px] text-slate-300">
+              {formatJobScheduleHint(job) ?? 'Timed pickup window'}
+            </p>
+            <p className="text-[10px]" style={{ color: '#475569' }}>
+              Accept now to claim it — plan to pick up during that window (not ASAP).
+            </p>
+          </div>
+        )}
+
+        {job.job_type === 'intercity' && (
+          <div
+            className="mb-3 px-2.5 py-2 rounded-md space-y-0.5"
+            style={{ background: '#120E05', border: '1px solid #3B2A0A' }}
+          >
+            <div className="text-[10px] font-medium text-amber-300" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+              INTERCITY · LIVE NOW
+            </div>
+            <p className="text-[11px] text-slate-300">
+              {formatJobScheduleHint(job) ?? 'Travel-day corridor job'}
+            </p>
+          </div>
+        )}
 
         {job.description && (
           <div className="text-[11px] px-2.5 py-1.5 rounded-md mb-3" style={{ background: '#070B17', color: '#64748B' }}>
@@ -196,16 +228,39 @@ export function RunnerFeedPage() {
   const [filter, setFilter] = useState<string>('All');
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set());
   const [raceNotice, setRaceNotice] = useState<string | null>(null);
+  const [clearingSuspension, setClearingSuspension] = useState(false);
 
   // Demo fallback: Home / mocks use u1 even when session user is briefly null.
   const runner = user ?? defaultUser;
   const isSuspended = runner.suspension_status === 'suspended';
 
-  const openJobs = jobs.filter(
-    j => j.status === 'OPEN' && canRunnerSeeJob(runner, j),
-  );
+  const allOpenJobs = jobs.filter(j => j.status === 'OPEN' && !isOpenJobExpired(j));
+  const ownOpenHidden = allOpenJobs.filter(j => j.sender_id === runner.id).length;
+  const openJobs = allOpenJobs.filter(j => canRunnerSeeJob(runner, j));
   const filters = ['All', 'Document', 'Food', 'Medicine', 'Object'];
   const filteredJobs = filter === 'All' ? openJobs : openJobs.filter(j => j.item_type === filter);
+
+  const handleRefreshFeed = async () => {
+    try {
+      const fresh = await services.jobs.listJobs();
+      setJobs(fresh);
+    } catch (err) {
+      console.warn('[RushBuddy] feed refresh failed', err);
+    }
+  };
+
+  const handleClearSuspensionDev = async () => {
+    if (!import.meta.env.DEV || !runner.id) return;
+    setClearingSuspension(true);
+    try {
+      await services.trust.setSuspension(runner.id, 'active');
+      // Soft path: reload user + jobs so accept gate updates without a full page reload.
+      window.location.reload();
+    } catch (err) {
+      console.warn('[RushBuddy] clear suspension failed', err);
+      setClearingSuspension(false);
+    }
+  };
 
   const handleAccept = async (jobId: string) => {
     if (isSuspended) return;
@@ -246,9 +301,22 @@ export function RunnerFeedPage() {
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
           style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
           <Ban size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs" style={{ color: '#F87171' }}>
-            Your runner account is suspended and cannot accept new jobs. Contact ops to appeal.
-          </p>
+          <div className="flex-1 space-y-2">
+            <p className="text-xs" style={{ color: '#F87171' }}>
+              Your runner account is suspended and cannot accept new jobs. Contact ops to appeal.
+            </p>
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                onClick={() => void handleClearSuspensionDev()}
+                disabled={clearingSuspension}
+                className="text-[11px] px-2 py-1 rounded border disabled:opacity-50"
+                style={{ borderColor: '#3B1111', color: '#FCA5A5', background: '#120808' }}
+              >
+                {clearingSuspension ? 'Clearing…' : 'Clear suspension (dev)'}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -273,7 +341,8 @@ export function RunnerFeedPage() {
           </p>
         </div>
         <button
-          onClick={() => {}}
+          type="button"
+          onClick={() => void handleRefreshFeed()}
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
           style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
         >
@@ -281,6 +350,18 @@ export function RunnerFeedPage() {
           Refresh
         </button>
       </div>
+
+      {ownOpenHidden > 0 && openJobs.length === 0 && (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
+          style={{ background: '#061620', border: '1px solid #0E2D3D' }}>
+          <AlertCircle size={14} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs" style={{ color: '#67E8F9' }}>
+            {ownOpenHidden} open job{ownOpenHidden === 1 ? '' : 's'} you posted are hidden here —
+            you can’t accept your own request. Open another browser/account as a runner to see them,
+            or track them under Sender.
+          </p>
+        </div>
+      )}
 
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-3">
@@ -341,7 +422,9 @@ export function RunnerFeedPage() {
             <p className="text-xs mt-1" style={{ color: '#334155' }}>
               {isSuspended
                 ? 'Resolve the suspension to browse jobs again.'
-                : 'Post a request as Sender, or run __rushbuddyDev.loadPilotScenarios() in the console.'}
+                : ownOpenHidden > 0
+                  ? 'Your own posts never appear here — use a second account as runner.'
+                  : 'Post a request as Sender, or run __rushbuddyDev.loadPilotScenarios() in the console.'}
             </p>
           </motion.div>
         ) : (

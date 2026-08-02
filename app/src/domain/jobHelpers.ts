@@ -28,7 +28,11 @@ const RISK_MULT: Record<RiskLevel, number> = {
 const INTERCITY_CORRIDOR_SURCHARGE_INR = 75;
 
 const CAMPUS_IMMEDIATE_TTL_MS = 30 * 60 * 1000;
+/** Notify / allow Extend when this much time remains (30 − 25 = 5 min). */
+export const CAMPUS_IMMEDIATE_EXTEND_WINDOW_MS = 5 * 60 * 1000;
 const INTERCITY_EXPIRY_LEAD_MS = 2 * 60 * 60 * 1000;
+
+export { CAMPUS_IMMEDIATE_TTL_MS };
 
 /** Uniform random int in [min, max] (inclusive). */
 function randomInt(min: number, max: number): number {
@@ -156,6 +160,79 @@ export function resolveHandoffMode(jobType: JobType): HandoffMode {
       return _exhaustive;
     }
   }
+}
+
+/** Short local time for schedule chips (e.g. "3:30 PM"). */
+function formatClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+/** Short local date+time for intercity / longer windows. */
+function formatDayClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Runner-facing schedule line for campus_scheduled / intercity.
+ * Campus Immediate has no window chip (countdown lives on Tracking).
+ */
+export function formatJobScheduleHint(job: {
+  job_type: JobType;
+  scheduled_window?: ScheduledWindow;
+  travel_date?: string;
+}): string | null {
+  if (job.job_type === 'campus_scheduled' && job.scheduled_window?.start && job.scheduled_window?.end) {
+    return `Pickup window ${formatClock(job.scheduled_window.start)} – ${formatClock(job.scheduled_window.end)}`;
+  }
+  if (job.job_type === 'intercity' && job.travel_date) {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(job.travel_date)
+      ? new Date(`${job.travel_date}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' })
+      : formatDayClock(job.travel_date);
+    return `Travel day ${day} · pickup before corridor departure`;
+  }
+  return null;
+}
+
+/** Milliseconds until `expires_at` (negative when past). */
+export function msUntilExpiry(expiresAt: string, now: Date = new Date()): number {
+  return parseIsoDate(expiresAt, 'expires_at').getTime() - now.getTime();
+}
+
+/** True when an OPEN job is past `expires_at`. */
+export function isOpenJobExpired(
+  job: { status: string; expires_at: string },
+  now: Date = new Date(),
+): boolean {
+  return job.status === 'OPEN' && msUntilExpiry(job.expires_at, now) <= 0;
+}
+
+/**
+ * Campus Immediate: Extend is offered in the last 5 minutes before expiry,
+ * once (`open_extended` must be false), while still OPEN.
+ */
+export function canExtendOpenJob(
+  job: {
+    status: string;
+    job_type: JobType;
+    expires_at: string;
+    open_extended?: boolean;
+  },
+  now: Date = new Date(),
+): boolean {
+  if (job.status !== 'OPEN') return false;
+  if (job.job_type !== 'campus_immediate') return false;
+  if (job.open_extended) return false;
+  const left = msUntilExpiry(job.expires_at, now);
+  return left > 0 && left <= CAMPUS_IMMEDIATE_EXTEND_WINDOW_MS;
 }
 
 /*

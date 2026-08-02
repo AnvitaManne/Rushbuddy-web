@@ -44,6 +44,7 @@ function requiredRunnerGender(
 /**
  * Whether a runner may see a job in the feed (accept eligibility is separate).
  *
+ * - Own jobs (`sender_id === runner.id`) → never visible (cannot self-accept)
  * - `suspension_status === 'suspended'` → never visible
  * - Conflicting mens/womens endpoints → never visible (invalid posting)
  * - `prefer_not_to_say` → hidden when either endpoint is a gendered hostel
@@ -52,6 +53,10 @@ function requiredRunnerGender(
  * - `general` on both ends → all active runners (subject to gender rules above)
  */
 export function canRunnerSeeJob(runner: User, job: Job): boolean {
+  if (runner.id && job.sender_id && runner.id === job.sender_id) {
+    return false;
+  }
+
   if (runner.suspension_status === 'suspended') {
     return false;
   }

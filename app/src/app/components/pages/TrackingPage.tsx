@@ -4,6 +4,12 @@ import { useApp, defaultUser } from '../../context/AppContext';
 import { assertTransition } from '@/domain/jobTransitions';
 import { computeDisputeWindowEndsAt } from '@/domain/paymentPolicy';
 import {
+  canExtendOpenJob,
+  CAMPUS_IMMEDIATE_TTL_MS,
+  formatJobScheduleHint,
+  msUntilExpiry,
+} from '@/domain/jobHelpers';
+import {
   applyNoShowStrike,
   buildFirExport,
   createTrustEvent,
@@ -15,11 +21,20 @@ import {
 import { logJobTransition } from '@/domain/devJobDebug';
 import { services, isSupabaseAdapter } from '@/services';
 import type { FIRExport } from '@/domain/types';
+import { FirPackagePanel } from '../FirPackagePanel';
 import {
   Package, MapPin, Clock, Star, Shield, CheckCircle2,
   AlertCircle, Phone, MessageSquare, X, ChevronRight, Radio, KeyRound, Users, FileWarning, Copy, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+function formatTtl(ms: number): string {
+  if (ms <= 0) return '0:00';
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 const TIMELINE_STEPS = [
   { key: 'OPEN', label: 'Finding Buddy', sub: 'Notifying runners...', icon: Radio },
@@ -66,12 +81,23 @@ export function TrackingPage() {
   const [firCopied, setFirCopied] = useState(false);
   const [opsUnsuspendRunner, setOpsUnsuspendRunner] = useState(false);
   const [opsResolveHint, setOpsResolveHint] = useState<string | null>(null);
+  const [ttlNow, setTtlNow] = useState(() => Date.now());
+  const [ttlBusy, setTtlBusy] = useState(false);
+  const [ttlHint, setTtlHint] = useState<string | null>(null);
 
   useEffect(() => {
     setOpsUnsuspendRunner(false);
     setOpsResolveHint(null);
     setFirData(null);
     setFirCopied(false);
+    setTtlHint(null);
+  }, [job?.id, job?.status]);
+
+  // Tick countdown while OPEN so Extend unlocks at T−5 min without a refresh.
+  useEffect(() => {
+    if (!job || job.status !== 'OPEN') return;
+    const id = window.setInterval(() => setTtlNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
   }, [job?.id, job?.status]);
 
   // Load a previously persisted FIR when viewing a disputed job.
@@ -142,20 +168,91 @@ export function TrackingPage() {
     setSimulating(false);
   };
 
-  const handleCancel = () => {
-    if (job && job.status === 'OPEN') {
-      setJobs(prev => prev.filter(j => j.id !== job.id));
+  const handleCancel = async () => {
+    if (!job || job.status !== 'OPEN') return;
+    setTtlBusy(true);
+    try {
+      const closed = await services.jobs.cancelOpenJob(job.id);
+      if (!closed) {
+        setOpsResolveHint('Could not cancel — soft-refresh and retry.');
+        return;
+      }
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...closed, status: 'CLOSED' } : j));
       navigate('/home');
+    } catch (err) {
+      console.warn('[RushBuddy] cancel open failed', err);
+      setOpsResolveHint(err instanceof Error ? err.message : 'Cancel failed');
+    } finally {
+      setTtlBusy(false);
     }
   };
 
-  const handleFindNewBuddy = () => {
+  const handleExtend = async () => {
+    if (!job || !canExtendOpenJob(job, new Date(ttlNow))) return;
+    setTtlBusy(true);
+    setTtlHint(null);
+    try {
+      const updated = await services.jobs.extendOpenJob(job.id);
+      if (!updated) {
+        setTtlHint('Extend failed — DB still has >5 min left (use DEV near expiry again so it persists), or already extended.');
+        return;
+      }
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updated } : j));
+      setTtlHint(`Extended — new expiry ${new Date(updated.expires_at).toLocaleTimeString()}.`);
+      setTtlNow(Date.now());
+    } catch (err) {
+      console.warn('[RushBuddy] extend open failed', err);
+      setTtlHint(err instanceof Error ? err.message : 'Extend failed');
+    } finally {
+      setTtlBusy(false);
+    }
+  };
+
+  /** DEV: persist expires_at ≈ 4 min so Extend + countdown match the server (not local-only). */
+  const handleDevNearExpiry = async () => {
+    if (!import.meta.env.DEV || !job || job.status !== 'OPEN') return;
+    setTtlBusy(true);
+    setTtlHint(null);
+    const near = new Date(Date.now() + 4 * 60 * 1000).toISOString();
+    try {
+      const updated = await services.jobs.updateJob(job.id, { expires_at: near });
+      if (!updated) {
+        // Fallback local-only if RLS blocks the column — Extend will still fail until persist works.
+        setJobs(prev => prev.map(j => j.id === job.id ? { ...j, expires_at: near } : j));
+        setTtlHint('Near-expiry set locally only — Extend may fail until refresh. Check update permissions.');
+      } else {
+        setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updated, expires_at: near } : j));
+        setTtlHint('DEV: expiry set to ~4 min on server. Click Extend +30 min now.');
+      }
+      setTtlNow(Date.now());
+    } catch (err) {
+      console.warn('[RushBuddy] DEV near expiry failed', err);
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, expires_at: near } : j));
+      setTtlHint(err instanceof Error ? err.message : 'Could not persist near-expiry');
+      setTtlNow(Date.now());
+    } finally {
+      setTtlBusy(false);
+    }
+  };
+
+  const handleFindNewBuddy = async () => {
     if (!job || !job.runner_id) return;
     const result = assertTransition('MATCHED', 'OPEN');
     if (!result.ok) return;
     const runnerId = job.runner_id;
-    setJobs(prev => prev.map(j => j.id === job.id ? {
+    const jobId = job.id;
+
+    // Persist MATCHED → OPEN + no-show strike (and auto-suspend at threshold 2).
+    const updated = await services.jobs.repoolNoShow(jobId);
+    if (!updated) {
+      setOpsResolveHint('Could not re-pool — sign out/in and retry (or pickup may already be confirmed).');
+      return;
+    }
+
+    // Update local first so mergeServerJobs won't keep MATCHED over server OPEN.
+    setJobs(prev => prev.map(j => j.id === jobId ? {
       ...j,
+      ...updated,
       status: 'OPEN',
       runner_id: undefined,
       runner_name: undefined,
@@ -164,13 +261,18 @@ export function TrackingPage() {
       matched_at: undefined,
       agreed_price: undefined,
     } : j));
-    updateRunnerTrustRecord(runnerId, prev => applyNoShowStrike(prev));
-    appendTrustEvent(createTrustEvent({
-      runner_id: runnerId,
-      job_id: job.id,
-      type: 'no_show',
-      description: `Re-pooled ${job.id} to Find New Buddy — no pickup confirmation.`,
-    }));
+
+    if (isSupabaseAdapter) {
+      await refreshData({ includeRunnerIds: [runnerId] });
+    } else {
+      updateRunnerTrustRecord(runnerId, prev => applyNoShowStrike(prev));
+      appendTrustEvent(createTrustEvent({
+        runner_id: runnerId,
+        job_id: jobId,
+        type: 'no_show',
+        description: `Re-pooled ${jobId} to Find New Buddy — no pickup confirmation.`,
+      }));
+    }
   };
 
   const handleGenerateFir = async () => {
@@ -301,8 +403,10 @@ export function TrackingPage() {
         </div>
         {job.status === 'OPEN' && (
           <button
-            onClick={handleCancel}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all"
+            type="button"
+            onClick={() => void handleCancel()}
+            disabled={ttlBusy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all disabled:opacity-50"
             style={{ background: '#1C0A0A', border: '1px solid #3B1111', color: '#F87171' }}
           >
             <X size={12} />
@@ -310,6 +414,83 @@ export function TrackingPage() {
           </button>
         )}
       </div>
+
+      {job.status === 'OPEN' && (() => {
+        const left = msUntilExpiry(job.expires_at, new Date(ttlNow));
+        const extendOk = canExtendOpenJob(job, new Date(ttlNow));
+        const urgent = left > 0 && left <= 5 * 60 * 1000;
+        return (
+          <div
+            className="rounded-xl p-4 space-y-3"
+            style={{
+              background: urgent ? '#1A1005' : '#0B1120',
+              border: `1px solid ${urgent ? '#3B2A0A' : '#1E2D45'}`,
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <Clock size={14} className={urgent ? 'text-amber-400 mt-0.5' : 'text-slate-400 mt-0.5'} />
+                <div>
+                  <p className={`text-xs font-medium ${urgent ? 'text-amber-300' : 'text-slate-300'}`}>
+                    {left <= 0 ? 'Listing expired' : 'Time left to find a buddy'}
+                  </p>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#64748B' }}>
+                    {job.job_type === 'campus_immediate'
+                      ? job.open_extended
+                        ? 'Already extended once — cancel or wait for a match.'
+                        : 'Campus Immediate · notify at 25 min with extend / cancel.'
+                      : job.job_type === 'campus_scheduled'
+                        ? 'Campus Scheduled · live now until window ends if unmatched.'
+                        : 'Expires before travel if unmatched.'}
+                  </p>
+                </div>
+              </div>
+              <div
+                className={`text-sm font-semibold tabular-nums ${left <= 0 ? 'text-red-400' : urgent ? 'text-amber-300' : 'text-cyan-300'}`}
+                style={{ fontFamily: 'JetBrains Mono, monospace' }}
+              >
+                {formatTtl(left)}
+              </div>
+            </div>
+            {(job.job_type === 'campus_scheduled' || job.job_type === 'intercity') && (
+              <p className="text-[11px] text-cyan-200/90 px-1">
+                {formatJobScheduleHint(job)
+                  ?? 'Timed job — pickup should match the window / travel day.'}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {extendOk && (
+                <button
+                  type="button"
+                  onClick={() => void handleExtend()}
+                  disabled={ttlBusy}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}
+                >
+                  Extend +{CAMPUS_IMMEDIATE_TTL_MS / 60000} min
+                </button>
+              )}
+              {import.meta.env.DEV && job.job_type === 'campus_immediate' && !job.open_extended && (
+                <button
+                  type="button"
+                  onClick={() => void handleDevNearExpiry()}
+                  disabled={ttlBusy}
+                  className="px-3 py-1.5 rounded-lg text-xs border disabled:opacity-50"
+                  style={{ borderColor: '#3B2A0A', color: '#FBBF24', background: '#120E05' }}
+                >
+                  DEV: near expiry
+                </button>
+              )}
+            </div>
+            {ttlHint && (
+              <p className="text-[11px] text-amber-200/90 flex items-start gap-1.5">
+                <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
+                {ttlHint}
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Confirmation code — visible while the job hasn't been handed off yet */}
       {['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(job.status) && (
@@ -496,23 +677,31 @@ export function TrackingPage() {
 
               <div className="pt-1 space-y-2">
                 <p className="text-[11px]" style={{ color: '#F87171' }}>
-                  Mock / dev only — platform support package, not a legal FIR filing.
+                  Campus support package for security / ops — not a legal FIR filing.
                 </p>
                 <button
                   type="button"
-                  onClick={handleGenerateFir}
+                  onClick={() => void handleGenerateFir()}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
                   style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)' }}
                 >
                   {firCopied ? <Check size={14} /> : <Copy size={14} />}
-                  Generate FIR Support Package
+                  {firData ? 'Regenerate support package' : 'Generate FIR Support Package'}
                 </button>
                 {firData && (
-                  <pre className="text-[10px] p-3 rounded-lg overflow-auto max-h-56" style={{ background: '#0D0303', border: '1px solid #3B1111', color: '#F87171' }}>
-                    {JSON.stringify(firData, null, 2)}
-                  </pre>
+                  <FirPackagePanel
+                    fir={firData}
+                    copied={firCopied}
+                    onCopy={async () => {
+                      try {
+                        await navigator.clipboard.writeText(JSON.stringify(firData, null, 2));
+                        setFirCopied(true);
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                  />
                 )}
-                {firCopied && <p className="text-[10px] text-emerald-400">Copied JSON to clipboard.</p>}
               </div>
             </div>
           )}

@@ -334,6 +334,9 @@ export function PostRequestPage() {
                     <AlertCircle size={10} />End must be after start.
                   </p>
                 )}
+                <p className="text-[11px]" style={{ color: '#64748B' }}>
+                  Goes live on the feed immediately so a buddy can claim it early — pickup should happen during this window, not ASAP.
+                </p>
               </motion.div>
             )}
 

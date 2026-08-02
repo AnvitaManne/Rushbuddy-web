@@ -112,6 +112,18 @@ export interface JobService {
     jobId: string,
     input: { outcome: DisputeResolutionOutcome; unsuspend?: boolean },
   ): Promise<Job | null>;
+
+  // --- No-show (Phase 19): Find New Buddy persists strike + optional auto-suspend ---
+  /** MATCHED → OPEN (clear runner). Increments runner no_show_count; suspends at threshold 2. */
+  repoolNoShow(jobId: string): Promise<Job | null>;
+
+  // --- OPEN TTL (Phase 21) ---
+  /** Sender cancels unmatched OPEN → CLOSED. */
+  cancelOpenJob(jobId: string): Promise<Job | null>;
+  /** Campus Immediate: +30 min once in the last 5 minutes. */
+  extendOpenJob(jobId: string): Promise<Job | null>;
+  /** Close expired OPEN jobs in the caller's org (idempotent). Returns count closed. */
+  expireStaleOpenJobs(): Promise<number>;
 }
 
 /** Off-platform payment intent + tip/rating at close (today: fields on `Job`). */

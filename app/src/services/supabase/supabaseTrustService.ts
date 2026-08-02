@@ -55,18 +55,21 @@ export function createSupabaseTrustService(client: SupabaseClient): TrustService
       let suspension_status: RunnerTrustRecord['suspension_status'] = 'active';
       let suspended_at: string | undefined;
       let suspension_reason: string | undefined;
+      let no_show_count = 0;
+      // Events after the most recent unsuspension are the only ones that count
+      // (ops clear + strike reset inserts an unsuspension marker).
       for (const e of events) {
-        if (e.type === 'suspension') {
+        if (e.type === 'unsuspension') break;
+        if (e.type === 'suspension' && suspension_status === 'active') {
           suspension_status = 'suspended';
           suspended_at = e.created_at;
           suspension_reason = e.description;
-          break;
         }
-        if (e.type === 'unsuspension') break; // most recent action was a lift
+        if (e.type === 'no_show') no_show_count += 1;
       }
       return {
         runner_id: runnerId,
-        no_show_count: events.filter((e) => e.type === 'no_show').length,
+        no_show_count,
         suspension_status,
         suspended_at,
         suspension_reason,
@@ -77,7 +80,16 @@ export function createSupabaseTrustService(client: SupabaseClient): TrustService
       return updater(await svc.getRunnerRecord(runnerId));
     },
 
-    async setSuspension(runnerId) {
+    async setSuspension(runnerId, status, _reason) {
+      if (status === 'active') {
+        // Persist lift so refreshData / accept_job see an active runner again.
+        const { error } = await client.rpc('ops_unsuspend_runner', {
+          p_runner_id: runnerId,
+          p_reset_strikes: true,
+        });
+        if (error) throw new Error(`TrustService.setSuspension: ${error.message}`);
+      }
+      // Suspensions are created by lifecycle RPCs (theft / no-show); client cannot invent them.
       return svc.getRunnerRecord(runnerId);
     },
   };

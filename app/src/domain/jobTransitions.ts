@@ -4,10 +4,11 @@ import type { JobStatus } from './enums';
  * Allowed job status transitions per core-flow-specs.md.
  *
  * Happy path: OPEN → MATCHED → IN_TRANSIT → DELIVERED → PENDING_RATING → CLOSED
- * Branches: DISPUTED (post-delivery), ISSUE_REPORTED (active delivery), MATCHED → OPEN (no-show re-pool)
+ * Branches: DISPUTED (post-delivery), ISSUE_REPORTED (active delivery), MATCHED → OPEN (no-show re-pool),
+ * OPEN → CLOSED (sender cancel / TTL expire)
  */
 export const ALLOWED_TRANSITIONS: Readonly<Record<JobStatus, readonly JobStatus[]>> = {
-  OPEN: ['MATCHED'],
+  OPEN: ['MATCHED', 'CLOSED'],
   MATCHED: ['IN_TRANSIT', 'OPEN', 'ISSUE_REPORTED'],
   IN_TRANSIT: ['DELIVERED', 'ISSUE_REPORTED'],
   DELIVERED: ['PENDING_RATING', 'CLOSED', 'DISPUTED'],

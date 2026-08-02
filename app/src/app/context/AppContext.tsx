@@ -10,24 +10,20 @@ export type { Job, User } from '@/domain/types';
 export type { JobStatus, UserRole, UserGender } from '@/domain/enums';
 
 /**
- * Fields that only live in local state today (payment + dispute persist in Phase 15).
- * The background refetch re-applies these so it doesn't wipe them.
+ * Fields that may only exist locally until a photo signed-URL hydrate lands.
+ * Payment / dispute / rating now come from the server (Phase 20).
  */
 const LOCAL_ONLY_JOB_FIELDS: (keyof Job)[] = [
-  'payment_method', 'payment_status', 'paid_at', 'tip_amount', 'rating',
-  'dispute_type', 'dispute_description', 'disputed_at',
   'photo_url', 'dropoff_photo_url',
 ];
 
-const JOB_STATUS_RANK: Record<string, number> = {
-  OPEN: 0, MATCHED: 1, IN_TRANSIT: 2, DELIVERED: 3, ISSUE_REPORTED: 3,
-  PENDING_RATING: 4, DISPUTED: 5, CLOSED: 6,
-};
-
 /**
- * Merge freshly fetched server jobs with the local copy so not-yet-persisted
- * state (dispute filed, payment recorded, mock-ops close) survives the poll.
- * Keeps the further-along status and re-applies local-only fields.
+ * Merge freshly fetched server jobs with the local copy.
+ * Server status/fields win (Phase 14+ persists lifecycle). Local-only photo
+ * URLs are re-applied when the server row has not hydrated them yet.
+ * Do NOT keep a further-along local status — that made DEV simulate /
+ * optimistic UI look PENDING_RATING while the DB was still MATCHED, so
+ * file_dispute failed with a confusing “sign in” message.
  */
 function mergeServerJobs(local: Job[], server: Job[]): Job[] {
   const localById = new Map(local.map((j) => [j.id, j]));
@@ -39,11 +35,6 @@ function mergeServerJobs(local: Job[], server: Job[]): Job[] {
       if (next[f] === undefined && l[f] !== undefined) {
         (next as Record<keyof Job, unknown>)[f] = l[f];
       }
-    }
-    if ((JOB_STATUS_RANK[l.status] ?? 0) > (JOB_STATUS_RANK[s.status] ?? 0)) {
-      next.status = l.status;
-      next.closed_at = l.closed_at ?? next.closed_at;
-      next.runner_payout_status = l.runner_payout_status ?? next.runner_payout_status;
     }
     return next;
   });
@@ -87,8 +78,12 @@ interface AppContextType {
     runnerId: string,
     updater: (prev: RunnerTrustRecord) => RunnerTrustRecord,
   ) => void;
-  /** Re-pull jobs + own suspension + trust from the backend (supabase mode; no-op on mock). */
-  refreshData: () => Promise<void>;
+  /**
+   * Re-pull jobs + own suspension + trust from the backend (supabase mode; no-op on mock).
+   * Pass `includeRunnerIds` to keep loading trust for runners no longer on a job
+   * (e.g. after Find New Buddy re-pool).
+   */
+  refreshData: (opts?: { includeRunnerIds?: string[] }) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -370,7 +365,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // and keep them fresh across accounts via focus + light polling. We refetch through
   // `listJobs` (privacy-safe: other users' confirmation codes are never returned)
   // instead of a Realtime subscription, which would broadcast full rows (codes).
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (opts?: { includeRunnerIds?: string[] }) => {
     if (!isSupabaseAdapter || !user?.id) return;
     try {
       const list = await services.jobs.listJobs();
@@ -396,9 +391,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.warn('[RushBuddy] user refresh failed', err);
       }
 
-      // Load trust events/records for runners on the user's jobs (sender-side banners).
+      // Load trust for runners still on jobs, plus any explicitly requested ids
+      // (e.g. former runner after Find New Buddy).
       const runnerIds = Array.from(
-        new Set(list.map((j) => j.runner_id).filter((id): id is string => !!id)),
+        new Set([
+          ...list.map((j) => j.runner_id).filter((id): id is string => !!id),
+          ...(opts?.includeRunnerIds ?? []),
+        ]),
       );
       if (runnerIds.length) {
         const eventLists = await Promise.all(
@@ -478,6 +477,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       suspended_at: status === 'suspended' ? new Date().toISOString() : undefined,
       suspension_reason: status === 'suspended' ? reason : undefined,
     }));
+    // Persist lifts in supabase so the next poll / accept_job sees active.
+    if (isSupabaseAdapter && status === 'active') {
+      void services.trust.setSuspension(runnerId, 'active').then(() => {
+        setUser(prevUser =>
+          prevUser && prevUser.id === runnerId
+            ? {
+                ...prevUser,
+                suspension_status: 'active',
+                no_show_count: 0,
+              }
+            : prevUser,
+        );
+      }).catch((err) => {
+        console.warn('[RushBuddy] persist unsuspend failed', err);
+      });
+    }
   };
 
   useEffect(() => {

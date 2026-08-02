@@ -1,5 +1,5 @@
 /**
- * Supabase JobService (Phase 13 / Slices 13.4).
+ * Supabase JobService (Phase 13 / Slices 13.4; Phase 20 hydration).
  *
  * - list/get: RLS scopes rows to the caller's org. Confirmation codes are
  *   fetched ONLY for the caller's own jobs (never leaked into feeds).
@@ -7,13 +7,13 @@
  *   The AFTER INSERT trigger writes the initial status_changed event.
  * - accept: atomic accept_job RPC; returns job id only, then we re-fetch as the
  *   runner (no code). A second accept of the same job resolves to null (conflict).
- *
- * Payment / dispute / photo lifecycle fields are not on public.jobs and stay
- * mock/local until later phases.
+ * - Phase 20: list/get attach payment / dispute / rating fields from child tables
+ *   so Ops/Tracking survive soft-refresh across accounts.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Job, User } from '@/domain/types';
+import type { PaymentMethod, PaymentStatus } from '@/domain/enums';
 import type { JobService, ReportNoAnswerInput } from '../types';
 import {
   JOB_COLUMNS,
@@ -69,6 +69,98 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
     return next;
   }
 
+  /**
+   * Batch-attach payment / rating / dispute display fields from child tables.
+   * Prefer the open (non-resolved) dispute; else the newest dispute row.
+   */
+  async function withRelatedFields(jobs: Job[]): Promise<Job[]> {
+    if (!jobs.length) return jobs;
+    const ids = jobs.map((j) => j.id);
+
+    const [payRes, ratingRes, disputeRes] = await Promise.all([
+      client
+        .from('payments')
+        .select('job_id, method, status, tip_amount, recorded_at')
+        .in('job_id', ids),
+      client.from('ratings').select('job_id, stars').in('job_id', ids),
+      client
+        .from('disputes')
+        .select('job_id, dispute_type, description, status, opened_at')
+        .in('job_id', ids)
+        .order('opened_at', { ascending: false }),
+    ]);
+
+    if (payRes.error) {
+      console.warn('[RushBuddy] payment hydrate failed', payRes.error.message);
+    }
+    if (ratingRes.error) {
+      console.warn('[RushBuddy] rating hydrate failed', ratingRes.error.message);
+    }
+    if (disputeRes.error) {
+      console.warn('[RushBuddy] dispute hydrate failed', disputeRes.error.message);
+    }
+
+    const payByJob = new Map<string, {
+      method: PaymentMethod;
+      status: PaymentStatus;
+      tip_amount: number;
+      recorded_at: string | null;
+    }>();
+    for (const r of payRes.data ?? []) {
+      payByJob.set(r.job_id as string, {
+        method: r.method as PaymentMethod,
+        status: r.status as PaymentStatus,
+        tip_amount: Number(r.tip_amount ?? 0),
+        recorded_at: (r.recorded_at as string | null) ?? null,
+      });
+    }
+
+    const ratingByJob = new Map<string, number>();
+    for (const r of ratingRes.data ?? []) {
+      ratingByJob.set(r.job_id as string, Number(r.stars));
+    }
+
+    type DisputeRow = {
+      job_id: string;
+      dispute_type: string;
+      description: string;
+      status: string;
+      opened_at: string;
+    };
+    const disputeByJob = new Map<string, DisputeRow>();
+    for (const r of (disputeRes.data ?? []) as DisputeRow[]) {
+      const existing = disputeByJob.get(r.job_id);
+      if (!existing) {
+        disputeByJob.set(r.job_id, r);
+        continue;
+      }
+      // Prefer open case file over a resolved one (query is newest-first).
+      if (existing.status === 'resolved' && r.status !== 'resolved') {
+        disputeByJob.set(r.job_id, r);
+      }
+    }
+
+    return jobs.map((job) => {
+      const next = { ...job };
+      const pay = payByJob.get(job.id);
+      if (pay) {
+        next.payment_method = pay.method;
+        next.payment_status = pay.status;
+        next.tip_amount = pay.tip_amount;
+        next.paid_at = pay.recorded_at ?? undefined;
+      }
+      const stars = ratingByJob.get(job.id);
+      if (stars != null) next.rating = stars;
+      const dispute = disputeByJob.get(job.id);
+      if (dispute) {
+        next.dispute_type = dispute.dispute_type;
+        next.dispute_description = dispute.description;
+        next.disputed_at = dispute.opened_at;
+      }
+      return next;
+    });
+  }
+
   async function fetchJob(id: string, includeCode: boolean): Promise<Job | null> {
     const { data, error } = await client
       .from('jobs')
@@ -78,8 +170,12 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
     if (error) throw new Error(`JobService.getJob: ${error.message}`);
     if (!data) return null;
     const row = data as unknown as DbJobRow;
-    const job = mapJobRow(row, { includeConfirmationCode: includeCode });
-    return withPhotoUrls(job, row);
+    const job = await withPhotoUrls(
+      mapJobRow(row, { includeConfirmationCode: includeCode }),
+      row,
+    );
+    const [hydrated] = await withRelatedFields([job]);
+    return hydrated;
   }
 
   /** Run a lifecycle RPC (returns job id), then re-fetch the runner view (no code). */
@@ -99,6 +195,13 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
 
   return {
     async listJobs() {
+      // Close expired OPEN jobs before listing so feeds stay clean.
+      try {
+        await client.rpc('expire_stale_open_jobs');
+      } catch (err) {
+        console.warn('[RushBuddy] expire on list failed', err);
+      }
+
       const me = await currentAppUserId(client);
 
       // Others' jobs: never select the code column (no over-the-wire leak).
@@ -134,7 +237,7 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
       }
 
       jobs.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-      return jobs;
+      return withRelatedFields(jobs);
     },
 
     async getJob(id) {
@@ -185,7 +288,7 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
       if (error) {
         // Already matched / not open → surface as a graceful conflict, not a throw.
         const code = (error as { code?: string }).code;
-        if (code === CONFLICT_SQLSTATE || /no longer open/i.test(error.message)) {
+        if (code === CONFLICT_SQLSTATE || /no longer open|suspended/i.test(error.message)) {
           return null;
         }
         throw new Error(`JobService.acceptJob: ${error.message}`);
@@ -237,11 +340,24 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
     },
 
     async fileDispute(jobId, input) {
-      return callLifecycleRpc('file_dispute', {
+      const { data, error } = await client.rpc('file_dispute', {
         p_job_id: jobId,
         p_type: input.dispute_type,
         p_description: input.description,
       });
+      if (error) {
+        const code = (error as { code?: string }).code;
+        if (code === CONFLICT_SQLSTATE || /not disputable/i.test(error.message)) {
+          // Surface status in the message so RatingPage can show it (not a vague "sign in").
+          throw new Error(
+            error.message.includes('status=')
+              ? `Cannot file dispute — ${error.message.replace(/^file_dispute:\s*/i, '')}. Complete a real handoff first (Tracking DEV simulate does not persist).`
+              : 'Cannot file dispute — job is not awaiting payment/rating on the server, or you are not the sender.',
+          );
+        }
+        throw new Error(`JobService.fileDispute: ${error.message}`);
+      }
+      return fetchJob((data as string | null) ?? jobId, true);
     },
 
     async resolveDispute(jobId, input) {
@@ -250,6 +366,44 @@ export function createSupabaseJobService(client: SupabaseClient): JobService {
         p_outcome: input.outcome,
         p_unsuspend: input.unsuspend ?? false,
       });
+    },
+
+    async repoolNoShow(jobId) {
+      // Sender needs confirmation_code after re-pool (job is theirs again).
+      const { data, error } = await client.rpc('record_no_show_and_repool', {
+        p_job_id: jobId,
+      });
+      if (error) {
+        const code = (error as { code?: string }).code;
+        if (code === CONFLICT_SQLSTATE) return null;
+        throw new Error(`JobService.repoolNoShow: ${error.message}`);
+      }
+      return fetchJob((data as string | null) ?? jobId, true);
+    },
+
+    async cancelOpenJob(jobId) {
+      return callLifecycleRpc('cancel_open_job', { p_job_id: jobId });
+    },
+
+    async extendOpenJob(jobId) {
+      const { data, error } = await client.rpc('extend_open_job', { p_job_id: jobId });
+      if (error) {
+        const code = (error as { code?: string }).code;
+        if (code === CONFLICT_SQLSTATE || /not extendable|too early/i.test(error.message)) {
+          return null;
+        }
+        throw new Error(`JobService.extendOpenJob: ${error.message}`);
+      }
+      return fetchJob((data as string | null) ?? jobId, true);
+    },
+
+    async expireStaleOpenJobs() {
+      const { data, error } = await client.rpc('expire_stale_open_jobs');
+      if (error) {
+        console.warn('[RushBuddy] expire_stale_open_jobs failed', error.message);
+        return 0;
+      }
+      return Number(data ?? 0);
     },
 
     async removeJob(id) {

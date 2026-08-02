@@ -59,6 +59,7 @@ export function RatingPage() {
   const total = basePrice + tip;
 
   const canDispute = job ? assertTransition(job.status, 'DISPUTED').ok : false;
+  const primaryDisabled = loading || (!disputeMode && paymentConfirmed && stars === 0) || (disputeMode && !disputeType);
 
   const handleConfirmPayment = async () => {
     if (!job) return;
@@ -104,54 +105,68 @@ export function RatingPage() {
 
   const handleDispute = async () => {
     if (!job) return;
-    const result = assertTransition(job.status, 'DISPUTED');
-    if (!result.ok) { setDisputeError(result.error); return; }
-    setLoading(true);
-
-    // Persist the dispute (supabase RPC also suspends the runner on theft-like types).
-    const updated = await services.jobs.fileDispute(job.id, {
-      dispute_type: disputeType || 'Not specified',
-      description: disputeDesc,
-    });
-    if (!updated) {
-      setLoading(false);
-      setDisputeError('Could not file the dispute — check you are signed in and retry.');
+    if (!disputeType) {
+      setDisputeError('Pick an issue type above first.');
       return;
     }
-
-    setJobs(prev => prev.map(j => j.id === job.id ? {
-      ...j,
-      ...updated,
-      dispute_type: disputeType || 'Not specified',
-      dispute_description: disputeDesc,
-      disputed_at: new Date().toISOString(),
-    } : j));
-
-    if (isTheftLikeDispute(disputeType) && job.runner_id) {
-      if (isSupabaseAdapter) {
-        // Server-side RPC already logged escalation + suspension; pull the truth in.
-        await refreshData();
-      } else {
-        appendTrustEvent(createTrustEvent({
-          runner_id: job.runner_id,
-          job_id: job.id,
-          type: 'theft_escalation',
-          description: `Theft-like dispute "${disputeType}" on ${job.id} — escalated for investigation (mock).`,
-        }));
-        appendTrustEvent(createTrustEvent({
-          runner_id: job.runner_id,
-          job_id: job.id,
-          type: 'suspension',
-          description: `Runner suspended pending theft investigation on ${job.id} (mock).`,
-        }));
-        updateRunnerTrustRecord(job.runner_id, prev => suspendRunner(prev, `Theft escalation: "${disputeType}" dispute`));
-      }
+    if (!canDispute) {
+      setDisputeError(
+        `Cannot dispute while job is ${job.status}. Finish a real handoff (runner enters confirmation code) so status is PENDING_RATING, then soft-refresh and try again.`,
+      );
+      return;
     }
+    setLoading(true);
+    setDisputeError('');
 
-    setLoading(false);
-    setSubmitted(true);
-    await new Promise(r => setTimeout(r, 1500));
-    navigate('/home');
+    try {
+      // Persist the dispute (supabase RPC also suspends the runner on theft-like types).
+      const updated = await services.jobs.fileDispute(job.id, {
+        dispute_type: disputeType || 'Not specified',
+        description: disputeDesc,
+      });
+      if (!updated) {
+        setLoading(false);
+        setDisputeError('Could not file the dispute — job missing after sync. Soft-refresh and retry.');
+        return;
+      }
+
+      setJobs(prev => prev.map(j => j.id === job.id ? {
+        ...j,
+        ...updated,
+        dispute_type: disputeType || 'Not specified',
+        dispute_description: disputeDesc,
+        disputed_at: new Date().toISOString(),
+      } : j));
+
+      if (isTheftLikeDispute(disputeType) && job.runner_id) {
+        if (isSupabaseAdapter) {
+          // Server-side RPC already logged escalation + suspension; pull the truth in.
+          await refreshData();
+        } else {
+          appendTrustEvent(createTrustEvent({
+            runner_id: job.runner_id,
+            job_id: job.id,
+            type: 'theft_escalation',
+            description: `Theft-like dispute "${disputeType}" on ${job.id} — escalated for investigation (mock).`,
+          }));
+          appendTrustEvent(createTrustEvent({
+            runner_id: job.runner_id,
+            job_id: job.id,
+            type: 'suspension',
+            description: `Runner suspended pending theft investigation on ${job.id} (mock).`,
+          }));
+          updateRunnerTrustRecord(job.runner_id, prev => suspendRunner(prev, `Theft escalation: "${disputeType}" dispute`));
+        }
+      }
+
+      setLoading(false);
+      setSubmitted(true);
+      await new Promise(r => setTimeout(r, 1500));
+      navigate('/home');
+    } catch (err) {
+      setLoading(false);
+      setDisputeError(err instanceof Error ? err.message : 'Could not file the dispute — try again.');
+    }
   };
 
   const handleSubmit = () => {
@@ -401,13 +416,25 @@ export function RatingPage() {
             <span className="text-sm font-medium text-red-300">File a Dispute</span>
           </div>
 
+          {!canDispute && (
+            <p className="text-[11px] mb-3 text-amber-300/90 flex items-start gap-1.5">
+              <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
+              <span>
+                Job is still <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{job.status}</span>.
+                Disputes need <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>PENDING_RATING</span> after
+                a real handoff (runner enters the confirmation code). Soft-refresh after that, then retry.
+              </span>
+            </p>
+          )}
+
           <div className="mb-3">
             <div className="text-xs mb-2" style={{ color: '#F87171' }}>Issue type</div>
             <div className="grid grid-cols-3 gap-2">
               {DISPUTE_TYPES.map(t => (
                 <button
                   key={t}
-                  onClick={() => setDisputeType(t)}
+                  type="button"
+                  onClick={() => { setDisputeType(t); setDisputeError(''); }}
                   className="py-2 rounded text-xs transition-all"
                   style={{
                     background: disputeType === t ? '#3B1111' : '#1C0A0A',
@@ -419,6 +446,11 @@ export function RatingPage() {
                 </button>
               ))}
             </div>
+            {!disputeType && (
+              <p className="text-[10px] mt-2" style={{ color: '#92400E' }}>
+                Select an issue type to unlock Submit Dispute.
+              </p>
+            )}
           </div>
 
           <textarea
@@ -437,8 +469,8 @@ export function RatingPage() {
           )}
 
           {disputeError && (
-            <p className="text-[11px] mt-2 text-red-300 flex items-center gap-1">
-              <AlertCircle size={10} />{disputeError}
+            <p className="text-[11px] mt-2 text-red-300 flex items-start gap-1">
+              <AlertCircle size={10} className="mt-0.5 flex-shrink-0" />{disputeError}
             </p>
           )}
 
@@ -451,16 +483,17 @@ export function RatingPage() {
       {/* Actions */}
       <div className="space-y-3">
         <button
+          type="button"
           onClick={handleSubmit}
-          disabled={loading || (!disputeMode && paymentConfirmed && stars === 0) || (disputeMode && !canDispute)}
+          disabled={primaryDisabled}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
           style={{
-            background: loading || (!disputeMode && paymentConfirmed && stars === 0) || (disputeMode && !canDispute)
+            background: primaryDisabled
               ? '#1E2D45'
               : disputeMode
                 ? 'linear-gradient(135deg, #EF4444, #DC2626)'
                 : 'linear-gradient(135deg, #06B6D4, #6366F1)',
-            color: (!disputeMode && paymentConfirmed && stars === 0) ? '#475569' : 'white',
+            color: primaryDisabled ? '#475569' : 'white',
           }}
         >
           {loading ? (
@@ -469,7 +502,7 @@ export function RatingPage() {
               Processing...
             </>
           ) : disputeMode ? (
-            'Submit Dispute'
+            !disputeType ? 'Pick an issue type first' : 'Submit Dispute'
           ) : !paymentConfirmed ? (
             `Confirm Payment · ₹${total}`
           ) : stars === 0 ? (
@@ -483,8 +516,14 @@ export function RatingPage() {
             Button unlocks after you select 1–5 stars.
           </p>
         )}
+        {disputeMode && !disputeType && (
+          <p className="text-[10px] text-center" style={{ color: '#64748B' }}>
+            Select Item damaged / Not delivered / Wrong item above.
+          </p>
+        )}
 
         <button
+          type="button"
           onClick={() => { setDisputeMode(d => !d); setStars(0); setDisputeError(''); }}
           className="w-full py-2.5 rounded-lg text-sm border transition-all"
           style={{
