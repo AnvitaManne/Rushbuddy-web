@@ -131,6 +131,9 @@ export interface Job {
   travel_date?: string;
   expires_at: string;
 
+  /** Campus Immediate: true after one sender +30 min extend (Phase 21). */
+  open_extended?: boolean;
+
   condition_acknowledged: boolean;
   photo_url?: string;
   dropoff_photo_url?: string;
@@ -208,18 +211,24 @@ export interface RunnerTrustRecord {
   suspension_reason?: string;
 }
 
-/** Mock First Information Report export bundle for a disputed job, generated for ops/police handoff. */
+/** Campus-security handoff package for a disputed job (not a legal FIR filing). */
 export interface FIRExport {
   job_id: string;
   generated_at: string;
+  disclaimer?: string;
   sender_name: string;
   sender_hostel: string;
+  sender_email?: string;
   runner_id: string;
   runner_name: string;
+  runner_hostel?: string;
+  runner_email?: string;
   item_description: string;
   declared_value?: number;
   pickup_location: string;
   drop_location: string;
+  receiver_phone?: string;
+  corridor_landmark?: string;
   dispute_type?: string;
   dispute_description?: string;
   confirmation_code: string;
@@ -230,4 +239,18 @@ export interface FIRExport {
     delivered_at?: string;
     disputed_at?: string;
   };
+  /** Ordered job_events snapshot at generate time. */
+  events?: Array<{
+    at: string;
+    type: string;
+    actor_user_id?: string | null;
+    payload?: Record<string, unknown>;
+  }>;
+  pickup_photo_id?: string;
+  dropoff_photo_id?: string;
+  pickup_photo_path?: string;
+  dropoff_photo_path?: string;
+  /** Client-hydrated signed URLs (not always persisted). */
+  pickup_photo_url?: string;
+  dropoff_photo_url?: string;
 }

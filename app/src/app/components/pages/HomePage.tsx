@@ -1,6 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router';
 import { useApp, defaultUser } from '../../context/AppContext';
+import { canRunnerSeeJob } from '@/domain/runnerEligibility';
+import { isOpenJobExpired } from '@/domain/jobHelpers';
 import {
   Package, Zap, TrendingUp, Star, Shield, Clock,
   ChevronRight, ArrowUpRight, Award, CheckCircle2,
@@ -64,6 +66,10 @@ export function HomePage() {
     if (isRunnerMode) return j.runner_id === uid;
     return j.sender_id === uid || j.runner_id === uid;
   });
+
+  const feedOpenCount = jobs.filter(
+    j => j.status === 'OPEN' && !isOpenJobExpired(j) && canRunnerSeeJob(user ?? defaultUser, j),
+  ).length;
 
   const openJob = (job: (typeof jobs)[number]) => {
     setActiveJob(job);
@@ -387,7 +393,7 @@ export function HomePage() {
           </div>
           <p className="text-sm font-medium text-white mb-0.5">Browse Jobs</p>
           <p className="text-[11px]" style={{ color: '#64748B' }}>
-            <span className="text-cyan-400 font-medium">{jobs.filter(j => j.status === 'OPEN').length} open</span> right now
+            <span className="text-cyan-400 font-medium">{feedOpenCount} open</span> you can accept
           </p>
           <div className="flex items-center gap-1 mt-2 text-[10px] text-cyan-400">
             <span>View feed</span>

@@ -9,6 +9,11 @@ import type { JobStatus } from '@/domain/enums';
 import { assertTransition } from '@/domain/jobTransitions';
 import { computeDisputeWindowEndsAt } from '@/domain/paymentPolicy';
 import {
+  canExtendOpenJob,
+  CAMPUS_IMMEDIATE_TTL_MS,
+  isOpenJobExpired,
+} from '@/domain/jobHelpers';
+import {
   canUseSecureDrop,
   createMockDropoffEvidence,
   markRunnerPayoutEarnedPatch,
@@ -67,6 +72,15 @@ export function createMockJobService(
 
   return {
     async listJobs() {
+      const now = new Date();
+      for (const job of store.getJobs()) {
+        if (!isOpenJobExpired(job, now)) continue;
+        if (!assertTransition(job.status, 'CLOSED').ok) continue;
+        patchJob(store, job.id, {
+          status: 'CLOSED',
+          closed_at: now.toISOString(),
+        });
+      }
       return store.getJobs();
     },
 
@@ -86,6 +100,8 @@ export function createMockJobService(
     async acceptJob(jobId, runner: Pick<User, 'id' | 'name' | 'rating' | 'hostel_block'>) {
       const job = store.getJobs().find((j) => j.id === jobId);
       if (!job) return null;
+      if (job.sender_id === runner.id) return null;
+      if (isOpenJobExpired(job)) return null;
       const result = assertTransition(job.status, 'MATCHED');
       if (!result.ok) return null;
       return patchJob(store, jobId, {
@@ -221,6 +237,58 @@ export function createMockJobService(
         status: 'CLOSED',
         closed_at: new Date().toISOString(),
       });
+    },
+
+    async repoolNoShow(jobId) {
+      const job = store.getJobs().find((j) => j.id === jobId);
+      if (!job || !job.runner_id || job.pickup_confirmed_at) return null;
+      const result = assertTransition(job.status, 'OPEN');
+      if (!result.ok) return null;
+      return patchJob(store, jobId, {
+        status: 'OPEN',
+        runner_id: undefined,
+        runner_name: undefined,
+        runner_rating: undefined,
+        runner_hostel: undefined,
+        matched_at: undefined,
+        agreed_price: undefined,
+      });
+    },
+
+    async cancelOpenJob(jobId) {
+      const job = store.getJobs().find((j) => j.id === jobId);
+      if (!job) return null;
+      const result = assertTransition(job.status, 'CLOSED');
+      if (!result.ok || job.status !== 'OPEN') return null;
+      return patchJob(store, jobId, {
+        status: 'CLOSED',
+        closed_at: new Date().toISOString(),
+      });
+    },
+
+    async extendOpenJob(jobId) {
+      const job = store.getJobs().find((j) => j.id === jobId);
+      if (!job || !canExtendOpenJob(job)) return null;
+      return patchJob(store, jobId, {
+        expires_at: new Date(Date.now() + CAMPUS_IMMEDIATE_TTL_MS).toISOString(),
+        open_extended: true,
+      });
+    },
+
+    async expireStaleOpenJobs() {
+      const now = new Date();
+      let n = 0;
+      for (const job of store.getJobs()) {
+        if (!isOpenJobExpired(job, now)) continue;
+        const result = assertTransition(job.status, 'CLOSED');
+        if (!result.ok) continue;
+        patchJob(store, job.id, {
+          status: 'CLOSED',
+          closed_at: now.toISOString(),
+        });
+        n += 1;
+      }
+      return n;
     },
   };
 }

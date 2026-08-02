@@ -25,7 +25,7 @@ import type {
 
 /** Feed / list projection — never includes confirmation_code_hash. */
 export const JOB_COLUMNS =
-  'id, organization_id, status, sender_id, sender_name, sender_hostel, runner_id, runner_name, runner_rating, runner_hostel, job_type, handoff_mode, item_type, weight, risk, purchase_type, pickup_location, drop_location, pickup_location_type, drop_location_type, description, price_floor, posted_price, agreed_price, corridor_landmark, receiver_phone, scheduled_window_start, scheduled_window_end, travel_date, expires_at, condition_acknowledged, no_answer_at, ops_notified, no_answer_contact_attempts, sender_response_at, no_answer_resolution, dropoff_secure_location, dropoff_geotag, runner_payout_status, dispute_window_ends_at, declared_value, matched_at, pickup_confirmed_at, delivered_at, closed_at, pickup_photo_id, dropoff_photo_id, created_at, updated_at' as const;
+  'id, organization_id, status, sender_id, sender_name, sender_hostel, runner_id, runner_name, runner_rating, runner_hostel, job_type, handoff_mode, item_type, weight, risk, purchase_type, pickup_location, drop_location, pickup_location_type, drop_location_type, description, price_floor, posted_price, agreed_price, corridor_landmark, receiver_phone, scheduled_window_start, scheduled_window_end, travel_date, expires_at, open_extended, condition_acknowledged, no_answer_at, ops_notified, no_answer_contact_attempts, sender_response_at, no_answer_resolution, dropoff_secure_location, dropoff_geotag, runner_payout_status, dispute_window_ends_at, declared_value, matched_at, pickup_confirmed_at, delivered_at, closed_at, pickup_photo_id, dropoff_photo_id, created_at, updated_at' as const;
 
 /** Sender-only detail projection — adds the plaintext code column. */
 export const JOB_COLUMNS_WITH_CODE = `${JOB_COLUMNS}, confirmation_code_hash` as const;
@@ -62,6 +62,7 @@ export interface DbJobRow {
   scheduled_window_end: string | null;
   travel_date: string | null;
   expires_at: string;
+  open_extended?: boolean | null;
   condition_acknowledged: boolean;
   no_answer_at: string | null;
   ops_notified: boolean | null;
@@ -140,6 +141,8 @@ export function mapJobRow(
     condition_acknowledged: !!row.condition_acknowledged,
     created_at: row.created_at,
   };
+
+  if (row.open_extended) job.open_extended = true;
 
   if (row.runner_id) {
     job.runner_id = row.runner_id;

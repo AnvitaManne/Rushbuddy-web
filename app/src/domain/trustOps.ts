@@ -63,19 +63,40 @@ export function unsuspendRunner(record: RunnerTrustRecord): RunnerTrustRecord {
   };
 }
 
-/** Builds a mock FIR (First Information Report) support package for a disputed job. */
+/** Builds an FIR support package for a disputed job (mock / client fallback). */
 export function buildFirExport(job: Job): FIRExport {
+  const events: NonNullable<FIRExport['events']> = [
+    { at: job.created_at, type: 'status_changed', payload: { to: 'OPEN' } },
+  ];
+  if (job.matched_at) {
+    events.push({ at: job.matched_at, type: 'status_changed', payload: { to: 'MATCHED' } });
+  }
+  if (job.pickup_confirmed_at) {
+    events.push({ at: job.pickup_confirmed_at, type: 'pickup_acknowledged' });
+  }
+  if (job.delivered_at) {
+    events.push({ at: job.delivered_at, type: 'status_changed', payload: { to: 'PENDING_RATING' } });
+  }
+  if (job.disputed_at) {
+    events.push({ at: job.disputed_at, type: 'dispute_filed', payload: { type: job.dispute_type } });
+  }
+
   return {
     job_id: job.id,
     generated_at: new Date().toISOString(),
+    disclaimer:
+      'RushBuddy campus support package for security / ops handoff. Not a legal First Information Report and not a police filing.',
     sender_name: job.sender_name,
     sender_hostel: job.sender_hostel,
     runner_id: job.runner_id ?? 'unknown',
     runner_name: job.runner_name ?? 'unknown',
+    runner_hostel: job.runner_hostel,
     item_description: `${job.item_type} · ${job.weight} · ${job.risk} risk — ${job.description || 'No description provided'}`,
     declared_value: job.declared_value,
     pickup_location: job.pickup_location,
     drop_location: job.drop_location,
+    receiver_phone: job.receiver_phone,
+    corridor_landmark: job.corridor_landmark,
     dispute_type: job.dispute_type,
     dispute_description: job.dispute_description,
     confirmation_code: job.confirmation_code,
@@ -86,6 +107,9 @@ export function buildFirExport(job: Job): FIRExport {
       delivered_at: job.delivered_at,
       disputed_at: job.disputed_at,
     },
+    events,
+    pickup_photo_url: job.photo_url,
+    dropoff_photo_url: job.dropoff_photo_url,
   };
 }
 

@@ -5,6 +5,8 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { services, isSupabaseAdapter } from '@/services';
+import type { FIRExport } from '@/domain/types';
+import { FirPackagePanel } from '../FirPackagePanel';
 import {
   applyDisputeRunnerFaultPenalty,
   createTrustEvent,
@@ -34,6 +36,8 @@ export function OpsPage() {
   const [unsuspend, setUnsuspend] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [fir, setFir] = useState<FIRExport | null>(null);
+  const [firCopied, setFirCopied] = useState(false);
 
   const queue = useMemo(
     () =>
@@ -162,6 +166,8 @@ export function OpsPage() {
                     setSelectedId(j.id);
                     setHint(null);
                     setUnsuspend(false);
+                    setFir(null);
+                    setFirCopied(false);
                   }}
                   className="w-full text-left rounded-xl p-3 transition-all"
                   style={{
@@ -209,6 +215,49 @@ export function OpsPage() {
               {selected.status === 'DISPUTED' && (
                 <>
                   <div className="text-[10px] uppercase tracking-wide" style={{ color: '#475569' }}>
+                    Support package (FIR)
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      setHint(null);
+                      try {
+                        const latest = await services.fir.getLatest(selected.id);
+                        const next = latest ?? (await services.fir.generate(selected.id));
+                        if (!next) {
+                          setHint('No support package yet — generate as sender or retry.');
+                          return;
+                        }
+                        setFir(next);
+                      } catch (err) {
+                        setHint(err instanceof Error ? err.message : 'FIR load failed');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                    className="w-full py-2 rounded-lg text-xs font-medium text-white"
+                    style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}
+                  >
+                    Load / generate support package
+                  </button>
+                  {fir && (
+                    <FirPackagePanel
+                      fir={fir}
+                      copied={firCopied}
+                      onCopy={async () => {
+                        try {
+                          await navigator.clipboard.writeText(JSON.stringify(fir, null, 2));
+                          setFirCopied(true);
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                    />
+                  )}
+
+                  <div className="text-[10px] uppercase tracking-wide pt-2" style={{ color: '#475569' }}>
                     Resolve dispute
                   </div>
                   <div className="space-y-2">
