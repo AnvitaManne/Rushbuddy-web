@@ -1,35 +1,63 @@
 # RushBuddy web
 
-Campus peer-delivery MVP (VIT Vellore beta). This repo holds the product spec, execution plan, and the Figma-derived React prototype.
+Campus peer-delivery for VIT Vellore — send a package with a student runner nearby, track handoff with a confirmation code, and close the job with payment, ratings, and dispute/trust controls.
 
-## Repository layout
+This repo is a full-stack MVP: React client + Supabase (Postgres, Auth, Storage, RLS) with a mock adapter for offline/demo work. Built through **Phase 22**.
 
-```
-rushbuddy-web/
-├── README.md                 # You are here
-├── notes/                    # Phase summaries (add phase-N-summary.md after each phase)
-│   ├── README.md             # Template for future phases
-│   ├── phase-1-summary.md
-│   └── phase-8-summary.md
-├── docs/
-│   ├── product/              # Source-of-truth product docs
-│   │   ├── core-flow-specs.md
-│   │   └── working-notes-v1.md
-│   ├── plans/                # Implementation roadmap
-│   │   └── sjt-mvp-core-loop.md
-│   ├── qa/                   # Pilot QA + dogfooding
-│   │   ├── scenario-test-matrix.md
-│   │   ├── internal-dogfooding-runbook.md
-│   │   └── pilot-readiness-checklist.md
-│   └── design/               # Design references
-│       └── figma-guidelines.md
-└── app/                      # Vite + React prototype (from Figma export)
-    ├── package.json
-    ├── src/
-    └── ...
-```
+---
 
-## Quick start (prototype)
+## Features (current stage)
+
+### Auth & campus gate
+- VIT-only signup (`@vitstudent.ac.in`) with email OTP via Supabase Auth
+- Registration captures name, hostel block, and gender (matching-only; never shown on profiles/cards)
+- Organization membership for the seeded VIT Vellore campus
+
+### Post a request (sender)
+- Three job types: **Campus Immediate**, **Campus Scheduled**, **Intercity**
+- Pickup/drop location types (`general` / men's / women's hostel) with gender-aware runner filtering
+- Carry-only rules, Food “already ordered” ack, ₹2,000 declared-value cap
+- Editable offer price with system floor; mode-locked handoff (campus → Mode 1, intercity → Mode 2)
+
+### Runner loop
+- Job feed with eligibility filters; race-safe accept (single winner in Postgres)
+- Active delivery: condition acknowledge, mandatory photos for Fragile/Valuable, handoff code entry
+- No-answer-at-door protocol → hold for ops when sender unreachable
+- Cross-account status sync (sender tracking updates when the runner advances the job)
+
+### Open-job lifecycle
+- Campus Immediate TTL with live countdown, cancel, and one-shot +30 min extend
+- Stale unmatched jobs auto-expire and leave the runner feed
+
+### Payments, ratings & disputes
+- Mock Cash / UPI / PhonePe settlement after successful handoff
+- Optional rating; 2-hour dispute window
+- Theft / not-delivered escalation with runner suspension hooks
+
+### Trust & ops
+- “Find New Buddy” no-show re-pool with strike count (auto-suspend at 2)
+- Lightweight **Ops Queue** for disputed / issue-reported jobs
+- Real camera/gallery photo capture uploaded to Supabase Storage
+- **FIR support package** (readable panel + copy / download JSON / print) — campus-security handoff aid, **not** a legal FIR filing
+
+### Architecture
+- Domain layer: types, job state machine, pricing/expiry/eligibility helpers
+- Service adapters: `VITE_DATA_ADAPTER=mock | supabase` (UI stays the same)
+- Append-only `job_events` timeline; RLS-backed jobs, payments, disputes, photos, trust
+
+---
+
+## Tech stack
+
+| Layer | Choice |
+|--------|--------|
+| Frontend | React 18, Vite, React Router, Tailwind |
+| Backend | Supabase (Postgres, Auth OTP, Storage, RPC + RLS) |
+| Local / demo | In-memory mock adapter (no env required) |
+
+---
+
+## Quick start
 
 ```bash
 cd app
@@ -37,63 +65,57 @@ pnpm install
 pnpm dev
 ```
 
-Open the URL shown in the terminal (usually `http://localhost:5173`).
-
-Production compile check:
+Open the URL Vite prints (usually `http://localhost:5173`).
 
 ```bash
 cd app
-pnpm build
+pnpm build   # production compile check
 ```
 
-App-local notes (including console DEV helpers): [app/README.md](app/README.md).
+### Supabase mode (optional)
 
-## Pilot QA (Phase 8)
+1. Copy `app/.env.example` → `app/.env.local`
+2. Set `VITE_DATA_ADAPTER=supabase` and paste project URL + anon key
+3. From repo root, apply migrations with the Supabase CLI as needed
 
-**Hard limits — do not treat as product bugs**
+App-local notes (DEV console helpers, Home sender/runner toggle): [app/README.md](app/README.md).
 
-- No real money (mock Cash / UPI / PhonePe only)
-- No real KYC (VIT email / mock OTP only; no Aadhaar uploads)
-- No backend persistence (in-memory state; **refresh resets** the session)
-- FIR support package is mock export/copy only — never file with police
+---
 
-### Suggested QA order
+## Honest limits (resume / demo)
 
-1. [docs/qa/scenario-test-matrix.md](docs/qa/scenario-test-matrix.md) — mark P0 / P1 Pass/Fail  
-2. [docs/qa/internal-dogfooding-runbook.md](docs/qa/internal-dogfooding-runbook.md) — 19-job tabletop run  
-3. [docs/qa/pilot-readiness-checklist.md](docs/qa/pilot-readiness-checklist.md) — Green / Yellow / Red go/no-go  
+- **No real money** — settlement UI is mock Cash / UPI / PhonePe
+- **No real KYC / Aadhaar** — VIT email + OTP only
+- **FIR package** is evidence export for campus security / founders — it does not file with police
+- Mock adapter: refresh resets session; Supabase mode persists across accounts
 
-### Load pilot scenarios (DEV console)
+Deferred (not in this version): live payment gateway, live GPS tracking, location-radius matching.
 
-With `pnpm dev` running, open the browser DevTools console and run:
+---
 
-```js
-__rushbuddyDev.loadPilotScenarios()
+## Repo layout
+
+```
+Rushbuddy-web/
+├── app/                 # Vite + React client
+├── supabase/            # Migrations, seed, local project config
+├── docs/
+│   ├── product/         # Core flow specs + working notes
+│   ├── plans/           # MVP core-loop plan
+│   └── qa/              # Pilot scenario matrix & dogfooding
+└── notes/               # Phase 1–22 summaries
 ```
 
-That seeds `PILOT-01`…`12` jobs for dogfooding. More helpers: [app/README.md](app/README.md).
+---
 
-### Home Sender / Runner mode (mock)
+## Docs worth reading
 
-Same logged-in user can act as both. On Command Centre (`/home`):
+1. [docs/product/core-flow-specs.md](docs/product/core-flow-specs.md) — flows, handoff modes, no-show & payment rules  
+2. [docs/plans/sjt-mvp-core-loop.md](docs/plans/sjt-mvp-core-loop.md) — locked MVP business rules  
+3. [notes/](notes/) — what each build phase shipped  
 
-- **Sender / Runner toggle stays on Home** — it does not jump to Post Request or Job Feed (use Quick Actions or nav for those).
-- **Sender mode** shows your sent requests + sender snapshot; opening a job goes to Tracking / Rate.
-- **Runner mode** shows your runs + earnings metrics; opening a job goes to Active Delivery.
+---
 
-## What to read first
+## Status
 
-1. [docs/product/core-flow-specs.md](docs/product/core-flow-specs.md) — flows, handoff modes, no-show, payment rules
-2. [docs/plans/sjt-mvp-core-loop.md](docs/plans/sjt-mvp-core-loop.md) — phased build plan
-3. [docs/product/working-notes-v1.md](docs/product/working-notes-v1.md) — founder ops/trust context
-4. [docs/qa/scenario-test-matrix.md](docs/qa/scenario-test-matrix.md) — when preparing a pilot QA pass
-
-## Git workflow
-
-- `main` — stable
-- `feature/<phase-name>` — one phase per branch (e.g. `feature/phase-1-data-model`)
-- Commit docs and code in small, logical commits
-
-## Next build phases
-
-See [docs/plans/sjt-mvp-core-loop.md](docs/plans/sjt-mvp-core-loop.md). Recommended order: data model → auth → post request → runner delivery → payment → ops/trust.
+**Phase 22 complete** — end-to-end campus delivery MVP with Supabase persistence, ops queue, photo evidence, and FIR support package. Built for a VIT Vellore beta / pilot, not a public consumer launch.
