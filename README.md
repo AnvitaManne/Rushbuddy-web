@@ -1,4 +1,4 @@
-# RushBuddy Web
+# RushBuddy web
 
 Campus peer-delivery MVP (VIT Vellore beta). This repo holds the product spec, execution plan, and the Figma-derived React prototype.
 
