@@ -1,4 +1,5 @@
 # RushBuddy
+# RushBuddy web
 
 Peer-to-peer package delivery for campus networks. Senders post carry-only jobs; nearby student runners accept, deliver, and close out with a confirmation-code handoff — backed by payments, ratings, disputes, and ops tooling.
 
