@@ -114,8 +114,3 @@ Rushbuddy-web/
 2. [docs/plans/sjt-mvp-core-loop.md](docs/plans/sjt-mvp-core-loop.md) — locked MVP business rules  
 3. [notes/](notes/) — what each build phase shipped  
 
----
-
-## Status
-
-**Phase 22 complete** — end-to-end campus delivery MVP with Supabase persistence, ops queue, photo evidence, and FIR support package. Built for a VIT Vellore beta / pilot, not a public consumer launch.
