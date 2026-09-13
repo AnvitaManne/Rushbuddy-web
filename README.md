@@ -1,59 +1,61 @@
+# RushBuddy
 # RushBuddy web
 
-Campus peer-delivery for VIT Vellore — send a package with a student runner nearby, track handoff with a confirmation code, and close the job with payment, ratings, and dispute/trust controls.
+Peer-to-peer package delivery for campus networks. Senders post carry-only jobs; nearby student runners accept, deliver, and close out with a confirmation-code handoff — backed by payments, ratings, disputes, and ops tooling.
 
-This repo is a full-stack MVP: React client + Supabase (Postgres, Auth, Storage, RLS) with a mock adapter for offline/demo work. Built through **Phase 22**.
-
----
-
-## Features (current stage)
-
-### Auth & campus gate
-- VIT-only signup (`@vitstudent.ac.in`) with email OTP via Supabase Auth
-- Registration captures name, hostel block, and gender (matching-only; never shown on profiles/cards)
-- Organization membership for the seeded VIT Vellore campus
-
-### Post a request (sender)
-- Three job types: **Campus Immediate**, **Campus Scheduled**, **Intercity**
-- Pickup/drop location types (`general` / men's / women's hostel) with gender-aware runner filtering
-- Carry-only rules, Food “already ordered” ack, ₹2,000 declared-value cap
-- Editable offer price with system floor; mode-locked handoff (campus → Mode 1, intercity → Mode 2)
-
-### Runner loop
-- Job feed with eligibility filters; race-safe accept (single winner in Postgres)
-- Active delivery: condition acknowledge, mandatory photos for Fragile/Valuable, handoff code entry
-- No-answer-at-door protocol → hold for ops when sender unreachable
-- Cross-account status sync (sender tracking updates when the runner advances the job)
-
-### Open-job lifecycle
-- Campus Immediate TTL with live countdown, cancel, and one-shot +30 min extend
-- Stale unmatched jobs auto-expire and leave the runner feed
-
-### Payments, ratings & disputes
-- Mock Cash / UPI / PhonePe settlement after successful handoff
-- Optional rating; 2-hour dispute window
-- Theft / not-delivered escalation with runner suspension hooks
-
-### Trust & ops
-- “Find New Buddy” no-show re-pool with strike count (auto-suspend at 2)
-- Lightweight **Ops Queue** for disputed / issue-reported jobs
-- Real camera/gallery photo capture uploaded to Supabase Storage
-- **FIR support package** (readable panel + copy / download JSON / print) — campus-security handoff aid, **not** a legal FIR filing
-
-### Architecture
-- Domain layer: types, job state machine, pricing/expiry/eligibility helpers
-- Service adapters: `VITE_DATA_ADAPTER=mock | supabase` (UI stays the same)
-- Append-only `job_events` timeline; RLS-backed jobs, payments, disputes, photos, trust
+Full-stack MVP: React client + Supabase (Postgres, Auth, Storage, RLS), plus a mock data adapter for local development.
 
 ---
 
-## Tech stack
+## Product
 
-| Layer | Choice |
-|--------|--------|
-| Frontend | React 18, Vite, React Router, Tailwind |
-| Backend | Supabase (Postgres, Auth OTP, Storage, RPC + RLS) |
-| Local / demo | In-memory mock adapter (no env required) |
+### Auth & access
+- Institution-gated signup (email domain allowlist) with OTP auth
+- Profile fields for hostel and matching preferences (preferences stay internal — never shown on public cards)
+- Multi-tenant org membership per campus
+
+### Posting
+- Job types: immediate, scheduled window, and intercity corridor
+- Location typing (general / gendered hostel) with eligibility filtering for runners
+- Carry-only policy, declared-value caps, and editable offer price above a computed floor
+- Handoff mode locked at post time (direct P2P vs landmark)
+
+### Delivery loop
+- Runner feed with eligibility rules; race-safe accept (single winner via Postgres RPC)
+- Condition acknowledge, risk-tiered photo evidence, and 4-digit handoff code completion
+- No-answer-at-dropoff protocol with hold-for-ops escalation
+- Live cross-account sync between sender tracking and runner progress
+
+### Lifecycle & expiry
+- Open-job TTL with countdown, cancel, and one-shot extend for immediate jobs
+- Auto-expiry so stale unmatched jobs leave the feed
+
+### Payments, trust & ops
+- Settlement flow after successful handoff (Cash / UPI / PhonePe UI; gateway integration deferred)
+- Ratings, dispute window, theft / not-delivered escalation, and suspension hooks
+- No-show re-pool (“Find New Buddy”) with strike counting
+- Ops queue for disputed and issue-reported jobs
+- Camera/gallery capture uploaded to object storage
+- Exportable incident support package (copy / JSON / print) for campus security handoff — not a legal filing
+
+---
+
+## Engineering highlights
+
+- Domain-first core: typed job model, explicit state machine, pure helpers for pricing, expiry, and runner eligibility
+- Adapter boundary (`mock` | `supabase`) so the UI stays stable while persistence swaps
+- Append-only job event timeline; RLS on jobs, payments, disputes, photos, and trust data
+- Server-side handoff verification and lifecycle RPCs for multi-account consistency
+
+---
+
+## Stack
+
+| Layer | Tech |
+|--------|------|
+| Client | React 18, Vite, React Router, Tailwind |
+| Backend | Supabase — Postgres, Auth (OTP), Storage, RPC + RLS |
+| Local | In-memory mock adapter (no env required) |
 
 ---
 
@@ -65,57 +67,44 @@ pnpm install
 pnpm dev
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`).
+Usually serves at `http://localhost:5173`.
 
 ```bash
-cd app
-pnpm build   # production compile check
+cd app && pnpm build
 ```
 
-### Supabase mode (optional)
+### Supabase mode
 
 1. Copy `app/.env.example` → `app/.env.local`
-2. Set `VITE_DATA_ADAPTER=supabase` and paste project URL + anon key
-3. From repo root, apply migrations with the Supabase CLI as needed
+2. Set `VITE_DATA_ADAPTER=supabase` with project URL + anon key
+3. Apply migrations from the repo root via the Supabase CLI
 
-App-local notes (DEV console helpers, Home sender/runner toggle): [app/README.md](app/README.md).
-
----
-
-## Honest limits (resume / demo)
-
-- **No real money** — settlement UI is mock Cash / UPI / PhonePe
-- **No real KYC / Aadhaar** — VIT email + OTP only
-- **FIR package** is evidence export for campus security / founders — it does not file with police
-- Mock adapter: refresh resets session; Supabase mode persists across accounts
-
-Deferred (not in this version): live payment gateway, live GPS tracking, location-radius matching.
+More app notes: [app/README.md](app/README.md).
 
 ---
 
-## Repo layout
+## Current scope
+
+- Settlement is simulated in-app; no live payment processor yet
+- Identity is email OTP + domain gate; no government-ID KYC
+- GPS tracking and radius-based matching are not in this build
+- Mock adapter resets on refresh; Supabase mode persists across sessions and accounts
+
+---
+
+## Layout
 
 ```
-Rushbuddy-web/
-├── app/                 # Vite + React client
-├── supabase/            # Migrations, seed, local project config
-├── docs/
-│   ├── product/         # Core flow specs + working notes
-│   ├── plans/           # MVP core-loop plan
-│   └── qa/              # Pilot scenario matrix & dogfooding
-└── notes/               # Phase 1–22 summaries
+├── app/          # Vite + React client
+├── supabase/     # Migrations, seed, project config
+├── docs/         # Product specs, plans, QA
+└── notes/        # Build summaries
 ```
 
 ---
 
-## Docs worth reading
+## Docs
 
-1. [docs/product/core-flow-specs.md](docs/product/core-flow-specs.md) — flows, handoff modes, no-show & payment rules  
-2. [docs/plans/sjt-mvp-core-loop.md](docs/plans/sjt-mvp-core-loop.md) — locked MVP business rules  
-3. [notes/](notes/) — what each build phase shipped  
-
----
-
-## Status
-
-**Phase 22 complete** — end-to-end campus delivery MVP with Supabase persistence, ops queue, photo evidence, and FIR support package. Built for a VIT Vellore beta / pilot, not a public consumer launch.
+- [docs/product/core-flow-specs.md](docs/product/core-flow-specs.md) — flows, handoff modes, failure & payment rules  
+- [docs/plans/sjt-mvp-core-loop.md](docs/plans/sjt-mvp-core-loop.md) — locked MVP operating rules  
+- [notes/](notes/) — what shipped in each build increment  
