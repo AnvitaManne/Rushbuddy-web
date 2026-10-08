@@ -2,6 +2,51 @@
 @import './tailwind.css';
 @import './theme.css';
 
+.rb-app {
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+  color: var(--rb-ink);
+  background: var(--rb-paper);
+}
+
+.rb-display {
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.rb-banner {
+  background-color: #0B2340;
+  background-image:
+    linear-gradient(90deg, rgba(11, 35, 64, 0.92) 0%, rgba(11, 35, 64, 0.62) 48%, rgba(11, 35, 64, 0.2) 78%, rgba(196, 69, 54, 0.12) 100%),
+    repeating-linear-gradient(
+      95deg,
+      transparent 0 22px,
+      rgba(255, 255, 255, 0.035) 22px 24px,
+      transparent 24px 56px
+    ),
+    linear-gradient(105deg, #0B2340 0%, #2a4258 38%, #C44536 70%, #E8A04A 88%, #7BA3C4 100%);
+  background-size: cover, 200px 100%, cover;
+}
+
+.rb-card {
+  background: #ffffff;
+  border: 1px solid rgba(11, 35, 64, 0.08);
+  box-shadow: 0 1px 2px rgba(11, 35, 64, 0.05);
+}
+
+.rb-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6B7684;
+}
+
+.rb-field {
+  background: #F3F2EF;
+  border: 1px solid rgba(11, 35, 64, 0.12);
+  color: #0B2340;
+  border-radius: 8px;
+}
+
 @media print {
   body * {
     visibility: hidden !important;

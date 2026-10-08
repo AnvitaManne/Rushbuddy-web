@@ -45,6 +45,7 @@ export function ActiveDeliveryPage() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [photoCaptured, setPhotoCaptured] = useState(!!job?.photo_url);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [ackError, setAckError] = useState('');
   const [dropoffPhotoCaptured, setDropoffPhotoCaptured] = useState(!!job?.dropoff_photo_url);
   const [dropoffUploading, setDropoffUploading] = useState(false);
   const [codeInput, setCodeInput] = useState('');
@@ -83,18 +84,35 @@ export function ActiveDeliveryPage() {
 
   const elapsed = `${String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
-  const canAckCondition = job?.risk === 'Low' || photoCaptured;
+  const canAckCondition = !job ? false : job.risk === 'Low' || photoCaptured || !!job.photo_url;
 
   // Merge a service-returned job into local state (preserves display-only + local
   // fields the backend doesn't persist, e.g. photo_url/eta). Returns false on null.
   const applyJob = (updated: Job | null, localPatch: Partial<Job> = {}) => {
     if (!updated) return false;
-    setJobs(prev => prev.map(j => (j.id === updated.id ? { ...j, ...updated, ...localPatch } : j)));
+    setJobs(prev => prev.map(j => {
+      if (j.id !== updated.id) return j;
+      return {
+        ...j,
+        ...updated,
+        ...localPatch,
+        photo_url: localPatch.photo_url ?? updated.photo_url ?? j.photo_url,
+        dropoff_photo_url: localPatch.dropoff_photo_url ?? updated.dropoff_photo_url ?? j.dropoff_photo_url,
+      };
+    }));
     return true;
   };
 
   const handlePickupPhoto = async (file: File) => {
-    if (!job || photoUploading) return;
+    if (!job) return;
+    const localUrl = URL.createObjectURL(file);
+    // Unlock Condition Ack as soon as a picture is chosen — don't wait on storage.
+    setPhotoCaptured(true);
+    setAckError('');
+    setJobs((prev) =>
+      prev.map((j) => (j.id === job.id ? { ...j, photo_url: j.photo_url ?? localUrl } : j)),
+    );
+    if (photoUploading) return;
     setPhotoUploading(true);
     try {
       const uploaded = await services.photos.uploadJobPhoto({
@@ -103,13 +121,13 @@ export function ActiveDeliveryPage() {
         blob: file,
       });
       setJobs((prev) =>
-        prev.map((j) => (j.id === job.id ? { ...j, photo_url: uploaded.url } : j)),
+        prev.map((j) => (j.id === job.id ? { ...j, photo_url: uploaded.url || localUrl } : j)),
       );
-      setPhotoCaptured(true);
     } catch (err) {
       console.warn('[RushBuddy] pickup photo upload failed', err);
-      // Soft-fail: still unlock Low-risk ack; Fragile stays gated until success.
-      if (job.risk === 'Low') setPhotoCaptured(true);
+      setJobs((prev) =>
+        prev.map((j) => (j.id === job.id ? { ...j, photo_url: j.photo_url ?? localUrl } : j)),
+      );
     } finally {
       setPhotoUploading(false);
     }
@@ -137,14 +155,28 @@ export function ActiveDeliveryPage() {
   };
 
   const handleConditionAck = async () => {
-    if (!job || !canAckCondition) return;
+    if (!job) return;
+    if (!(job.risk === 'Low' || photoCaptured || job.photo_url)) {
+      setAckError('Capture a pickup photo first — required for Fragile / Valuable items.');
+      return;
+    }
+    setAckError('');
     setCondAckLoading(true);
-    const updated = await services.jobs.acknowledgePickup(job.id, {
-      photo_url: job.photo_url,
-    });
-    setCondAckLoading(false);
-    if (!applyJob(updated)) return;
-    setPhase('in_transit');
+    try {
+      const updated = await services.jobs.acknowledgePickup(job.id, {
+        photo_url: job.photo_url,
+      });
+      if (!applyJob(updated, { photo_url: job.photo_url, condition_acknowledged: true })) {
+        setAckError('Could not record Condition Acknowledged. Make sure this job is still matched to you, then try again.');
+        return;
+      }
+      setPhase('in_transit');
+    } catch (err) {
+      console.warn('[RushBuddy] acknowledgePickup failed', err);
+      setAckError(err instanceof Error ? err.message : 'Could not record Condition Acknowledged.');
+    } finally {
+      setCondAckLoading(false);
+    }
   };
 
   const handleConfirmCode = async () => {
@@ -206,32 +238,34 @@ export function ActiveDeliveryPage() {
 
   if (!job) {
     return (
-      <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
-        <Package size={32} className="text-slate-600 mx-auto mb-3" />
-        <p className="text-sm mb-4" style={{ color: '#64748B' }}>No active delivery right now.</p>
-        <button onClick={() => navigate('/runner/feed')}
-          className="px-4 py-2 rounded-lg text-sm text-cyan-400"
-          style={{ background: '#061620', border: '1px solid #0E2D3D' }}>
-          Browse Job Feed
-        </button>
+      <div className="p-6 max-w-md mx-auto">
+        <div className="rb-card p-6 text-center" style={{ borderRadius: 12 }}>
+          <Package size={32} className="mx-auto mb-3" style={{ color: '#C44536' }} />
+          <p className="text-sm mb-4 font-medium" style={{ color: '#0B2340' }}>No active delivery right now.</p>
+          <button onClick={() => navigate('/runner/feed')}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ background: '#C44536' }}>
+            Browse Job Feed
+          </button>
+        </div>
       </div>
     );
   }
 
   if (job.status === 'ISSUE_REPORTED') {
     return (
-      <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="p-6 text-center" >
         <ShieldAlert size={32} className="text-amber-400 mx-auto mb-3" />
-        <h3 className="text-white font-semibold mb-1">Held for Ops</h3>
-        <p className="text-sm mb-1 text-white/80" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</p>
-        <p className="text-sm mb-4" style={{ color: '#64748B' }}>
+        <h3 className="text-[#0B2340] font-semibold mb-1">Held for Ops</h3>
+        <p className="text-sm mb-1 text-[#0B2340]/80">{job.id}</p>
+        <p className="text-sm mb-4" style={{ color: '#6B7684' }}>
           {job.pickup_location} → {job.drop_location}
           <br />
           Sender unreachable — item held per fragile/valuable policy. Your payout is earned.
         </p>
         <button type="button" onClick={() => navigate('/runner/feed')}
-          className="px-4 py-2 rounded-lg text-sm text-cyan-400"
-          style={{ background: '#061620', border: '1px solid #0E2D3D' }}>
+          className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+          style={{ background: '#C44536' }}>
           Browse Job Feed
         </button>
       </div>
@@ -240,13 +274,13 @@ export function ActiveDeliveryPage() {
 
   if (job.status === 'PENDING_RATING' || job.status === 'CLOSED' || job.status === 'DISPUTED') {
     return (
-      <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="p-6 text-center" >
         <CheckCircle2 size={32} className="text-emerald-400 mx-auto mb-3" />
-        <h3 className="text-white font-semibold mb-1">
+        <h3 className="text-[#0B2340] font-semibold mb-1">
           {job.status === 'DISPUTED' ? 'Under ops review' : job.status === 'CLOSED' ? 'Job closed' : 'Handoff complete'}
         </h3>
-        <p className="text-sm mb-1 text-white/80" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</p>
-        <p className="text-sm mb-4" style={{ color: '#64748B' }}>
+        <p className="text-sm mb-1 text-[#0B2340]/80">{job.id}</p>
+        <p className="text-sm mb-4" style={{ color: '#6B7684' }}>
           {job.status === 'PENDING_RATING'
             ? 'Waiting on sender payment & rating.'
             : job.status === 'DISPUTED'
@@ -254,8 +288,8 @@ export function ActiveDeliveryPage() {
               : `Closed · payout ${job.runner_payout_status ?? 'n/a'}`}
         </p>
         <button type="button" onClick={() => navigate('/home')}
-          className="px-4 py-2 rounded-lg text-sm text-cyan-400"
-          style={{ background: '#061620', border: '1px solid #0E2D3D' }}>
+          className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+          style={{ background: '#C44536' }}>
           Back to Home
         </button>
       </div>
@@ -276,32 +310,32 @@ export function ActiveDeliveryPage() {
   const needsOpsHold = requiresOpsHold(job);
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-xl space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-xl space-y-4" >
 
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="text-xs mb-1" style={{ color: '#6B7684' }}>
             ACTIVE DELIVERY · {job.id}
           </div>
-          <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
+          <h1 className="text-[#0B2340]" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
             {phaseLabels[phase === 'resolved' ? 'in_transit' : phase].title}
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
+          <p className="text-sm mt-0.5" style={{ color: '#6B7684' }}>
             {phaseLabels[phase === 'resolved' ? 'in_transit' : phase].sub}
           </p>
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-          style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
+          style={{ background: '#F3F2EF', border: '1px solid #1A3520' }}>
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-emerald-400 text-xs" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+          <span className="text-emerald-400 text-xs">
             {elapsed}
           </span>
         </div>
       </div>
 
       {/* Delivery progress */}
-      <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+      <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
         <div className="flex items-center gap-2 mb-4">
           {steps.map((s, i) => {
             const isDone = stepIdx > i;
@@ -311,20 +345,20 @@ export function ActiveDeliveryPage() {
                 <div className="flex flex-col items-center">
                   <div className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-500"
                     style={{
-                      background: isDone ? '#0A2010' : isActive ? '#061620' : '#111827',
-                      border: `2px solid ${isDone ? '#10B981' : isActive ? '#06B6D4' : '#1E2D45'}`,
+                      background: isDone ? '#F3F2EF' : isActive ? '#C44536' : '#ffffff',
+                      border: `2px solid ${isDone ? '#10B981' : isActive ? '#0B2340' : 'rgba(11,35,64,0.12)'}`,
                     }}>
                     {isDone
                       ? <CheckCircle2 size={13} className="text-emerald-400" />
                       : <span className="text-[10px]" style={{
-                          color: isActive ? '#22D3EE' : '#475569',
-                          fontFamily: 'JetBrains Mono, monospace'
+                          color: isActive ? '#ffffff' : '#6B7684',
+                          
                         }}>{i + 1}</span>
                     }
                   </div>
                 </div>
                 {i < steps.length - 1 && (
-                  <div className="flex-1 h-px" style={{ background: isDone ? '#10B981' : '#1E2D45' }} />
+                  <div className="flex-1 h-px" style={{ background: isDone ? '#10B981' : 'rgba(11,35,64,0.12)' }} />
                 )}
               </React.Fragment>
             );
@@ -335,18 +369,18 @@ export function ActiveDeliveryPage() {
         <AnimatePresence mode="wait">
           {phase === 'going_pickup' && (
             <motion.div key="phase1" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <div className="rounded-lg p-3 mb-4" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+              <div className="rounded-lg p-3 mb-4" style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="text-xs text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>PICKUP LOCATION</span>
+                  <span className="text-xs text-[#0B2340]">PICKUP LOCATION</span>
                 </div>
-                <p className="text-sm text-white">{job.pickup_location}</p>
+                <p className="text-sm text-[#0B2340]">{job.pickup_location}</p>
                 <div className="flex items-center gap-3 mt-2">
-                  <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
+                  <div className="flex items-center gap-1 text-xs" style={{ color: '#6B7684' }}>
                     <MapPin size={11} />
                     {job.distance || '0.8 km'}
                   </div>
-                  <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
+                  <div className="flex items-center gap-1 text-xs" style={{ color: '#6B7684' }}>
                     <Clock size={11} />
                     ~{job.eta || '8 min'}
                   </div>
@@ -354,17 +388,17 @@ export function ActiveDeliveryPage() {
               </div>
 
               <div className="flex items-center gap-3 p-3 rounded-lg mb-4"
-                style={{ background: '#0B1525', border: '1px solid #1E2D45' }}>
+                style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0"
                   style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', fontSize: '0.9rem' }}>
                   {job.sender_name.charAt(0)}
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs text-white">{job.sender_name}</div>
-                  <div className="text-[10px]" style={{ color: '#64748B' }}>Sender · {job.sender_hostel}</div>
+                  <div className="text-xs text-[#0B2340]">{job.sender_name}</div>
+                  <div className="text-[10px]" style={{ color: '#6B7684' }}>Sender · {job.sender_hostel}</div>
                 </div>
                 <button className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
+                  style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
                   <Phone size={13} className="text-slate-400" />
                 </button>
               </div>
@@ -372,7 +406,7 @@ export function ActiveDeliveryPage() {
               <button
                 onClick={() => setPhase('condition_ack')}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white"
-                style={{ background: 'linear-gradient(135deg, #06B6D4, #0EA5E9)' }}
+                style={{ background: '#C44536' }}
               >
                 I've reached the pickup point
                 <ArrowRight size={15} />
@@ -382,7 +416,7 @@ export function ActiveDeliveryPage() {
 
           {phase === 'condition_ack' && (
             <motion.div key="phase2" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <div className="rounded-lg p-4 mb-4" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
+              <div className="rounded-lg p-4 mb-4" style={{ background: '#FFF6EA', border: '1px solid #E8A04A66' }}>
                 <div className="flex items-start gap-3">
                   <AlertTriangle size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
                   <div>
@@ -396,8 +430,8 @@ export function ActiveDeliveryPage() {
               </div>
 
               {/* Item details */}
-              <div className="rounded-lg p-3 mb-4 space-y-2" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
-                <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>ITEM TO PICK UP</div>
+              <div className="rounded-lg p-3 mb-4 space-y-2" style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)' }}>
+                <div className="text-xs" style={{ color: '#6B7684' }}>ITEM TO PICK UP</div>
                 {[
                   { label: 'Type', value: job.item_type },
                   { label: 'Weight', value: job.weight },
@@ -405,19 +439,19 @@ export function ActiveDeliveryPage() {
                   { label: 'Description', value: job.description || 'None provided' },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between text-xs">
-                    <span style={{ color: '#475569' }}>{label}</span>
-                    <span style={{ color: '#E2E8F0' }}>{value}</span>
+                    <span style={{ color: '#6B7684' }}>{label}</span>
+                    <span style={{ color: '#0B2340' }}>{value}</span>
                   </div>
                 ))}
               </div>
 
               {/* Photo gate for fragile/valuable */}
               {(job.risk === 'Fragile' || job.risk === 'Valuable') && (
-                <div className="rounded-lg p-3 mb-4" style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
-                  <p className="text-xs font-medium text-white mb-2">
+                <div className="rounded-lg p-3 mb-4" style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
+                  <p className="text-xs font-medium text-[#0B2340] mb-2">
                     📸 Required: Photograph item at pickup
                   </p>
-                  <p className="text-[11px] mb-3" style={{ color: '#64748B' }}>
+                  <p className="text-[11px] mb-3" style={{ color: '#6B7684' }}>
                     Risk level is <span className="text-amber-400">{job.risk}</span>. Take a photo with your camera or choose from gallery — you’ll see a preview below.
                   </p>
                   <PhotoCapture
@@ -431,12 +465,13 @@ export function ActiveDeliveryPage() {
               )}
 
               <button
-                onClick={handleConditionAck}
+                type="button"
+                onClick={() => { void handleConditionAck(); }}
                 disabled={condAckLoading || !canAckCondition}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white mb-1"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold mb-1"
                 style={{
-                  background: condAckLoading ? '#1A1005' : canAckCondition ? 'linear-gradient(135deg, #F59E0B, #EF4444)' : '#1E2D45',
-                  color: canAckCondition ? 'white' : '#475569',
+                  background: condAckLoading ? '#F3F2EF' : canAckCondition ? '#C44536' : 'rgba(11,35,64,0.12)',
+                  color: canAckCondition ? '#ffffff' : '#6B7684',
                   opacity: condAckLoading ? 0.8 : 1,
                 }}
               >
@@ -453,16 +488,19 @@ export function ActiveDeliveryPage() {
                 )}
               </button>
               {!canAckCondition && (
-                <p className="text-[10px] mb-3 text-center" style={{ color: '#F59E0B' }}>
+                <p className="text-[10px] mb-3 text-center" style={{ color: '#C44536' }}>
                   Capture a pickup photo first — required for Fragile / Valuable items.
                 </p>
               )}
-              {canAckCondition && <div className="mb-3" />}
+              {ackError && (
+                <p className="text-[11px] mb-3 text-center" style={{ color: '#C44536' }}>{ackError}</p>
+              )}
+              {canAckCondition && !ackError && <div className="mb-3" />}
 
               <button
                 onClick={() => setShowIssuePanel(true)}
                 className="w-full py-2 rounded-lg text-sm border transition-all"
-                style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
               >
                 Report an Issue
               </button>
@@ -472,7 +510,7 @@ export function ActiveDeliveryPage() {
           {phase === 'in_transit' && (
             <motion.div key="phase3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               {/* Route */}
-              <div className="rounded-lg p-3 mb-4 space-y-3" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+              <div className="rounded-lg p-3 mb-4 space-y-3" style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)' }}>
                 <div className="flex items-center gap-3">
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-2 h-2 rounded-full bg-cyan-400" />
@@ -481,26 +519,26 @@ export function ActiveDeliveryPage() {
                   </div>
                   <div className="space-y-2">
                     <div>
-                      <p className="text-xs text-white">{job.pickup_location}</p>
+                      <p className="text-xs text-[#0B2340]">{job.pickup_location}</p>
                       <p className="text-[10px] text-emerald-400">✓ Picked up</p>
                     </div>
                     <div>
-                      <p className="text-xs text-white">{job.drop_location}</p>
-                      <p className="text-[10px]" style={{ color: '#64748B' }}>Heading here</p>
+                      <p className="text-xs text-[#0B2340]">{job.drop_location}</p>
+                      <p className="text-[10px]" style={{ color: '#6B7684' }}>Heading here</p>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Handoff code entry */}
-              <div className="rounded-lg p-4 mb-4" style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
+              <div className="rounded-lg p-4 mb-4" style={{ background: '#F3F2EF', border: '1px solid #1A3520' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <KeyRound size={13} className="text-emerald-400" />
-                  <span className="text-xs text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  <span className="text-xs text-emerald-400">
                     HANDOFF CODE
                   </span>
                 </div>
-                <p className="text-[11px] mb-3" style={{ color: '#64748B' }}>
+                <p className="text-[11px] mb-3" style={{ color: '#6B7684' }}>
                   Ask the person receiving the package for the sender’s 4-digit code. Wrong code will not complete the job · {codeAttemptsLeft}/3 attempts left.
                 </p>
                 <div className="flex gap-2">
@@ -512,20 +550,19 @@ export function ActiveDeliveryPage() {
                     disabled={codeAttemptsLeft <= 0}
                     onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setCodeError(''); }}
                     placeholder="0000"
-                    className="flex-1 px-3 py-2.5 rounded-lg text-center text-lg text-white outline-none tracking-widest disabled:opacity-50"
+                    className="flex-1 px-3 py-2.5 rounded-lg text-center text-lg text-[#0B2340] outline-none tracking-widest disabled:opacity-50"
                     style={{
-                      background: '#060A14',
-                      border: `1px solid ${codeError ? '#EF4444' : '#1A3520'}`,
-                      fontFamily: 'JetBrains Mono, monospace',
+                      background: '#F3F2EF',
+                      border: `1px solid ${codeError ? '#EF4444' : 'rgba(11,35,64,0.12)'}`,
                     }}
                   />
                   <button
                     onClick={handleConfirmCode}
                     disabled={codeAttemptsLeft <= 0 || codeInput.length < 4}
-                    className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all"
+                    className="px-4 py-2.5 rounded-lg text-sm font-semibold text-[#0B2340] transition-all"
                     style={{
                       background: codeAttemptsLeft <= 0 || codeInput.length < 4
-                        ? '#1E2D45'
+                        ? 'rgba(11,35,64,0.12)'
                         : 'linear-gradient(135deg, #10B981, #059669)',
                     }}
                     title={
@@ -551,17 +588,17 @@ export function ActiveDeliveryPage() {
               </div>
 
               {/* No answer / sender unreachable flow */}
-              <div className="rounded-lg p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+              <div className="rounded-lg p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
                 <button
                   onClick={() => setShowNoAnswerPanel(s => !s)}
                   className="w-full flex items-center justify-between text-xs"
-                  style={{ color: '#94A3B8' }}
+                  style={{ color: '#6B7684' }}
                 >
                   <span className="flex items-center gap-1.5">
                     <PhoneMissed size={12} />
                     Sender not answering?
                   </span>
-                  <span className="text-[10px]" style={{ color: '#475569' }}>
+                  <span className="text-[10px]" style={{ color: '#6B7684' }}>
                     {job.no_answer_contact_attempts ?? 0} attempt(s) logged
                   </span>
                 </button>
@@ -572,14 +609,14 @@ export function ActiveDeliveryPage() {
                       <button
                         onClick={handleLogContactAttempt}
                         className="w-full py-2 rounded-lg text-xs border"
-                        style={{ background: '#070B17', border: '1px solid #1A2535', color: '#94A3B8' }}
+                        style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)', color: '#6B7684' }}
                       >
                         Log contact attempt ({job.no_answer_contact_attempts ?? 0}/2 required)
                       </button>
                     )}
 
                     {canMarkUnreachable && (
-                      <div className="rounded-lg p-3 space-y-2" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
+                      <div className="rounded-lg p-3 space-y-2" style={{ background: '#FFF6EA', border: '1px solid #E8A04A66' }}>
                         <p className="text-[11px] text-amber-300">
                           Sender unreachable after {job.no_answer_contact_attempts ?? 0} attempts.
                           {canSecureDrop ? ' Low-risk item — you may use a secure drop.' : ' This item must be held for ops.'}
@@ -592,11 +629,11 @@ export function ActiveDeliveryPage() {
                               value={secureLocation}
                               onChange={e => setSecureLocation(e.target.value)}
                               placeholder="Where did you leave it? e.g. reception desk"
-                              className="w-full px-3 py-2 rounded-lg text-xs text-white placeholder-slate-600 outline-none"
-                              style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                              className="w-full px-3 py-2 rounded-lg text-xs text-[#0B2340] placeholder-slate-600 outline-none"
+                              style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}
                             />
                             <div>
-                              <p className="text-[11px] mb-2" style={{ color: '#94A3B8' }}>
+                              <p className="text-[11px] mb-2" style={{ color: '#6B7684' }}>
                                 Photo of the secure drop is required.
                               </p>
                               <PhotoCapture
@@ -610,12 +647,12 @@ export function ActiveDeliveryPage() {
                             <button
                               onClick={handleSecureDrop}
                               disabled={!dropoffPhotoCaptured && !job.dropoff_photo_url}
-                              className="w-full py-2 rounded-lg text-xs font-semibold text-white"
+                              className="w-full py-2 rounded-lg text-xs font-semibold text-[#0B2340]"
                               style={{
                                 background: (dropoffPhotoCaptured || job.dropoff_photo_url)
                                   ? 'linear-gradient(135deg, #10B981, #059669)'
-                                  : '#1E2D45',
-                                color: (dropoffPhotoCaptured || job.dropoff_photo_url) ? 'white' : '#64748B',
+                                  : 'rgba(11,35,64,0.12)',
+                                color: (dropoffPhotoCaptured || job.dropoff_photo_url) ? 'white' : '#6B7684',
                               }}
                             >
                               Confirm Secure Drop — Complete Delivery
@@ -626,7 +663,7 @@ export function ActiveDeliveryPage() {
                         {needsOpsHold && (
                           <button
                             onClick={handleHoldForOps}
-                            className="w-full py-2 rounded-lg text-xs font-semibold text-white"
+                            className="w-full py-2 rounded-lg text-xs font-semibold text-[#0B2340]"
                             style={{ background: 'linear-gradient(135deg, #F59E0B, #DC2626)' }}
                           >
                             Hold for Ops — Do Not Leave Unattended
@@ -641,7 +678,7 @@ export function ActiveDeliveryPage() {
               <button
                 onClick={() => setShowIssuePanel(true)}
                 className="w-full py-2 rounded-lg text-sm border"
-                style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
               >
                 Report an Issue
               </button>
@@ -651,18 +688,18 @@ export function ActiveDeliveryPage() {
       </div>
 
       {/* Earnings preview */}
-      <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-        <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>EARNINGS PREVIEW</div>
+      <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+        <div className="text-xs mb-3" style={{ color: '#6B7684' }}>EARNINGS PREVIEW</div>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-white font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.2rem' }}>
+            <div className="text-[#0B2340] font-semibold" style={{ fontSize: '1.2rem' }}>
               ₹{job.agreed_price ?? job.posted_price}
             </div>
-            <div className="text-[10px] mt-0.5" style={{ color: '#64748B' }}>Agreed base fee</div>
+            <div className="text-[10px] mt-0.5" style={{ color: '#6B7684' }}>Agreed base fee</div>
           </div>
           <div className="text-right">
-            <div className="text-xs" style={{ color: '#64748B' }}>Platform fee: <span className="text-emerald-400">₹0</span> (beta)</div>
-            <div className="text-[10px] mt-0.5" style={{ color: '#475569' }}>Tip set by sender after delivery</div>
+            <div className="text-xs" style={{ color: '#6B7684' }}>Platform fee: <span className="text-emerald-400">₹0</span> (beta)</div>
+            <div className="text-[10px] mt-0.5" style={{ color: '#6B7684' }}>Tip set by sender after delivery</div>
           </div>
         </div>
       </div>
@@ -682,11 +719,11 @@ export function ActiveDeliveryPage() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 40, opacity: 0 }}
               className="w-full max-w-sm rounded-2xl p-5"
-              style={{ background: '#0B1120', border: '1px solid #1E2D45' }}
+              style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}
             >
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle size={16} className="text-amber-400" />
-                <h3 className="text-white font-medium">Report an Issue</h3>
+                <h3 className="text-[#0B2340] font-medium">Report an Issue</h3>
               </div>
 
               <textarea
@@ -694,22 +731,22 @@ export function ActiveDeliveryPage() {
                 onChange={e => setIssueText(e.target.value)}
                 rows={3}
                 placeholder="Describe the issue (sender unreachable, location wrong, etc.)"
-                className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none resize-none mb-4"
-                style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                className="w-full px-3 py-2.5 rounded-lg text-sm text-[#0B2340] placeholder-slate-600 outline-none resize-none mb-4"
+                style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}
               />
 
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowIssuePanel(false)}
                   className="flex-1 py-2.5 rounded-lg text-sm border"
-                  style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                  style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleIssue}
                   className="flex-1 py-2.5 rounded-lg text-sm font-medium text-white"
-                  style={{ background: '#3B1A05', border: '1px solid #6B3010', color: '#F97316' }}
+                  style={{ background: '#C44536' }}
                 >
                   Flag to Ops
                 </button>

@@ -179,20 +179,20 @@ export function RatingPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center p-6" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="min-h-[60vh] flex items-center justify-center p-6" >
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           className="text-center"
         >
           <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"
-            style={{ background: '#0A2010', border: '2px solid #10B981' }}>
+            style={{ background: '#F3F2EF', border: '2px solid #10B981' }}>
             <CheckCircle2 size={38} className="text-emerald-400" />
           </div>
-          <h2 className="text-white mb-2" style={{ fontWeight: 600, fontSize: '1.2rem' }}>
+          <h2 className="text-[#0B2340] mb-2" style={{ fontWeight: 600, fontSize: '1.2rem' }}>
             {disputeMode ? 'Dispute Filed' : 'Thanks for rating!'}
           </h2>
-          <p className="text-sm" style={{ color: '#64748B' }}>
+          <p className="text-sm" style={{ color: '#6B7684' }}>
             {disputeMode
               ? isTheftLikeDispute(disputeType)
                 ? 'Theft escalation logged — runner suspended pending review. Ops team will review within 4 hours.'
@@ -212,12 +212,12 @@ export function RatingPage() {
 
   if (!job) {
     return (
-      <div className="p-6 text-center space-y-3" style={{ fontFamily: 'Inter, sans-serif' }}>
-        <p className="text-sm" style={{ color: '#64748B' }}>No delivery ready to rate yet.</p>
+      <div className="p-6 text-center space-y-3" >
+        <p className="text-sm" style={{ color: '#6B7684' }}>No delivery ready to rate yet.</p>
         <button
           onClick={() => navigate('/home')}
-          className="px-4 py-2 rounded-lg text-sm text-cyan-400"
-          style={{ background: '#061620', border: '1px solid #0E2D3D' }}
+          className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+          style={{ background: '#C44536' }}
         >
           Back to Home
         </button>
@@ -226,17 +226,17 @@ export function RatingPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-md space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-md space-y-4" >
 
       {/* Header */}
       <div>
-        <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+        <div className="text-xs mb-1" style={{ color: '#6B7684' }}>
           {paymentConfirmed ? 'STEP 2 · RATE YOUR BUDDY' : 'STEP 1 · CONFIRM PAYMENT'}
         </div>
-        <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
+        <h1 className="text-[#0B2340]" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
           {paymentConfirmed ? 'How was the delivery?' : 'Pay your Buddy'}
         </h1>
-        <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+        <p className="text-sm mt-1" style={{ color: '#6B7684' }}>
           {paymentConfirmed
             ? 'Stars only — tip and payment were already confirmed.'
             : 'Choose tip + payment method first. Rating comes next.'}
@@ -244,25 +244,25 @@ export function RatingPage() {
       </div>
 
       {/* Runner card */}
-      <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+      <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl"
-            style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}>
+            style={{ background: '#C44536' }}>
             {runnerName.charAt(0)}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-white font-medium">{runnerName}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full text-cyan-400"
-                style={{ background: '#061620', border: '1px solid #0E2D3D', fontFamily: 'JetBrains Mono, monospace' }}>
+              <span className="text-[#0B2340] font-medium">{runnerName}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full text-[#0B2340]"
+                style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
                 VERIFIED
               </span>
             </div>
-            <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: '#64748B' }}>
-              <Shield size={11} className="text-cyan-400" />
+            <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: '#6B7684' }}>
+              <Shield size={11} className="text-[#0B2340]" />
               Trust Score: 96 · 47 deliveries
             </div>
-            <div className="text-xs mt-0.5" style={{ color: '#64748B' }}>
+            <div className="text-xs mt-0.5" style={{ color: '#6B7684' }}>
               {job.item_type} · {job.pickup_location?.split(',')[0]} → {job.drop_location?.split(',')[0]}
             </div>
           </div>
@@ -271,7 +271,7 @@ export function RatingPage() {
         {/* Stars */}
         {!disputeMode && paymentConfirmed && (
           <div>
-            <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
               HOW WAS YOUR DELIVERY?
             </div>
             <div className="flex gap-2 justify-center mb-2">
@@ -287,7 +287,7 @@ export function RatingPage() {
                     size={32}
                     fill={(hoveredStar || stars) >= s ? '#F59E0B' : 'transparent'}
                     className="transition-colors"
-                    style={{ color: (hoveredStar || stars) >= s ? '#F59E0B' : '#1E2D45' }}
+                    style={{ color: (hoveredStar || stars) >= s ? '#F59E0B' : 'rgba(11,35,64,0.12)' }}
                   />
                 </button>
               ))}
@@ -305,7 +305,7 @@ export function RatingPage() {
         )}
 
         {!disputeMode && !paymentConfirmed && (
-          <div className="text-xs" style={{ color: '#475569' }}>
+          <div className="text-xs" style={{ color: '#6B7684' }}>
             Tip + payment method below — then confirm. Rating is the next step.
           </div>
         )}
@@ -313,8 +313,8 @@ export function RatingPage() {
 
       {/* Tip — part of payment (before confirm), not during rating */}
       {!disputeMode && !paymentConfirmed && (
-        <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-          <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+        <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+          <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
             ADD A TIP (OPTIONAL)
           </div>
           <div className="grid grid-cols-4 gap-2">
@@ -324,10 +324,9 @@ export function RatingPage() {
                 onClick={() => setTip(t)}
                 className="py-2 rounded-lg text-sm font-medium transition-all"
                 style={{
-                  background: tip === t ? '#0A1A10' : '#070B17',
-                  border: `1px solid ${tip === t ? '#10B981' : '#1E2D45'}`,
-                  color: tip === t ? '#10B981' : '#64748B',
-                  fontFamily: 'JetBrains Mono, monospace',
+                  background: tip === t ? '#0B2340' : '#F3F2EF',
+                  border: `1px solid ${tip === t ? '#0B2340' : 'rgba(11,35,64,0.12)'}`,
+                  color: tip === t ? '#ffffff' : '#6B7684',
                 }}
               >
                 {t === 0 ? '₹0' : `₹${t}`}
@@ -339,8 +338,8 @@ export function RatingPage() {
 
       {/* Payment method */}
       {!disputeMode && !paymentConfirmed && (
-        <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-          <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+        <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+          <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
             PAYMENT METHOD
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -350,9 +349,9 @@ export function RatingPage() {
                 onClick={() => setPaymentMethod(id)}
                 className="flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm transition-all"
                 style={{
-                  background: paymentMethod === id ? '#061620' : '#070B17',
-                  border: `1px solid ${paymentMethod === id ? '#06B6D4' : '#1E2D45'}`,
-                  color: paymentMethod === id ? '#22D3EE' : '#64748B',
+                  background: paymentMethod === id ? '#0B2340' : '#F3F2EF',
+                  border: `1px solid ${paymentMethod === id ? '#0B2340' : 'rgba(11,35,64,0.12)'}`,
+                  color: paymentMethod === id ? '#ffffff' : '#6B7684',
                 }}
               >
                 {PAYMENT_LABELS[id].icon}
@@ -361,12 +360,12 @@ export function RatingPage() {
             ))}
           </div>
           {job.handoff_mode === 'mode_2_landmark' && (
-            <p className="text-[10px] mt-2" style={{ color: '#475569' }}>
+            <p className="text-[10px] mt-2" style={{ color: '#6B7684' }}>
               Cash is hidden for intercity (Mode 2) jobs — the receiver is off-campus and unverified in person.
             </p>
           )}
           {paymentMethod === 'cash' && (
-            <p className="text-[10px] mt-2" style={{ color: '#475569' }}>
+            <p className="text-[10px] mt-2" style={{ color: '#6B7684' }}>
               Cash payments are recorded as intent but not verified. UPI escrow is coming in v2.
             </p>
           )}
@@ -375,8 +374,8 @@ export function RatingPage() {
 
       {/* Payment summary */}
       {!disputeMode && (
-        <div className="rounded-xl p-4" style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
-          <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+        <div className="rounded-xl p-4" style={{ background: '#F3F2EF', border: '1px solid #1A3520' }}>
+          <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
             PAYMENT SUMMARY
           </div>
           {[
@@ -385,14 +384,14 @@ export function RatingPage() {
             { label: 'Tip', value: `₹${tip}` },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-center justify-between text-sm mb-2">
-              <span style={{ color: '#64748B' }}>{label}</span>
-              <span style={{ color: '#E2E8F0', fontFamily: 'JetBrains Mono, monospace' }}>{value}</span>
+              <span style={{ color: '#6B7684' }}>{label}</span>
+              <span style={{ color: '#0B2340' }}>{value}</span>
             </div>
           ))}
           <div className="h-px my-2" style={{ background: '#1A3520' }} />
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-white">Total</span>
-            <span className="font-semibold text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.1rem' }}>₹{total}</span>
+            <span className="text-sm font-medium text-[#0B2340]">Total</span>
+            <span className="font-semibold text-emerald-400" style={{ fontSize: '1.1rem' }}>₹{total}</span>
           </div>
           {paymentConfirmed && (
             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-400">
@@ -409,7 +408,7 @@ export function RatingPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="rounded-xl p-4"
-          style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}
+          style={{ background: '#C4453612', border: '1px solid #C4453644' }}
         >
           <div className="flex items-center gap-2 mb-3">
             <AlertCircle size={15} className="text-red-400" />
@@ -420,8 +419,8 @@ export function RatingPage() {
             <p className="text-[11px] mb-3 text-amber-300/90 flex items-start gap-1.5">
               <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
               <span>
-                Job is still <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{job.status}</span>.
-                Disputes need <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>PENDING_RATING</span> after
+                Job is still <span>{job.status}</span>.
+                Disputes need <span>PENDING_RATING</span> after
                 a real handoff (runner enters the confirmation code). Soft-refresh after that, then retry.
               </span>
             </p>
@@ -437,8 +436,8 @@ export function RatingPage() {
                   onClick={() => { setDisputeType(t); setDisputeError(''); }}
                   className="py-2 rounded text-xs transition-all"
                   style={{
-                    background: disputeType === t ? '#3B1111' : '#1C0A0A',
-                    border: `1px solid ${disputeType === t ? '#EF4444' : '#3B1111'}`,
+                    background: disputeType === t ? '#C4453644' : '#C4453612',
+                    border: `1px solid ${disputeType === t ? '#EF4444' : '#C4453644'}`,
                     color: disputeType === t ? '#F87171' : '#EF4444',
                   }}
                 >
@@ -458,8 +457,8 @@ export function RatingPage() {
             onChange={e => setDisputeDesc(e.target.value)}
             rows={3}
             placeholder="Describe what happened..."
-            className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none resize-none"
-            style={{ background: '#0D0303', border: '1px solid #3B1111' }}
+            className="w-full px-3 py-2.5 rounded-lg text-sm text-[#0B2340] placeholder-slate-600 outline-none resize-none"
+            style={{ background: '#F3F2EF', border: '1px solid #C4453644', color: '#0B2340' }}
           />
 
           {isTheftLikeDispute(disputeType) && (
@@ -489,11 +488,11 @@ export function RatingPage() {
           className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
           style={{
             background: primaryDisabled
-              ? '#1E2D45'
+              ? 'rgba(11,35,64,0.12)'
               : disputeMode
                 ? 'linear-gradient(135deg, #EF4444, #DC2626)'
-                : 'linear-gradient(135deg, #06B6D4, #6366F1)',
-            color: primaryDisabled ? '#475569' : 'white',
+                : '#C44536',
+            color: primaryDisabled ? '#6B7684' : 'white',
           }}
         >
           {loading ? (
@@ -512,12 +511,12 @@ export function RatingPage() {
           )}
         </button>
         {!disputeMode && paymentConfirmed && stars === 0 && (
-          <p className="text-[10px] text-center" style={{ color: '#64748B' }}>
+          <p className="text-[10px] text-center" style={{ color: '#6B7684' }}>
             Button unlocks after you select 1–5 stars.
           </p>
         )}
         {disputeMode && !disputeType && (
-          <p className="text-[10px] text-center" style={{ color: '#64748B' }}>
+          <p className="text-[10px] text-center" style={{ color: '#6B7684' }}>
             Select Item damaged / Not delivered / Wrong item above.
           </p>
         )}
@@ -527,9 +526,9 @@ export function RatingPage() {
           onClick={() => { setDisputeMode(d => !d); setStars(0); setDisputeError(''); }}
           className="w-full py-2.5 rounded-lg text-sm border transition-all"
           style={{
-            background: '#0B1120',
-            border: `1px solid ${disputeMode ? '#1E2D45' : '#3B1111'}`,
-            color: disputeMode ? '#64748B' : '#F87171',
+            background: '#ffffff',
+            border: `1px solid ${disputeMode ? 'rgba(11,35,64,0.12)' : '#C4453644'}`,
+            color: disputeMode ? '#6B7684' : '#F87171',
           }}
         >
           {disputeMode ? '← Back to Rating' : 'Report an Issue Instead'}
