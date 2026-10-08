@@ -25,9 +25,9 @@ const todayIdx = dayMap[today];
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload?.length) {
     return (
-      <div className="rounded-lg px-3 py-2" style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
-        <p className="text-xs text-white" style={{ fontFamily: 'JetBrains Mono, monospace' }}>₹{payload[0].value}</p>
-        <p className="text-[10px]" style={{ color: '#64748B' }}>{label}</p>
+      <div className="rounded-lg px-3 py-2" style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
+        <p className="text-xs text-[#0B2340]">₹{payload[0].value}</p>
+        <p className="text-[10px]" style={{ color: '#6B7684' }}>{label}</p>
       </div>
     );
   }
@@ -65,31 +65,31 @@ export function ProfilePage() {
   ] as const;
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl space-y-4" >
 
       {/* Profile header */}
-      <div className="rounded-xl p-5" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+      <div className="rounded-xl p-5" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}>
+            style={{ background: '#C44536' }}>
             {displayUser.name.charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-white" style={{ fontWeight: 700, fontSize: '1.1rem' }}>
+              <h2 className="text-[#0B2340]" style={{ fontWeight: 700, fontSize: '1.1rem' }}>
                 {displayUser.name}
               </h2>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full text-emerald-400"
-                style={{ background: '#0A2010', border: '1px solid #1A4020', fontFamily: 'JetBrains Mono, monospace' }}>
+                style={{ background: '#F3F2EF', border: '1px solid #1A4020' }}>
                 ✓ VERIFIED
               </span>
             </div>
-            <p className="text-xs mt-0.5" style={{ color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
+            <p className="text-xs mt-0.5" style={{ color: '#6B7684' }}>
               {displayUser.email}
             </p>
             <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <span className="text-xs" style={{ color: '#64748B' }}>📍 {displayUser.hostel_block}</span>
-              <span className="text-xs" style={{ color: '#64748B' }}>
+              <span className="text-xs" style={{ color: '#6B7684' }}>📍 {displayUser.hostel_block}</span>
+              <span className="text-xs" style={{ color: '#6B7684' }}>
                 Joined {new Date(displayUser.joined_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
               </span>
             </div>
@@ -97,32 +97,32 @@ export function ProfilePage() {
         </div>
 
         {/* Mini stats */}
-        <div className="grid grid-cols-4 gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #1E2D45' }}>
+        <div className="grid grid-cols-4 gap-2 mt-4 pt-4" style={{ borderTop: '1px solid rgba(11,35,64,0.12)' }}>
           {[
             { label: 'Rating', value: `${displayUser.rating}★`, color: '#F59E0B' },
             { label: 'Runs', value: displayUser.total_deliveries, color: '#10B981' },
-            { label: 'Earned', value: `₹${displayUser.total_earnings.toLocaleString()}`, color: '#06B6D4' },
+            { label: 'Earned', value: `₹${displayUser.total_earnings.toLocaleString()}`, color: '#0B2340' },
             { label: 'Streak', value: `${displayUser.streak}🔥`, color: '#F97316' },
           ].map(({ label, value, color }) => (
             <div key={label} className="text-center">
-              <div className="font-semibold text-sm" style={{ color, fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
-              <div className="text-[9px] mt-0.5" style={{ color: '#475569' }}>{label}</div>
+              <div className="font-semibold text-sm" style={{ color }}>{value}</div>
+              <div className="text-[9px] mt-0.5" style={{ color: '#6B7684' }}>{label}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid #1E2D45' }}>
+      <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid rgba(11,35,64,0.12)' }}>
         {tabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className="flex-1 py-2.5 text-sm transition-all"
             style={{
-              background: tab === t.id ? '#111E35' : '#0B1120',
-              color: tab === t.id ? '#22D3EE' : '#64748B',
-              borderBottom: tab === t.id ? '2px solid #06B6D4' : '2px solid transparent',
+              background: tab === t.id ? '#ffffff' : '#F3F2EF',
+              color: tab === t.id ? '#0B2340' : '#6B7684',
+              borderBottom: tab === t.id ? '2px solid #C44536' : '2px solid transparent',
             }}
           >
             {t.label}
@@ -134,26 +134,26 @@ export function ProfilePage() {
       {tab === 'overview' && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           {/* Earnings chart */}
-          <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+          <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <div className="text-xs mb-0.5" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                <div className="text-xs mb-0.5" style={{ color: '#6B7684' }}>
                   THIS WEEK
                 </div>
-                <div className="text-white font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.3rem' }}>
+                <div className="text-[#0B2340] font-semibold" style={{ fontSize: '1.3rem' }}>
                   ₹{displayUser.weekly_earnings}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-emerald-400">
                 <TrendingUp size={13} />
-                <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>+₹80 vs last week</span>
+                <span>+₹80 vs last week</span>
               </div>
             </div>
             <ResponsiveContainer width="100%" height={100}>
               <BarChart data={weeklyData} barSize={18}>
                 <XAxis
                   dataKey="day"
-                  tick={{ fill: '#475569', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+                  tick={{ fill: '#6B7684', fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -163,7 +163,7 @@ export function ProfilePage() {
                   {weeklyData.map((entry, i) => (
                     <Cell
                       key={`cell-${entry.day}`}
-                      fill={i === todayIdx ? '#06B6D4' : '#1E2D45'}
+                      fill={i === todayIdx ? '#0B2340' : 'rgba(11,35,64,0.12)'}
                     />
                   ))}
                 </Bar>
@@ -172,27 +172,27 @@ export function ProfilePage() {
           </div>
 
           {/* Performance */}
-          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1E2D45' }}>
-            <div className="px-4 py-3" style={{ background: '#0D1525', borderBottom: '1px solid #1E2D45' }}>
-              <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="px-4 py-3" style={{ background: '#F3F2EF', borderBottom: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="text-xs" style={{ color: '#6B7684' }}>
                 RUNNER PERFORMANCE
               </div>
             </div>
-            <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
+            <div className="p-4 space-y-3" style={{ background: '#ffffff' }}>
               {[
                 { label: 'Acceptance Rate', value: displayUser.acceptance_rate, max: 100, unit: '%', color: '#10B981', good: displayUser.acceptance_rate >= 80 },
-                { label: 'Trust Score', value: displayUser.trust_score, max: 100, unit: '', color: '#06B6D4', good: true },
+                { label: 'Trust Score', value: displayUser.trust_score, max: 100, unit: '', color: '#0B2340', good: true },
                 { label: 'On-Time Delivery', value: 96, max: 100, unit: '%', color: '#10B981', good: true },
                 { label: 'Condition Disputes', value: 2, max: 20, unit: ' disputes', color: '#F59E0B', good: true },
               ].map(({ label, value, max, unit, color, good }) => (
                 <div key={label}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs" style={{ color: '#64748B' }}>{label}</span>
-                    <span className="text-xs font-medium" style={{ color, fontFamily: 'JetBrains Mono, monospace' }}>
+                    <span className="text-xs" style={{ color: '#6B7684' }}>{label}</span>
+                    <span className="text-xs font-medium" style={{ color }}>
                       {value}{unit}
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full" style={{ background: '#1E2D45' }}>
+                  <div className="h-1.5 rounded-full" style={{ background: 'rgba(11,35,64,0.12)' }}>
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${(value / max) * 100}%` }}
@@ -214,26 +214,26 @@ export function ProfilePage() {
           {[...myRunnerJobs, ...mySenderJobs].length === 0 ? (
             <div className="text-center py-10">
               <Package size={24} className="text-slate-600 mx-auto mb-2" />
-              <p className="text-sm" style={{ color: '#475569' }}>No completed jobs yet.</p>
+              <p className="text-sm" style={{ color: '#6B7684' }}>No completed jobs yet.</p>
             </div>
           ) : (
             [...myRunnerJobs, ...mySenderJobs].map(job => (
-              <div key={job.id} className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+              <div key={job.id} className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
+                    style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
                     <Package size={14} className="text-slate-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium text-white">{job.item_type}</span>
-                      <span className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</span>
+                      <span className="text-xs font-medium text-[#0B2340]">{job.item_type}</span>
+                      <span className="text-[10px]" style={{ color: '#6B7684' }}>{job.id}</span>
                       {job.runner_id === 'u1' && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded text-cyan-400"
-                          style={{ background: '#061620', border: '1px solid #0E2D3D' }}>Runner</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded"
+                          style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)', color: '#0B2340' }}>Runner</span>
                       )}
                     </div>
-                    <p className="text-[11px] mt-0.5" style={{ color: '#64748B' }}>
+                    <p className="text-[11px] mt-0.5" style={{ color: '#6B7684' }}>
                       {job.pickup_location} → {job.drop_location}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5">
@@ -246,7 +246,7 @@ export function ProfilePage() {
                       {job.tip_amount !== undefined && job.tip_amount > 0 && (
                         <span className="text-[11px] text-emerald-400">+₹{job.tip_amount} tip</span>
                       )}
-                      <span className="text-[11px]" style={{ color: '#475569' }}>
+                      <span className="text-[11px]" style={{ color: '#6B7684' }}>
                         {job.delivered_at
                           ? new Date(job.delivered_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
                           : new Date(job.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
@@ -254,7 +254,7 @@ export function ProfilePage() {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="text-sm font-semibold text-white" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    <div className="text-sm font-semibold text-[#0B2340]">
                       ₹{(job.agreed_price ?? job.posted_price) + (job.tip_amount || 0)}
                     </div>
                     <div className="text-[10px]" style={{ color: '#10B981' }}>CLOSED</div>
@@ -269,8 +269,8 @@ export function ProfilePage() {
       {/* Tab: Trust & Safety */}
       {tab === 'trust' && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-            <div className="text-xs mb-4" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="text-xs mb-4" style={{ color: '#6B7684' }}>
               IDENTITY VERIFICATION
             </div>
             {[
@@ -279,10 +279,10 @@ export function ProfilePage() {
               { label: 'Aadhaar (V2)', value: 'Not required in beta', status: 'pending' },
             ].map(({ label, value, status }) => (
               <div key={label} className="flex items-center justify-between py-2.5"
-                style={{ borderBottom: '1px solid #111E35' }}>
+                style={{ borderBottom: '1px solid #F3F2EF' }}>
                 <div>
-                  <div className="text-xs text-white">{label}</div>
-                  <div className="text-[10px] mt-0.5" style={{ color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
+                  <div className="text-xs text-[#0B2340]">{label}</div>
+                  <div className="text-[10px] mt-0.5" style={{ color: '#6B7684' }}>{value}</div>
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px]"
                   style={{ color: status === 'verified' ? '#10B981' : '#F59E0B' }}>
@@ -295,8 +295,8 @@ export function ProfilePage() {
             ))}
           </div>
 
-          <div className="rounded-xl p-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-            <div className="text-xs mb-4" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="text-xs mb-4" style={{ color: '#6B7684' }}>
               TRUST SCORE BREAKDOWN
             </div>
             {[
@@ -308,19 +308,19 @@ export function ProfilePage() {
             ].map(({ factor, score, max }) => (
               <div key={factor} className="mb-3">
                 <div className="flex justify-between text-xs mb-1">
-                  <span style={{ color: '#64748B' }}>{factor}</span>
-                  <span style={{ color: '#E2E8F0', fontFamily: 'JetBrains Mono, monospace' }}>{score}/{max}</span>
+                  <span style={{ color: '#6B7684' }}>{factor}</span>
+                  <span style={{ color: '#0B2340' }}>{score}/{max}</span>
                 </div>
-                <div className="h-1.5 rounded-full" style={{ background: '#1E2D45' }}>
+                <div className="h-1.5 rounded-full" style={{ background: 'rgba(11,35,64,0.12)' }}>
                   <div className="h-1.5 rounded-full"
                     style={{ width: `${(score / max) * 100}%`, background: score >= max * 0.8 ? '#10B981' : '#F59E0B' }} />
                 </div>
               </div>
             ))}
-            <div className="pt-3 mt-1" style={{ borderTop: '1px solid #1E2D45' }}>
+            <div className="pt-3 mt-1" style={{ borderTop: '1px solid rgba(11,35,64,0.12)' }}>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-white">Total Trust Score</span>
-                <span className="font-bold text-cyan-400" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.2rem' }}>
+                <span className="text-sm text-[#0B2340]">Total Trust Score</span>
+                <span className="font-bold text-[#0B2340]" style={{ fontSize: '1.2rem' }}>
                   {displayUser.trust_score}/100
                 </span>
               </div>
@@ -328,8 +328,8 @@ export function ProfilePage() {
           </div>
 
           {/* Policies */}
-          <div className="rounded-xl p-4 space-y-2" style={{ background: '#070B17', border: '1px solid #1A2535' }}>
-            <div className="text-xs mb-2" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="rounded-xl p-4 space-y-2" style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)' }}>
+            <div className="text-xs mb-2" style={{ color: '#6B7684' }}>
               PLATFORM POLICIES
             </div>
             {[
@@ -339,8 +339,8 @@ export function ProfilePage() {
               'No-show ×3: automatic ops review + rating drop',
               'Off-platform payment tracking: V2 escrow roadmap',
             ].map(p => (
-              <div key={p} className="flex items-start gap-2 text-xs" style={{ color: '#64748B' }}>
-                <Shield size={11} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+              <div key={p} className="flex items-start gap-2 text-xs" style={{ color: '#6B7684' }}>
+                <Shield size={11} className="text-[#0B2340] flex-shrink-0 mt-0.5" />
                 {p}
               </div>
             ))}

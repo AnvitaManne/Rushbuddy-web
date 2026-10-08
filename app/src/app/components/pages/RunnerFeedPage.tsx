@@ -21,9 +21,9 @@ const itemIcon = (type: string) => {
 
 const riskBadge = (risk: string) => {
   const c = risk === 'Low' ? '#10B981' : risk === 'Fragile' ? '#F59E0B' : '#EF4444';
-  const bg = risk === 'Low' ? '#0A1A10' : risk === 'Fragile' ? '#1A1005' : '#1C0A0A';
+  const bg = risk === 'Low' ? '#F3F2EF' : risk === 'Fragile' ? '#FFF6EA' : '#C4453612';
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: bg, color: c, fontFamily: 'JetBrains Mono, monospace' }}>
+    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: bg, color: c }}>
       {risk.toUpperCase()}
     </span>
   );
@@ -59,28 +59,28 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
       exit={{ opacity: 0, scale: 0.95 }}
       className="rounded-xl overflow-hidden transition-all"
       style={{
-        background: accepted ? '#0A2010' : '#0B1120',
-        border: `1px solid ${accepted ? '#1A4020' : '#1E2D45'}`,
+        background: accepted ? '#F3F2EF' : '#ffffff',
+        border: `1px solid ${accepted ? '#1A4020' : 'rgba(11,35,64,0.12)'}`,
       }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: '1px solid #111E35' }}>
+        style={{ borderBottom: '1px solid #F3F2EF' }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: '#0D1525', border: '1px solid #1E2D45' }}>
+            style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
             {itemIcon(job.item_type)}
           </div>
           <div>
-            <div className="text-xs font-medium text-white">{job.item_type}</div>
-            <div className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>{job.id}</div>
+            <div className="text-xs font-medium text-[#0B2340]">{job.item_type}</div>
+            <div className="text-[10px]" style={{ color: '#6B7684' }}>{job.id}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {riskBadge(job.risk)}
           {isWomensOnly && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1"
-              style={{ background: '#1A0F2E', color: '#A78BFA', fontFamily: 'JetBrains Mono, monospace' }}>
+            <span className="text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 font-medium"
+              style={{ background: '#FBE8D4', color: '#9A3B16', border: '1px solid #E8A04A88' }}>
               <Lock size={8} />
               WOMEN ONLY
             </span>
@@ -99,39 +99,39 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
           </div>
           <div className="flex-1 space-y-2">
             <div>
-              <p className="text-xs text-white">{job.pickup_location}</p>
-              <p className="text-[10px]" style={{ color: '#475569' }}>Pickup</p>
+              <p className="text-xs text-[#0B2340]">{job.pickup_location}</p>
+              <p className="text-[10px]" style={{ color: '#6B7684' }}>Pickup</p>
             </div>
             <div>
-              <p className="text-xs text-white">{job.drop_location}</p>
-              <p className="text-[10px]" style={{ color: '#475569' }}>Drop</p>
+              <p className="text-xs text-[#0B2340]">{job.drop_location}</p>
+              <p className="text-[10px]" style={{ color: '#6B7684' }}>Drop</p>
             </div>
           </div>
         </div>
 
         {/* Meta row */}
         <div className="flex items-center gap-3 mb-3 flex-wrap">
-          <div className="flex items-center gap-1 text-[11px]" style={{ color: '#64748B' }}>
+          <div className="flex items-center gap-1 text-[11px]" style={{ color: '#6B7684' }}>
             <Clock size={11} />
             {timeSince}
           </div>
           {job.distance && (
-            <div className="flex items-center gap-1 text-[11px]" style={{ color: '#64748B' }}>
+            <div className="flex items-center gap-1 text-[11px]" style={{ color: '#6B7684' }}>
               <MapPin size={11} />
               {job.distance}
             </div>
           )}
-          <div className="flex items-center gap-1 text-[11px]" style={{ color: '#64748B' }}>
+          <div className="flex items-center gap-1 text-[11px]" style={{ color: '#6B7684' }}>
             <Package size={11} />
             {job.weight}
           </div>
           {job.eta && job.job_type === 'campus_immediate' && (
             <div className="text-[11px] px-1.5 py-0.5 rounded"
-              style={{ background: '#0A1A10', color: '#10B981', fontFamily: 'JetBrains Mono, monospace' }}>
+              style={{ background: '#F3F2EF', color: '#10B981' }}>
               ~{job.eta}
             </div>
           )}
-          <div className="flex items-center gap-1 text-[11px]" style={{ color: '#64748B' }}>
+          <div className="flex items-center gap-1 text-[11px]" style={{ color: '#6B7684' }}>
             by {job.sender_name}
           </div>
         </div>
@@ -139,15 +139,15 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
         {job.job_type === 'campus_scheduled' && job.scheduled_window && (
           <div
             className="mb-3 px-2.5 py-2 rounded-md space-y-0.5"
-            style={{ background: '#0A1520', border: '1px solid #0E2D3D' }}
+            style={{ background: '#FFF6EA', border: '1px solid #E8A04A66' }}
           >
-            <div className="text-[10px] font-medium text-cyan-300" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="text-[10px] font-medium" style={{ color: '#9A6A1E' }}>
               CAMPUS SCHEDULED · LIVE NOW
             </div>
-            <p className="text-[11px] text-slate-300">
+            <p className="text-[11px]" style={{ color: '#0B2340' }}>
               {formatJobScheduleHint(job) ?? 'Timed pickup window'}
             </p>
-            <p className="text-[10px]" style={{ color: '#475569' }}>
+            <p className="text-[10px]" style={{ color: '#6B7684' }}>
               Accept now to claim it — plan to pick up during that window (not ASAP).
             </p>
           </div>
@@ -156,19 +156,19 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
         {job.job_type === 'intercity' && (
           <div
             className="mb-3 px-2.5 py-2 rounded-md space-y-0.5"
-            style={{ background: '#120E05', border: '1px solid #3B2A0A' }}
+            style={{ background: '#FFF6EA', border: '1px solid #E8A04A66' }}
           >
-            <div className="text-[10px] font-medium text-amber-300" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="text-[10px] font-medium" style={{ color: '#9A6A1E' }}>
               INTERCITY · LIVE NOW
             </div>
-            <p className="text-[11px] text-slate-300">
+            <p className="text-[11px]" style={{ color: '#0B2340' }}>
               {formatJobScheduleHint(job) ?? 'Travel-day corridor job'}
             </p>
           </div>
         )}
 
         {job.description && (
-          <div className="text-[11px] px-2.5 py-1.5 rounded-md mb-3" style={{ background: '#070B17', color: '#64748B' }}>
+          <div className="text-[11px] px-2.5 py-1.5 rounded-md mb-3" style={{ background: '#F3F2EF', color: '#6B7684' }}>
             "{job.description}"
           </div>
         )}
@@ -176,15 +176,15 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
         {/* Accept row */}
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-white font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.1rem' }}>
+            <div className="text-[#0B2340] font-semibold" style={{ fontSize: '1.1rem' }}>
               ₹{job.price_floor}–{job.posted_price}
             </div>
-            <div className="text-[10px]" style={{ color: '#475569' }}>Sender-set range</div>
+            <div className="text-[10px]" style={{ color: '#6B7684' }}>Sender-set range</div>
           </div>
 
           {accepted ? (
             <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
-              style={{ background: '#0A2010', border: '1px solid #1A4020', color: '#10B981' }}>
+              style={{ background: '#F3F2EF', border: '1px solid #1A4020', color: '#10B981' }}>
               <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
                 ✓
               </motion.div>
@@ -195,7 +195,7 @@ function JobCard({ job, onAccept, accepted, disabled }: { job: Job; onAccept: (i
               onClick={handleAccept}
               disabled={accepting || disabled}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
-              style={{ background: disabled ? '#1E2D45' : accepting ? '#0A2030' : 'linear-gradient(135deg, #06B6D4, #0EA5E9)', minWidth: 110 }}
+              style={{ background: disabled ? 'rgba(11,35,64,0.12)' : accepting ? '#0B2340' : '#C44536', minWidth: 110 }}
               title={disabled ? 'Account suspended — cannot accept' : `Accept for ₹${job.posted_price}`}
             >
               {accepting ? (
@@ -294,12 +294,12 @@ export function RunnerFeedPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-4 md:p-6 pb-24 md:pb-6 space-y-4" >
 
       {/* Suspension banner */}
       {isSuspended && (
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
-          style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+          style={{ background: '#C4453612', border: '1px solid #C4453644' }}>
           <Ban size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
           <div className="flex-1 space-y-2">
             <p className="text-xs" style={{ color: '#F87171' }}>
@@ -311,7 +311,7 @@ export function RunnerFeedPage() {
                 onClick={() => void handleClearSuspensionDev()}
                 disabled={clearingSuspension}
                 className="text-[11px] px-2 py-1 rounded border disabled:opacity-50"
-                style={{ borderColor: '#3B1111', color: '#FCA5A5', background: '#120808' }}
+                style={{ borderColor: '#C4453644', color: '#C44536', background: '#fff' }}
               >
                 {clearingSuspension ? 'Clearing…' : 'Clear suspension (dev)'}
               </button>
@@ -323,20 +323,20 @@ export function RunnerFeedPage() {
       {/* Accept-race notice */}
       {raceNotice && (
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
-          style={{ background: '#1A1005', border: '1px solid #3B2A0A' }}>
+          style={{ background: '#FFF6EA', border: '1px solid #3B2A0A' }}>
           <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs" style={{ color: '#FBBF24' }}>{raceNotice}</p>
+          <p className="text-xs" style={{ color: '#9A6A1E' }}>{raceNotice}</p>
         </div>
       )}
 
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="text-xs mb-1" style={{ color: '#6B7684' }}>
             RUNNER FEED · {openJobs.length} OPEN
           </div>
-          <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>Job Listings</h1>
-          <p className="text-sm mt-0.5" style={{ color: '#64748B' }}>
+          <h1 className="text-[#0B2340]" style={{ fontWeight: 700, fontSize: '1.2rem' }}>Job Listings</h1>
+          <p className="text-sm mt-0.5" style={{ color: '#6B7684' }}>
             Pick up jobs that match your route
           </p>
         </div>
@@ -344,7 +344,7 @@ export function RunnerFeedPage() {
           type="button"
           onClick={() => void handleRefreshFeed()}
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
-          style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+          style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
         >
           <RefreshCw size={13} />
           Refresh
@@ -353,9 +353,9 @@ export function RunnerFeedPage() {
 
       {ownOpenHidden > 0 && openJobs.length === 0 && (
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
-          style={{ background: '#061620', border: '1px solid #0E2D3D' }}>
-          <AlertCircle size={14} className="text-cyan-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs" style={{ color: '#67E8F9' }}>
+          style={{ background: '#FFF6EA', border: '1px solid #E8A04A66' }}>
+          <AlertCircle size={14} className="flex-shrink-0 mt-0.5" style={{ color: '#C44536' }} />
+          <p className="text-xs" style={{ color: '#0B2340' }}>
             {ownOpenHidden} open job{ownOpenHidden === 1 ? '' : 's'} you posted are hidden here —
             you can’t accept your own request. Open another browser/account as a runner to see them,
             or track them under Sender.
@@ -366,13 +366,13 @@ export function RunnerFeedPage() {
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Open Jobs', value: openJobs.length, color: '#06B6D4' },
+          { label: 'Open Jobs', value: openJobs.length, color: '#0B2340' },
           { label: 'Potential', value: `₹${openJobs.reduce((s, j) => s + j.posted_price, 0)}`, color: '#10B981' },
           { label: 'Avg ETA', value: '~11 min', color: '#F59E0B' },
         ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-            <div className="font-semibold text-sm" style={{ color, fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
-            <div className="text-[10px] mt-0.5" style={{ color: '#475569' }}>{label}</div>
+          <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="font-semibold text-sm" style={{ color }}>{value}</div>
+            <div className="text-[10px] mt-0.5" style={{ color: '#6B7684' }}>{label}</div>
           </div>
         ))}
       </div>
@@ -386,9 +386,9 @@ export function RunnerFeedPage() {
             onClick={() => setFilter(f)}
             className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs transition-all"
             style={{
-              background: filter === f ? '#061620' : '#0B1120',
-              border: `1px solid ${filter === f ? '#06B6D4' : '#1E2D45'}`,
-              color: filter === f ? '#22D3EE' : '#64748B',
+              background: '#ffffff',
+              border: `1px solid ${filter === f ? '#C44536' : 'rgba(11,35,64,0.12)'}`,
+              color: filter === f ? '#0B2340' : '#6B7684',
             }}
           >
             {f}
@@ -398,10 +398,10 @@ export function RunnerFeedPage() {
 
       {/* Women's hostel notice */}
       <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg"
-        style={{ background: '#0D0D20', border: '1px solid #2D1E45' }}>
-        <Shield size={13} className="text-violet-400 flex-shrink-0 mt-0.5" />
-        <p className="text-[11px]" style={{ color: '#64748B' }}>
-          Jobs tagged <span className="text-violet-400">WOMEN ONLY</span> are restricted to verified female runners. This filter is automatic.
+        style={{ background: '#FBE8D4', border: '1px solid #E8A04A88' }}>
+        <Shield size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#9A3B16' }} />
+        <p className="text-[11px]" style={{ color: '#0B2340' }}>
+          Jobs tagged <span className="font-semibold" style={{ color: '#9A3B16' }}>WOMEN ONLY</span> are restricted to verified female runners. This filter is automatic.
         </p>
       </div>
 
@@ -414,7 +414,7 @@ export function RunnerFeedPage() {
             className="text-center py-12"
           >
             <Zap size={28} className="text-slate-600 mx-auto mb-3" />
-            <p className="text-sm" style={{ color: '#475569' }}>
+            <p className="text-sm" style={{ color: '#6B7684' }}>
               {isSuspended
                 ? 'Feed locked while suspended.'
                 : `No open jobs ${filter !== 'All' ? `for ${filter}` : ''} right now.`}
@@ -445,7 +445,7 @@ export function RunnerFeedPage() {
       {/* Skip warning */}
       {openJobs.length > 0 && (
         <div className="rounded-lg px-3 py-2.5 flex items-start gap-2"
-          style={{ background: '#1A1005', border: '1px solid #3B2A0A' }}>
+          style={{ background: '#FFF6EA', border: '1px solid #3B2A0A' }}>
           <AlertCircle size={12} className="text-amber-400 flex-shrink-0 mt-0.5" />
           <p className="text-[11px]" style={{ color: '#92400E' }}>
             Skipping more than 5 consecutive jobs is logged for ops review and may affect your access to high-value requests.

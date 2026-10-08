@@ -126,17 +126,17 @@ export function OpsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-4 md:p-6 max-w-3xl space-y-4" >
       <div className="flex items-start gap-3">
         <div
           className="w-10 h-10 rounded-lg flex items-center justify-center"
-          style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}
+          style={{ background: '#FFF6EA', border: '1px solid #E8A04A66' }}
         >
           <Shield size={18} className="text-amber-400" />
         </div>
         <div>
-          <h1 className="text-white font-semibold text-lg">Ops queue</h1>
-          <p className="text-sm" style={{ color: '#64748B' }}>
+          <h1 className="text-[#0B2340] font-semibold text-lg">Ops queue</h1>
+          <p className="text-sm" style={{ color: '#6B7684' }}>
             Disputed jobs and hold-for-ops. Pilot: any active org member can resolve.
           </p>
         </div>
@@ -145,11 +145,11 @@ export function OpsPage() {
       {queue.length === 0 ? (
         <div
           className="rounded-xl p-8 text-center"
-          style={{ background: '#0B1120', border: '1px solid #1E2D45' }}
+          style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}
         >
           <CheckCircle2 size={28} className="text-emerald-400 mx-auto mb-2" />
-          <p className="text-sm text-white/80">Queue clear</p>
-          <p className="text-xs mt-1" style={{ color: '#64748B' }}>
+          <p className="text-sm text-[#0B2340]/80">Queue clear</p>
+          <p className="text-xs mt-1" style={{ color: '#6B7684' }}>
             No DISPUTED or ISSUE_REPORTED jobs in your org right now.
           </p>
         </div>
@@ -171,8 +171,8 @@ export function OpsPage() {
                   }}
                   className="w-full text-left rounded-xl p-3 transition-all"
                   style={{
-                    background: active ? '#111E35' : '#0B1120',
-                    border: `1px solid ${active ? '#06B6D4' : '#1E2D45'}`,
+                    background: active ? '#F3F2EF' : '#ffffff',
+                    border: `1px solid ${active ? '#0B2340' : 'rgba(11,35,64,0.12)'}`,
                   }}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -181,15 +181,15 @@ export function OpsPage() {
                     ) : (
                       <Package size={14} className="text-amber-400" />
                     )}
-                    <span className="text-xs font-medium text-white">{j.status}</span>
+                    <span className="text-xs font-medium text-[#0B2340]">{j.status}</span>
                   </div>
-                  <div className="text-[11px] text-white/70" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                  <div className="text-[11px] text-[#0B2340]/70">
                     {j.id.slice(0, 8)}…
                   </div>
-                  <div className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+                  <div className="text-xs mt-1" style={{ color: '#6B7684' }}>
                     {j.pickup_location} → {j.drop_location}
                   </div>
-                  <div className="text-[10px] mt-1" style={{ color: '#64748B' }}>
+                  <div className="text-[10px] mt-1" style={{ color: '#6B7684' }}>
                     {j.dispute_type || j.no_answer_resolution || j.item_type} · ₹{j.agreed_price ?? j.posted_price}
                   </div>
                 </button>
@@ -198,23 +198,23 @@ export function OpsPage() {
           </div>
 
           {selected && (
-            <div className="rounded-xl p-4 space-y-3" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-              <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl p-4 space-y-3" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="text-xs" style={{ color: '#6B7684' }}>
                 {selected.id}
               </div>
-              <div className="text-sm text-white">
+              <div className="text-sm text-[#0B2340]">
                 {selected.sender_name} · runner {selected.runner_name ?? '—'}
               </div>
-              <div className="text-xs" style={{ color: '#94A3B8' }}>
+              <div className="text-xs" style={{ color: '#6B7684' }}>
                 {selected.pickup_location} → {selected.drop_location}
               </div>
               {selected.dispute_description && (
-                <p className="text-xs" style={{ color: '#64748B' }}>{selected.dispute_description}</p>
+                <p className="text-xs" style={{ color: '#6B7684' }}>{selected.dispute_description}</p>
               )}
 
               {selected.status === 'DISPUTED' && (
                 <>
-                  <div className="text-[10px] uppercase tracking-wide" style={{ color: '#475569' }}>
+                  <div className="text-[10px] uppercase tracking-wide" style={{ color: '#6B7684' }}>
                     Support package (FIR)
                   </div>
                   <button
@@ -237,8 +237,8 @@ export function OpsPage() {
                         setBusy(false);
                       }
                     }}
-                    className="w-full py-2 rounded-lg text-xs font-medium text-white"
-                    style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}
+                    className="w-full py-2 rounded-lg text-xs font-medium text-[#0B2340]"
+                    style={{ background: '#C4453612', border: '1px solid #C4453644' }}
                   >
                     Load / generate support package
                   </button>
@@ -257,7 +257,7 @@ export function OpsPage() {
                     />
                   )}
 
-                  <div className="text-[10px] uppercase tracking-wide pt-2" style={{ color: '#475569' }}>
+                  <div className="text-[10px] uppercase tracking-wide pt-2" style={{ color: '#6B7684' }}>
                     Resolve dispute
                   </div>
                   <div className="space-y-2">
@@ -267,14 +267,14 @@ export function OpsPage() {
                         type="button"
                         disabled={busy}
                         onClick={() => resolve(o.id)}
-                        className="w-full py-2 rounded-lg text-xs font-medium text-white"
-                        style={{ background: '#111E35', border: '1px solid #1E2D45' }}
+                        className="w-full py-2 rounded-lg text-xs font-medium text-[#0B2340]"
+                        style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}
                       >
                         {o.label}
                       </button>
                     ))}
                   </div>
-                  <label className="flex items-center gap-2 text-xs" style={{ color: '#94A3B8' }}>
+                  <label className="flex items-center gap-2 text-xs" style={{ color: '#6B7684' }}>
                     <input
                       type="checkbox"
                       checked={unsuspend}
@@ -290,7 +290,7 @@ export function OpsPage() {
                   type="button"
                   disabled={busy}
                   onClick={closeHold}
-                  className="w-full py-2.5 rounded-lg text-xs font-semibold text-white"
+                  className="w-full py-2.5 rounded-lg text-xs font-semibold text-[#0B2340]"
                   style={{ background: 'linear-gradient(135deg, #F59E0B, #DC2626)' }}
                 >
                   Close hold-for-ops job
@@ -298,7 +298,7 @@ export function OpsPage() {
               )}
 
               {hint && (
-                <p className="text-xs text-cyan-400">{hint}</p>
+                <p className="text-xs text-[#0B2340]">{hint}</p>
               )}
             </div>
           )}
