@@ -145,7 +145,7 @@ export function OpsPage() {
       {queue.length === 0 ? (
         <div
           className="rounded-xl p-8 text-center"
-          style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}
+          style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}
         >
           <CheckCircle2 size={28} className="text-emerald-400 mx-auto mb-2" />
           <p className="text-sm text-[#0B2340]/80">Queue clear</p>
@@ -198,7 +198,7 @@ export function OpsPage() {
           </div>
 
           {selected && (
-            <div className="rounded-xl p-4 space-y-3" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
               <div className="text-xs" style={{ color: '#6B7684' }}>
                 {selected.id}
               </div>

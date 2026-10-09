@@ -98,7 +98,7 @@ function SessionRestoreGate() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center gap-3"
-      style={{ background: '#F3F2EF' }}
+      style={{ background: 'var(--rb-paper)' }}
     >
       <div
         className="w-10 h-10 flex items-center justify-center overflow-hidden"

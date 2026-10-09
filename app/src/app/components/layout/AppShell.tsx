@@ -53,7 +53,7 @@ export function AppShell() {
     : 'Select role';
 
   return (
-    <div className="rb-app flex h-screen overflow-hidden" style={{ background: '#F3F2EF' }}>
+    <div className="rb-app flex h-screen overflow-hidden" style={{ background: 'var(--rb-paper)' }}>
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-[#0B2340]/40 md:hidden"
@@ -65,7 +65,7 @@ export function AppShell() {
         className={`fixed md:relative z-50 h-full flex flex-col transition-all duration-300 ease-in-out
           ${sidebarOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full md:translate-x-0 md:w-[220px]'}
         `}
-        style={{ background: '#3F4F5F' }}
+        style={{ background: '#111315' }}
       >
         <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
           <RushMark size={36} />
@@ -169,14 +169,14 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto" style={{ background: '#F3F2EF' }}>
+        <main className="flex-1 overflow-y-auto rb-main-stage">
           <Outlet />
         </main>
       </div>
 
       <div
         className="fixed bottom-0 left-0 right-0 md:hidden flex items-center z-30"
-        style={{ background: '#3F4F5F', borderTop: '1px solid rgba(255,255,255,0.08)' }}
+        style={{ background: '#111315', borderTop: '1px solid rgba(255,255,255,0.08)' }}
       >
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink

@@ -13,37 +13,139 @@
   letter-spacing: -0.02em;
 }
 
+/* Light surfaces → dark ink; dark washes → light ink */
+.rb-on-card {
+  color: var(--rb-on-card);
+}
+
+.rb-on-dark {
+  color: var(--rb-on-dark);
+}
+
+.rb-muted-on-card {
+  color: var(--rb-muted-on-card);
+}
+
+.rb-muted-on-dark {
+  color: var(--rb-muted-on-dark);
+}
+
+/* Top bar after login — abstract motion bg (not login crowd) */
 .rb-banner {
-  background-color: #0B2340;
+  background-color: #1a1e22;
   background-image:
-    linear-gradient(90deg, rgba(11, 35, 64, 0.92) 0%, rgba(11, 35, 64, 0.62) 48%, rgba(11, 35, 64, 0.2) 78%, rgba(196, 69, 54, 0.12) 100%),
-    repeating-linear-gradient(
-      95deg,
-      transparent 0 22px,
-      rgba(255, 255, 255, 0.035) 22px 24px,
-      transparent 24px 56px
-    ),
-    linear-gradient(105deg, #0B2340 0%, #2a4258 38%, #C44536 70%, #E8A04A 88%, #7BA3C4 100%);
-  background-size: cover, 200px 100%, cover;
+    linear-gradient(100deg, rgba(11, 35, 64, 0.55) 0%, rgba(20, 22, 26, 0.35) 45%, rgba(196, 69, 54, 0.2) 100%),
+    url('/brand/app-bg.png'),
+    linear-gradient(105deg, #15283c 0%, #3a4f66 50%, #2a2018 100%);
+  background-size: cover, cover, cover;
+  background-position: center, 50% 50%, center;
+  background-repeat: no-repeat;
+}
+
+/* Full-bleed auth / verify — wharf photo; bottom half favored */
+.rb-auth-stage {
+  position: relative;
+  min-height: 100vh;
+  background-color: #0f1418;
+  background-image:
+    linear-gradient(115deg, rgba(8, 12, 16, 0.45) 0%, rgba(15, 22, 28, 0.22) 42%, rgba(28, 20, 16, 0.35) 100%),
+    url('/brand/terminal.jpg');
+  background-size: cover, cover;
+  background-position: center, 50% 78%;
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
+/* Post-login main canvas — soft cream */
+.rb-main-stage {
+  position: relative;
+  min-height: 100%;
+  background-color: #F3F2EF;
+  background-image: none;
+  background-attachment: local;
+}
+
+.rb-main-stage > * {
+  position: relative;
+  z-index: 1;
 }
 
 .rb-card {
-  background: #ffffff;
+  background-color: #E6E3DA;
+  background-image: none;
   border: 1px solid rgba(11, 35, 64, 0.08);
-  box-shadow: 0 1px 2px rgba(11, 35, 64, 0.05);
+  box-shadow: 0 1px 2px rgba(11, 35, 64, 0.04);
+  color: var(--rb-on-card);
+}
+
+.rb-home-hero {
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 168px;
+  padding: 1.25rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background-color: #2a2420;
+  background-image:
+    linear-gradient(115deg, rgba(20, 18, 16, 0.55) 0%, rgba(20, 18, 16, 0.25) 50%, rgba(20, 18, 16, 0.45) 100%),
+    url('/brand/page-bg.jpg');
+  background-size: cover, cover;
+  background-position: center, 50% 12%;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(11, 35, 64, 0.08);
+}
+
+/* Auth / verify form — light translucent box, no shine */
+.rb-auth-enter .rb-card {
+  background-color: rgba(242, 240, 235, 0.82);
+  background-image: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  color: #0B2340;
+}
+
+.rb-auth-enter .rb-card h2,
+.rb-auth-enter .rb-card .rb-on-card,
+.rb-auth-enter .rb-card .rb-display {
+  color: #0B2340 !important;
+}
+
+.rb-auth-enter .rb-card .rb-label,
+.rb-auth-enter .rb-card .rb-muted-on-card,
+.rb-auth-enter .rb-card label,
+.rb-auth-enter .rb-card p {
+  color: #4A5560 !important;
+}
+
+.rb-auth-enter .rb-card .rb-muted-on-card span.rb-on-card,
+.rb-auth-enter .rb-card span.rb-on-card.font-medium {
+  color: #0B2340 !important;
+}
+
+.rb-auth-enter .rb-field {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(11, 35, 64, 0.14);
+  color: #0B2340;
+}
+
+.rb-auth-enter .rb-field::placeholder {
+  color: #6B7684;
 }
 
 .rb-label {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #6B7684;
+  color: var(--rb-muted-on-card);
 }
 
 .rb-field {
-  background: #F3F2EF;
-  border: 1px solid rgba(11, 35, 64, 0.12);
-  color: #0B2340;
+  background: #EDEBE6;
+  border: 1px solid rgba(11, 35, 64, 0.14);
+  color: var(--rb-on-card);
   border-radius: 8px;
 }
 

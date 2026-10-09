@@ -157,28 +157,18 @@ export function VerifyPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: '#F3F2EF',  }}>
+    <div className="rb-app rb-auth-stage flex items-center justify-center p-6">
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.97 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-sm"
-      >
-        {/* Wrong email / back */}
+      <div className="relative z-[1] w-full max-w-sm rb-auth-enter">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 text-sm mb-6 transition-colors"
-          style={{ color: '#6B7684' }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#6B7684')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#6B7684')}
+          className="flex items-center gap-2 text-sm mb-6 transition-colors rb-muted-on-dark hover:opacity-100 opacity-85"
         >
           <ArrowLeft size={14} />
           Wrong email? Back to login
         </button>
 
-        <div className="rounded-2xl p-8" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+        <div className="rb-card rounded-2xl p-8 rb-on-card">
           {success ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
@@ -203,22 +193,21 @@ export function VerifyPage() {
               {/* Header */}
               <div className="text-center mb-7">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                  style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
-                  <Shield size={24} className="text-[#0B2340]" />
+                  style={{ background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(11,35,64,0.12)' }}>
+                  <Shield size={24} color="#0B2340" />
                 </div>
-                <div className="text-xs mb-1" style={{ color: '#6B7684' }}>
+                <div className="text-xs mb-1 uppercase tracking-wider" style={{ color: '#4A5560' }}>
                   OTP VERIFICATION
                 </div>
-                <h2 className="text-[#0B2340] mb-2" style={{ fontWeight: 600 }}>Check your inbox</h2>
-                <p className="text-sm" style={{ color: '#6B7684' }}>
+                <h2 className="mb-2" style={{ fontWeight: 600, color: '#0B2340' }}>Check your inbox</h2>
+                <p className="text-sm" style={{ color: '#4A5560' }}>
                   6-digit code sent to
                 </p>
-                <p className="text-sm text-[#0B2340] mt-0.5">
+                <p className="text-sm mt-0.5" style={{ color: '#0B2340' }}>
                   {pendingEmail || pendingSignup?.email || 'your@vitstudent.ac.in'}
                 </p>
               </div>
 
-              {/* OTP inputs */}
               <div className="flex gap-2 justify-center mb-5" onPaste={handlePaste}>
                 {otp.map((digit, i) => (
                   <input
@@ -230,10 +219,11 @@ export function VerifyPage() {
                     value={digit}
                     onChange={e => handleChange(i, e.target.value)}
                     onKeyDown={e => handleKeyDown(i, e)}
-                    className="w-11 h-12 text-center rounded-lg text-[#0B2340] text-lg outline-none transition-all"
+                    className="w-11 h-12 text-center rounded-lg text-lg outline-none transition-all"
                     style={{
-                      background: '#F3F2EF',
-                      border: `1px solid ${error ? '#C4453644' : digit ? '#0B2340' : 'rgba(11,35,64,0.12)'}`,
+                      background: 'rgba(255,255,255,0.9)',
+                      color: '#0B2340',
+                      border: `1px solid ${error ? '#C4453644' : digit ? '#0B2340' : 'rgba(11,35,64,0.14)'}`,
                       boxShadow: digit ? '0 0 0 2px rgba(11,35,64,0.12)' : 'none',
                     }}
                   />
@@ -279,17 +269,17 @@ export function VerifyPage() {
                 )}
               </button>
               {attempts <= 0 && (
-                <p className="text-[10px] text-center mb-3" style={{ color: '#6B7684' }}>
+                <p className="text-[10px] text-center mb-3" style={{ color: '#4A5560' }}>
                   Button stays locked until you resend a new code.
                 </p>
               )}
 
-              {/* Resend */}
-              <div className="text-center text-xs" style={{ color: '#6B7684' }}>
+              <div className="text-center text-xs" style={{ color: '#4A5560' }}>
                 {canResend ? (
                   <button
                     onClick={handleResend}
-                    className="flex items-center gap-1.5 mx-auto text-[#0B2340] hover:text-[#0B2340] transition-colors"
+                    className="flex items-center gap-1.5 mx-auto transition-colors"
+                    style={{ color: '#0B2340' }}
                   >
                     <RefreshCw size={11} />
                     Resend code
@@ -297,28 +287,27 @@ export function VerifyPage() {
                 ) : (
                   <span>
                     Resend in{' '}
-                    <span style={{ color: '#6B7684' }}>
+                    <span style={{ color: '#0B2340' }}>
                       {timer}s
                     </span>
                   </span>
                 )}
               </div>
 
-              {/* Validity */}
               <div className="mt-4 px-3 py-2 rounded-lg text-xs text-center"
-                style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)', color: '#6B7684' }}>
-                Code valid for <span className="text-amber-400">10:00</span> minutes
+                style={{ background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(11,35,64,0.1)', color: '#4A5560' }}>
+                Code valid for <span style={{ color: '#9A6A1E' }}>10:00</span> minutes
                 {isMockAdapter && (
                   <>
                     {' · Demo OTP '}
-                    <span className="text-[#0B2340]">123456</span>
+                    <span style={{ color: '#0B2340' }}>123456</span>
                   </>
                 )}
               </div>
             </>
           )}
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

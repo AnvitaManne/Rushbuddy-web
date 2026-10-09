@@ -510,7 +510,7 @@ export function TrackingPage() {
       )}
 
       {/* Status card */}
-      <div className="rounded-xl p-5" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+      <div className="rounded-xl p-5" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
         {/* Timeline */}
         <div className="flex items-start justify-between mb-6">
           {TIMELINE_STEPS.map((s, i) => {
@@ -720,7 +720,7 @@ export function TrackingPage() {
             </div>
           )}
 
-          <div className="rounded-xl p-4 space-y-3" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+          <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
             <div className="text-xs" style={{ color: '#6B7684' }}>
               MOCK OPS RESOLUTION
             </div>
@@ -738,7 +738,7 @@ export function TrackingPage() {
                   type="button"
                   onClick={() => handleResolveDispute(outcome)}
                   className="w-full py-2.5 rounded-lg text-xs font-semibold text-left px-3 text-[#0B2340]"
-                  style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}
+                  style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}
                 >
                   {label}
                 </button>
@@ -768,7 +768,7 @@ export function TrackingPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           className="rounded-xl p-4"
-          style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}
+          style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}
         >
           <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
             YOUR BUDDY
@@ -820,7 +820,7 @@ export function TrackingPage() {
         <div className="px-4 py-3" style={{ background: '#F3F2EF', borderBottom: '1px solid rgba(11,35,64,0.12)' }}>
           <div className="text-xs" style={{ color: '#6B7684' }}>JOB DETAILS</div>
         </div>
-        <div className="p-4 space-y-3" style={{ background: '#ffffff' }}>
+        <div className="p-4 space-y-3" style={{ background: 'var(--rb-card-gradient)' }}>
           {[
             { label: 'From', value: job.pickup_location, icon: <div className="w-2 h-2 rounded-full bg-cyan-400" /> },
             { label: 'To', value: job.drop_location, icon: <div className="w-2 h-2 rounded-full bg-violet-400" /> },
