@@ -9,11 +9,18 @@
   --rb-lamp: #E8A04A;
   --rb-paper: #F3F2EF;
   --rb-ink: #1A1C1F;
+  --rb-card: #E6E3DA;
+  --rb-card-gradient: #E6E3DA;
+  /* Contrast: light boxes → dark type; dark photo washes → light type */
+  --rb-on-card: #0B2340;
+  --rb-muted-on-card: #6B7684;
+  --rb-on-dark: #F2F0EB;
+  --rb-muted-on-dark: rgba(242, 240, 235, 0.78);
   --background: #F3F2EF;
   --foreground: #1A1C1F;
-  --card: #ffffff;
+  --card: #E6E3DA;
   --card-foreground: #1A1C1F;
-  --popover: #ffffff;
+  --popover: #E6E3DA;
   --popover-foreground: #1A1C1F;
   --primary: #C44536;
   --primary-foreground: #ffffff;

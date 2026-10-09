@@ -33,7 +33,7 @@ export function FirPackagePanel({
   };
 
   return (
-    <div className="fir-package space-y-3 rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(196,69,54,0.25)' }}>
+    <div className="fir-package space-y-3 rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(196,69,54,0.25)' }}>
       <p className="text-[10px] flex items-start gap-1.5" style={{ color: '#9A6A1E' }}>
         <AlertCircle size={11} className="mt-0.5 flex-shrink-0" />
         {fir.disclaimer

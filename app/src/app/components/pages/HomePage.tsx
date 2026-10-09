@@ -122,16 +122,22 @@ export function HomePage() {
 
   return (
     <div className="p-4 md:p-6 pb-24 md:pb-6 space-y-5">
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <motion.div
+        className="rb-home-hero"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 w-full">
           <div>
-            <div className="text-xs mb-1" style={{ color: '#6B7684' }}>
+            <div className="text-xs mb-1 uppercase tracking-wider rb-muted-on-dark">
               {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+              {' · '}Command Centre
             </div>
-            <h1 className="rb-display font-semibold" style={{ fontSize: '1.45rem', color: '#0B2340' }}>
+            <h1 className="rb-display font-semibold rb-on-dark" style={{ fontSize: '1.55rem' }}>
               Hello, {displayUser.name.split(' ')[0]}
             </h1>
-            <p className="text-sm mt-0.5" style={{ color: '#6B7684' }}>
+            <p className="text-sm mt-0.5 rb-muted-on-dark">
               {displayUser.hostel_block}
               {' · '}
               {currentRole === 'sender'
@@ -142,14 +148,14 @@ export function HomePage() {
             </p>
           </div>
 
-          <div className="flex overflow-hidden flex-shrink-0" style={{ border: '1px solid rgba(11,35,64,0.12)', borderRadius: 8 }}>
+          <div className="flex overflow-hidden flex-shrink-0" style={{ border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8, background: 'rgba(255,255,255,0.12)' }}>
             <button
               type="button"
               onClick={() => setCurrentRole('sender')}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors"
               style={{
-                background: currentRole === 'sender' ? '#0B2340' : '#fff',
-                color: currentRole === 'sender' ? '#fff' : '#6B7684',
+                background: currentRole === 'sender' ? '#fff' : 'transparent',
+                color: currentRole === 'sender' ? '#0B2340' : 'rgba(255,255,255,0.8)',
               }}
             >
               Sender
@@ -159,8 +165,8 @@ export function HomePage() {
               onClick={() => setCurrentRole('runner')}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors"
               style={{
-                background: currentRole === 'runner' ? '#C44536' : '#fff',
-                color: currentRole === 'runner' ? '#fff' : '#6B7684',
+                background: currentRole === 'runner' ? '#C44536' : 'transparent',
+                color: currentRole === 'runner' ? '#fff' : 'rgba(255,255,255,0.8)',
               }}
             >
               Runner
@@ -170,7 +176,7 @@ export function HomePage() {
       </motion.div>
 
       {import.meta.env.DEV && (
-        <div className="px-3 py-2.5 text-[11px] rounded-lg" style={{ background: '#fff', border: '1px solid rgba(11,35,64,0.08)', color: '#6B7684' }}>
+        <div className="rb-card px-3 py-2.5 text-[11px] rounded-lg" style={{ color: '#6B7684' }}>
           DEV dogfood: <span style={{ color: '#0B2340' }}>__rushbuddyDev.loadPilotScenarios()</span>
           {' · '}
           <span style={{ color: '#0B2340' }}>bypassNoAnswerWait(true)</span>
@@ -193,8 +199,8 @@ export function HomePage() {
               <p className="text-[11px] font-medium uppercase tracking-wider mb-1" style={{ color: '#C44536' }}>
                 {activeJob.status === 'PENDING_RATING' ? 'Payment pending' : activeJob.status === 'ISSUE_REPORTED' ? 'Needs review' : 'Active job'}
               </p>
-              <p className="text-sm font-medium truncate" style={{ color: '#0B2340' }}>{activeJob.pickup_location} → {activeJob.drop_location}</p>
-              <p className="text-xs mt-0.5" style={{ color: '#6B7684' }}>
+              <p className="text-sm font-medium truncate rb-on-card">{activeJob.pickup_location} → {activeJob.drop_location}</p>
+              <p className="text-xs mt-0.5 rb-muted-on-card">
                 {isSenderMode && (activeJob.status === 'PENDING_RATING' || activeJob.status === 'ISSUE_REPORTED')
                   ? 'Tap to confirm payment & rate'
                   : isRunnerMode && activeJob.status === 'ISSUE_REPORTED'
@@ -212,17 +218,18 @@ export function HomePage() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {(isSenderMode ? senderStats : runnerStats).map(({ label, value, sub }) => (
+        {(isSenderMode ? senderStats : runnerStats).map(({ label, value, sub }, i) => (
           <motion.div
             key={label}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rb-card p-4"
+            transition={{ delay: 0.08 * i }}
+            className="rb-card p-4 rb-on-card"
             style={{ borderRadius: 12 }}
           >
-            <div className="text-xs mb-1" style={{ color: '#6B7684' }}>{label}</div>
-            <div className="rb-display font-semibold mb-0.5" style={{ fontSize: '1.2rem', color: '#0B2340' }}>{value}</div>
-            <div className="text-[10px]" style={{ color: '#8A93A0' }}>{sub}</div>
+            <div className="text-xs mb-1 rb-muted-on-card">{label}</div>
+            <div className="rb-display font-semibold mb-0.5 rb-on-card" style={{ fontSize: '1.2rem' }}>{value}</div>
+            <div className="text-[10px] rb-muted-on-card">{sub}</div>
           </motion.div>
         ))}
       </div>
@@ -231,12 +238,12 @@ export function HomePage() {
       <div className="rb-card p-4" style={{ borderRadius: 12 }}>
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-xs font-medium uppercase tracking-wider mb-0.5" style={{ color: '#6B7684' }}>Weekly progress</div>
-            <p className="text-sm" style={{ color: '#0B2340' }}>
+            <div className="text-xs font-medium uppercase tracking-wider mb-0.5 rb-muted-on-card">Weekly progress</div>
+            <p className="text-sm rb-on-card">
               ₹{displayUser.best_week_earnings - displayUser.weekly_earnings} away from your best week
             </p>
           </div>
-          <div className="text-right text-xs" style={{ color: '#6B7684' }}>
+          <div className="text-right text-xs rb-muted-on-card">
             <div>Best: ₹{displayUser.best_week_earnings}</div>
             <div>{displayUser.streak}-day streak</div>
           </div>
@@ -265,8 +272,8 @@ export function HomePage() {
           style={{ borderRadius: 12, opacity: isRunnerMode ? 0.65 : 1 }}
         >
           <Package size={18} color="#0B2340" />
-          <p className="text-sm font-medium mt-2 mb-0.5" style={{ color: '#0B2340' }}>Post a Request</p>
-          <p className="text-[11px]" style={{ color: '#6B7684' }}>Send something across campus</p>
+          <p className="text-sm font-medium mt-2 mb-0.5 rb-on-card">Post a Request</p>
+          <p className="text-[11px] rb-muted-on-card">Send something across campus</p>
           <div className="flex items-center gap-1 mt-2 text-[10px]" style={{ color: '#C44536' }}>
             <span>Get started</span>
             <ArrowUpRight size={10} />
@@ -280,9 +287,9 @@ export function HomePage() {
           style={{ borderRadius: 12, opacity: isSenderMode ? 0.65 : 1 }}
         >
           <Zap size={18} color="#C44536" />
-          <p className="text-sm font-medium mt-2 mb-0.5" style={{ color: '#0B2340' }}>Browse Jobs</p>
-          <p className="text-[11px]" style={{ color: '#6B7684' }}>
-            <span className="font-medium" style={{ color: '#0B2340' }}>{feedOpenCount} open</span> you can accept
+          <p className="text-sm font-medium mt-2 mb-0.5 rb-on-card">Browse Jobs</p>
+          <p className="text-[11px] rb-muted-on-card">
+            <span className="font-medium rb-on-card">{feedOpenCount} open</span> you can accept
           </p>
           <div className="flex items-center gap-1 mt-2 text-[10px]" style={{ color: '#C44536' }}>
             <span>View feed</span>
@@ -293,7 +300,7 @@ export function HomePage() {
 
       {isSenderMode ? (
         <div className="rb-card p-4" style={{ borderRadius: 12 }}>
-          <div className="text-xs font-medium uppercase tracking-wider mb-4" style={{ color: '#6B7684' }}>
+          <div className="text-xs font-medium uppercase tracking-wider mb-4 rb-muted-on-card">
             Sender snapshot
           </div>
           <div className="grid grid-cols-3 gap-4">
@@ -303,15 +310,15 @@ export function HomePage() {
               { label: 'Disputed', value: myJobs.filter(j => j.status === 'DISPUTED').length },
             ].map(({ label, value }) => (
               <div key={label} className="text-center">
-                <div className="rb-display font-semibold mb-1" style={{ fontSize: '1.1rem', color: '#0B2340' }}>{value}</div>
-                <div className="text-[10px]" style={{ color: '#6B7684' }}>{label}</div>
+                <div className="rb-display font-semibold mb-1 rb-on-card" style={{ fontSize: '1.1rem' }}>{value}</div>
+                <div className="text-[10px] rb-muted-on-card">{label}</div>
               </div>
             ))}
           </div>
         </div>
       ) : (
         <div className="rb-card p-4" style={{ borderRadius: 12 }}>
-          <div className="text-xs font-medium uppercase tracking-wider mb-4" style={{ color: '#6B7684' }}>
+          <div className="text-xs font-medium uppercase tracking-wider mb-4 rb-muted-on-card">
             Runner metrics
           </div>
           <div className="grid grid-cols-3 gap-4">
@@ -321,8 +328,8 @@ export function HomePage() {
               { label: 'Rating', value: `${displayUser.rating}/5.0` },
             ].map(({ label, value }) => (
               <div key={label} className="text-center">
-                <div className="rb-display font-semibold mb-1" style={{ fontSize: '1.1rem', color: '#0B2340' }}>{value}</div>
-                <div className="text-[10px]" style={{ color: '#6B7684' }}>{label}</div>
+                <div className="rb-display font-semibold mb-1 rb-on-card" style={{ fontSize: '1.1rem' }}>{value}</div>
+                <div className="text-[10px] rb-muted-on-card">{label}</div>
               </div>
             ))}
           </div>
@@ -331,7 +338,7 @@ export function HomePage() {
 
       <div className="rb-card overflow-hidden" style={{ borderRadius: 12 }}>
         <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(11,35,64,0.08)' }}>
-          <div className="text-xs font-medium uppercase tracking-wider" style={{ color: '#6B7684' }}>
+          <div className="text-xs font-medium uppercase tracking-wider rb-muted-on-card">
             {isSenderMode ? 'My requests' : isRunnerMode ? 'My runs' : 'Recent jobs'}
           </div>
           <button type="button" className="text-xs flex items-center gap-1" style={{ color: '#C44536' }}>
@@ -341,7 +348,7 @@ export function HomePage() {
 
         {recentJobs.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <p className="text-sm" style={{ color: '#6B7684' }}>
+            <p className="text-sm rb-muted-on-card">
               {isSenderMode
                 ? 'No requests yet. Post a request to get started.'
                 : isRunnerMode
@@ -358,40 +365,40 @@ export function HomePage() {
                 tabIndex={0}
                 onClick={() => openJob(job)}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openJob(job); } }}
-                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#F3F2EF] transition-colors"
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#EDEBE6]/70 transition-colors"
                 style={{ borderBottom: i < recentJobs.length - 1 ? '1px solid rgba(11,35,64,0.06)' : 'none' }}
               >
                 <div
                   className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
-                  style={{ background: '#F3F2EF' }}
+                  style={{ background: '#EDEBE6' }}
                 >
                   <Package size={14} color="#0B2340" />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs truncate font-medium" style={{ color: '#0B2340' }}>
+                    <span className="text-xs truncate font-medium rb-on-card">
                       {job.pickup_location} → {job.drop_location}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={job.status} />
                     {isSenderMode ? (
-                      <span className="text-[10px]" style={{ color: '#8A93A0' }}>as Sender</span>
+                      <span className="text-[10px] rb-muted-on-card">as Sender</span>
                     ) : isRunnerMode ? (
-                      <span className="text-[10px]" style={{ color: '#8A93A0' }}>as Runner</span>
+                      <span className="text-[10px] rb-muted-on-card">as Runner</span>
                     ) : job.sender_id === uid && job.runner_id === uid ? (
-                      <span className="text-[10px]" style={{ color: '#8A93A0' }}>you = sender + runner</span>
+                      <span className="text-[10px] rb-muted-on-card">you = sender + runner</span>
                     ) : job.runner_id === uid ? (
-                      <span className="text-[10px]" style={{ color: '#8A93A0' }}>as Runner</span>
+                      <span className="text-[10px] rb-muted-on-card">as Runner</span>
                     ) : (
-                      <span className="text-[10px]" style={{ color: '#8A93A0' }}>as Sender</span>
+                      <span className="text-[10px] rb-muted-on-card">as Sender</span>
                     )}
                   </div>
                 </div>
 
                 <div className="text-right flex-shrink-0">
-                  <div className="text-sm font-medium" style={{ color: '#0B2340' }}>
+                  <div className="text-sm font-medium rb-on-card">
                     ₹{job.agreed_price ?? job.posted_price}
                   </div>
                   {job.tip_amount && job.tip_amount > 0 ? (

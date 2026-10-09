@@ -72,101 +72,103 @@ export function AuthPage() {
   };
 
   return (
-    <div className="rb-app min-h-screen flex" style={{ background: '#F3F2EF' }}>
+    <div className="rb-app rb-auth-stage flex">
       {/* Left panel — branding */}
-      <div className="rb-banner hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10">
-
-        {/* Logo */}
+      <div className="relative z-[1] hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10">
         <div className="flex items-center gap-3">
           <RushMark size={40} />
           <div>
-            <div className="text-white font-semibold">RushBuddy</div>
-            <div className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.7)' }}>Beta · VIT Vellore</div>
+            <div className="rb-on-dark font-semibold">RushBuddy</div>
+            <div className="text-[10px] uppercase tracking-wider rb-muted-on-dark">Beta · VIT Vellore</div>
           </div>
         </div>
 
-        {/* Center content */}
         <div>
           <motion.div
-            initial={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
           >
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6"
-              style={{ background: 'rgba(11,35,64,0.45)', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#E8A04A' }} />
-              <span className="text-[11px] text-white/85">
+              style={{ background: 'rgba(11,35,64,0.72)', border: '1.5px solid rgba(255,255,255,0.28)' }}>
+              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#E8A04A' }} />
+              <span className="text-[11px] rb-muted-on-dark">
                 Peer logistics. Reimagined.
               </span>
             </div>
-            <h1 className="rb-display mb-4" style={{ fontSize: '2rem', fontWeight: 600, lineHeight: 1.2, color: '#ffffff' }}>
+            <h1 className="rb-display mb-4 rb-on-dark" style={{ fontSize: '2rem', fontWeight: 600, lineHeight: 1.2 }}>
               Campus delivery,<br />
               peer-powered.
             </h1>
-            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.78)', lineHeight: 1.7 }}>
+            <p className="text-sm rb-muted-on-dark" style={{ lineHeight: 1.7 }}>
               RushBuddy formalises the informal delivery network that already exists on campus.
               Verified. Fast. Trusted.
             </p>
           </motion.div>
 
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-3 mt-8">
             {[
               { label: 'Deliveries', value: '1,240+', sub: 'total' },
               { label: 'Avg ETA', value: '11 min', sub: 'intra-campus' },
               { label: 'Trust Score', value: '96%', sub: 'platform avg' },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-lg p-3" style={{ background: 'rgba(11,35,64,0.4)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                <div className="text-white font-semibold text-lg">{stat.value}</div>
-                <div className="text-[10px] mt-0.5 text-white/70">{stat.label}</div>
-                <div className="text-[9px] text-white/45">{stat.sub}</div>
-              </div>
+            ].map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + i * 0.08 }}
+                className="rounded-lg p-3"
+                style={{ background: 'rgba(11,35,64,0.72)', border: '1.5px solid rgba(255,255,255,0.28)' }}
+              >
+                <div className="rb-on-dark font-semibold text-lg">{stat.value}</div>
+                <div className="text-[10px] mt-0.5 rb-muted-on-dark">{stat.label}</div>
+                <div className="text-[9px] opacity-50 rb-on-dark">{stat.sub}</div>
+              </motion.div>
             ))}
           </div>
         </div>
 
-        {/* Feature pills */}
         <div className="space-y-2.5">
           {[
             { icon: Shield, text: 'VIT email verified — no anonymous runners' },
             { icon: Zap, text: 'Real-time matching & tracking on every job' },
             { icon: Package, text: 'Intra-campus + intercity corridors' },
-          ].map(({ icon: Icon, text }) => (
-            <div key={text} className="flex items-center gap-3 text-xs text-white/80">
+          ].map(({ icon: Icon, text }, i) => (
+            <motion.div
+              key={text}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.35 + i * 0.07 }}
+              className="flex items-center gap-3 text-xs rb-muted-on-dark"
+            >
               <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(11,35,64,0.45)' }}>
                 <Icon size={12} color="#E8A04A" />
               </div>
               {text}
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
 
       {/* Right panel — form */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12">
+      <div className="relative z-[1] flex-1 flex flex-col items-center justify-center p-6 lg:p-12">
 
-        {/* Mobile logo */}
         <div className="flex items-center gap-3 mb-8 lg:hidden">
           <RushMark size={36} />
-          <span className="font-semibold" style={{ color: '#0B2340' }}>RushBuddy</span>
+          <span className="font-semibold rb-on-dark">RushBuddy</span>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="w-full max-w-md"
-        >
-          <div className="rb-card rounded-2xl p-8">
-            {/* Header */}
+        <div className="w-full max-w-md rb-auth-enter">
+          <div className="rb-card rounded-2xl p-8 rb-on-card">
             <div className="mb-6">
-              <div className="text-xs mb-1 uppercase tracking-wider" style={{ color: '#6B7684' }}>
+              <div className="rb-label mb-1">
                 Auth · VIT beta
               </div>
-              <h2 className="rb-display mb-1" style={{ fontSize: '1.4rem', fontWeight: 600, color: '#0B2340' }}>
+              <h2 className="rb-display mb-1 rb-on-card" style={{ fontSize: '1.4rem', fontWeight: 600 }}>
                 Access RushBuddy
               </h2>
-              <p className="text-sm" style={{ color: '#6B7684' }}>
+              <p className="text-sm rb-muted-on-card">
                 Sign in with your VIT student email to continue.
               </p>
             </div>
@@ -174,20 +176,18 @@ export function AuthPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email */}
               <div>
-                <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>
+                <label className="text-xs mb-1.5 block rb-muted-on-card">
                   VIT Email Address
                 </label>
                 <div className="relative">
-                  <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6B7684' }} />
+                  <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 rb-muted-on-card" />
                   <input
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="yourname@vitstudent.ac.in"
-                    className="w-full pl-9 pr-4 py-2.5 rounded-lg text-sm outline-none transition-all"
+                    className="rb-field w-full pl-9 pr-4 py-2.5 rounded-lg text-sm outline-none transition-all"
                     style={{
-                      background: '#F3F2EF',
-                      color: '#0B2340',
                       border: `1px solid ${error && error.toLowerCase().includes('vit email') ? '#C44536' : 'rgba(11,35,64,0.12)'}`,
                     }}
                     onFocus={e => { e.target.style.borderColor = '#7BA3C4'; e.target.style.boxShadow = '0 0 0 2px rgba(123,163,196,0.25)'; }}
@@ -199,7 +199,7 @@ export function AuthPage() {
 
               {/* Name */}
               <div>
-                <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>
+                <label className="text-xs mb-1.5 block rb-muted-on-card">
                   Full Name
                 </label>
                 <input
@@ -207,8 +207,7 @@ export function AuthPage() {
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="As on college ID"
-                  className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
-                  style={{ background: '#F3F2EF', color: '#0B2340', border: '1px solid rgba(11,35,64,0.12)' }}
+                  className="rb-field w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
                   onFocus={e => { e.target.style.borderColor = '#7BA3C4'; e.target.style.boxShadow = '0 0 0 2px rgba(123,163,196,0.25)'; }}
                   onBlur={e => { e.target.style.borderColor = 'rgba(11,35,64,0.12)'; e.target.style.boxShadow = 'none'; }}
                   required
@@ -217,7 +216,7 @@ export function AuthPage() {
 
               {/* Hostel */}
               <div>
-                <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>
+                <label className="text-xs mb-1.5 block rb-muted-on-card">
                   Hostel Block
                 </label>
                 <input
@@ -225,8 +224,7 @@ export function AuthPage() {
                   value={hostel}
                   onChange={e => setHostel(e.target.value)}
                   placeholder="e.g. MH-C Block, GH-A Block"
-                  className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
-                  style={{ background: '#F3F2EF', color: '#0B2340', border: '1px solid rgba(11,35,64,0.12)' }}
+                  className="rb-field w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
                   onFocus={e => { e.target.style.borderColor = '#7BA3C4'; e.target.style.boxShadow = '0 0 0 2px rgba(123,163,196,0.25)'; }}
                   onBlur={e => { e.target.style.borderColor = 'rgba(11,35,64,0.12)'; e.target.style.boxShadow = 'none'; }}
                   required
@@ -235,7 +233,7 @@ export function AuthPage() {
 
               {/* Gender — matching-only, hidden elsewhere in the UI */}
               <div>
-                <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>
+                <label className="text-xs mb-1.5 block rb-muted-on-card">
                   Gender
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -246,16 +244,17 @@ export function AuthPage() {
                       onClick={() => setGender(value)}
                       className="py-2 rounded-lg text-xs border transition-all"
                       style={{
-                        background: '#ffffff',
-                        border: `1px solid ${gender === value ? '#C44536' : 'rgba(11,35,64,0.12)'}`,
-                        color: gender === value ? '#0B2340' : '#6B7684',
+                        background: gender === value ? 'rgba(196,69,54,0.12)' : 'rgba(255,255,255,0.65)',
+                        border: `1px solid ${gender === value ? '#C44536' : 'rgba(11,35,64,0.14)'}`,
+                        color: '#0B2340',
+                        fontWeight: gender === value ? 600 : 400,
                       }}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
-                <p className="text-[10px] mt-1.5" style={{ color: '#8A93A0' }}>
+                <p className="text-[10px] mt-1.5 rb-muted-on-card">
                   Used only to match gendered-hostel deliveries. Never shown on your profile.
                 </p>
               </div>
@@ -279,7 +278,7 @@ export function AuthPage() {
                 disabled={loading}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all duration-200 mt-2"
                 style={{
-                  background: loading ? '#6B7684' : '#C44536',
+                  background: loading ? '#6B7684' : '#111315',
                   opacity: loading ? 0.8 : 1,
                 }}
               >
@@ -299,16 +298,15 @@ export function AuthPage() {
 
             {/* Demo hint — mock adapter only */}
             {isMockAdapter && (
-              <div className="mt-5 px-3 py-2.5 rounded-lg text-xs" style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.08)' }}>
-                <span style={{ color: '#6B7684' }}>DEMO → </span>
-                <span style={{ color: '#6B7684' }}>use any </span>
-                <span style={{ color: '#0B2340' }}>@vitstudent.ac.in</span>
-                <span style={{ color: '#6B7684' }}> email. OTP is </span>
-                <span style={{ color: '#0B2340' }}>123456</span>
+              <div className="mt-5 px-3 py-2.5 rounded-lg text-xs" style={{ background: 'rgba(255,255,255,0.35)', border: '1px solid rgba(11,35,64,0.08)' }}>
+                <span className="rb-muted-on-card">DEMO → use any </span>
+                <span className="rb-on-card font-medium">@vitstudent.ac.in</span>
+                <span className="rb-muted-on-card"> email. OTP is </span>
+                <span className="rb-on-card font-medium">123456</span>
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

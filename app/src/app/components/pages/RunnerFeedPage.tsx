@@ -311,7 +311,7 @@ export function RunnerFeedPage() {
                 onClick={() => void handleClearSuspensionDev()}
                 disabled={clearingSuspension}
                 className="text-[11px] px-2 py-1 rounded border disabled:opacity-50"
-                style={{ borderColor: '#C4453644', color: '#C44536', background: '#fff' }}
+                style={{ borderColor: '#C4453644', color: '#C44536', background: 'var(--rb-card-gradient)' }}
               >
                 {clearingSuspension ? 'Clearing…' : 'Clear suspension (dev)'}
               </button>
@@ -344,7 +344,7 @@ export function RunnerFeedPage() {
           type="button"
           onClick={() => void handleRefreshFeed()}
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
-          style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
+          style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
         >
           <RefreshCw size={13} />
           Refresh
@@ -370,7 +370,7 @@ export function RunnerFeedPage() {
           { label: 'Potential', value: `₹${openJobs.reduce((s, j) => s + j.posted_price, 0)}`, color: '#10B981' },
           { label: 'Avg ETA', value: '~11 min', color: '#F59E0B' },
         ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+          <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
             <div className="font-semibold text-sm" style={{ color }}>{value}</div>
             <div className="text-[10px] mt-0.5" style={{ color: '#6B7684' }}>{label}</div>
           </div>
@@ -386,7 +386,7 @@ export function RunnerFeedPage() {
             onClick={() => setFilter(f)}
             className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs transition-all"
             style={{
-              background: '#ffffff',
+              background: 'var(--rb-card-gradient)',
               border: `1px solid ${filter === f ? '#C44536' : 'rgba(11,35,64,0.12)'}`,
               color: filter === f ? '#0B2340' : '#6B7684',
             }}

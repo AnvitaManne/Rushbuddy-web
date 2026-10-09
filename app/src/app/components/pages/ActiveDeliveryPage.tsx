@@ -335,7 +335,7 @@ export function ActiveDeliveryPage() {
       </div>
 
       {/* Delivery progress */}
-      <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+      <div className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
         <div className="flex items-center gap-2 mb-4">
           {steps.map((s, i) => {
             const isDone = stepIdx > i;
@@ -388,7 +388,7 @@ export function ActiveDeliveryPage() {
               </div>
 
               <div className="flex items-center gap-3 p-3 rounded-lg mb-4"
-                style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+                style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0"
                   style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', fontSize: '0.9rem' }}>
                   {job.sender_name.charAt(0)}
@@ -500,7 +500,7 @@ export function ActiveDeliveryPage() {
               <button
                 onClick={() => setShowIssuePanel(true)}
                 className="w-full py-2 rounded-lg text-sm border transition-all"
-                style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
+                style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
               >
                 Report an Issue
               </button>
@@ -588,7 +588,7 @@ export function ActiveDeliveryPage() {
               </div>
 
               {/* No answer / sender unreachable flow */}
-              <div className="rounded-lg p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="rounded-lg p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
                 <button
                   onClick={() => setShowNoAnswerPanel(s => !s)}
                   className="w-full flex items-center justify-between text-xs"
@@ -678,7 +678,7 @@ export function ActiveDeliveryPage() {
               <button
                 onClick={() => setShowIssuePanel(true)}
                 className="w-full py-2 rounded-lg text-sm border"
-                style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
+                style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
               >
                 Report an Issue
               </button>
@@ -688,7 +688,7 @@ export function ActiveDeliveryPage() {
       </div>
 
       {/* Earnings preview */}
-      <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+      <div className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
         <div className="text-xs mb-3" style={{ color: '#6B7684' }}>EARNINGS PREVIEW</div>
         <div className="flex items-center justify-between">
           <div>
@@ -719,7 +719,7 @@ export function ActiveDeliveryPage() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 40, opacity: 0 }}
               className="w-full max-w-sm rounded-2xl p-5"
-              style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}
+              style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}
             >
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle size={16} className="text-amber-400" />
@@ -739,7 +739,7 @@ export function ActiveDeliveryPage() {
                 <button
                   onClick={() => setShowIssuePanel(false)}
                   className="flex-1 py-2.5 rounded-lg text-sm border"
-                  style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
+                  style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
                 >
                   Cancel
                 </button>

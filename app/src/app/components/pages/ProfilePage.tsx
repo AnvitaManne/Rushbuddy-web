@@ -68,7 +68,7 @@ export function ProfilePage() {
     <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl space-y-4" >
 
       {/* Profile header */}
-      <div className="rounded-xl p-5" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+      <div className="rounded-xl p-5" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl flex-shrink-0"
             style={{ background: '#C44536' }}>
@@ -134,7 +134,7 @@ export function ProfilePage() {
       {tab === 'overview' && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           {/* Earnings chart */}
-          <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+          <div className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="text-xs mb-0.5" style={{ color: '#6B7684' }}>
@@ -178,7 +178,7 @@ export function ProfilePage() {
                 RUNNER PERFORMANCE
               </div>
             </div>
-            <div className="p-4 space-y-3" style={{ background: '#ffffff' }}>
+            <div className="p-4 space-y-3" style={{ background: 'var(--rb-card-gradient)' }}>
               {[
                 { label: 'Acceptance Rate', value: displayUser.acceptance_rate, max: 100, unit: '%', color: '#10B981', good: displayUser.acceptance_rate >= 80 },
                 { label: 'Trust Score', value: displayUser.trust_score, max: 100, unit: '', color: '#0B2340', good: true },
@@ -218,7 +218,7 @@ export function ProfilePage() {
             </div>
           ) : (
             [...myRunnerJobs, ...mySenderJobs].map(job => (
-              <div key={job.id} className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div key={job.id} className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
@@ -269,7 +269,7 @@ export function ProfilePage() {
       {/* Tab: Trust & Safety */}
       {tab === 'trust' && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+          <div className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
             <div className="text-xs mb-4" style={{ color: '#6B7684' }}>
               IDENTITY VERIFICATION
             </div>
@@ -295,7 +295,7 @@ export function ProfilePage() {
             ))}
           </div>
 
-          <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+          <div className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
             <div className="text-xs mb-4" style={{ color: '#6B7684' }}>
               TRUST SCORE BREAKDOWN
             </div>

@@ -279,7 +279,7 @@ export function PostRequestPage() {
         {/* Step 1: Job type */}
         {step === 1 && (
           <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
               <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
                 JOB TYPE
               </div>
@@ -302,7 +302,7 @@ export function PostRequestPage() {
             {/* Conditional: campus_scheduled window */}
             {jobType === 'campus_scheduled' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="rounded-xl p-4 mb-4 space-y-3" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+                className="rounded-xl p-4 mb-4 space-y-3" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
                 <div className="text-xs" style={{ color: '#6B7684' }}>
                   SCHEDULED WINDOW
                 </div>
@@ -342,7 +342,7 @@ export function PostRequestPage() {
             {/* Conditional: intercity fields */}
             {jobType === 'intercity' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="rounded-xl p-4 mb-4 space-y-3" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+                className="rounded-xl p-4 mb-4 space-y-3" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
                 <div className="text-xs" style={{ color: '#6B7684' }}>
                   INTERCITY DETAILS (MODE 2 · LANDMARK HANDOFF)
                 </div>
@@ -403,7 +403,7 @@ export function PostRequestPage() {
         {step === 2 && (
           <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             {/* Item type */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
               <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
                 ITEM TYPE
               </div>
@@ -441,7 +441,7 @@ export function PostRequestPage() {
             </div>
 
             {/* Weight */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
               <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
                 WEIGHT TIER
               </div>
@@ -461,7 +461,7 @@ export function PostRequestPage() {
             </div>
 
             {/* Risk */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
               <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
                 RISK LEVEL
               </div>
@@ -477,7 +477,7 @@ export function PostRequestPage() {
                     onClick={() => setRisk(r)}
                     className="p-3 text-center rounded-lg border transition-all duration-150"
                     style={{
-                      background: '#ffffff',
+                      background: 'var(--rb-card-gradient)',
                       border: `1px solid ${risk === r ? color : 'rgba(11,35,64,0.12)'}`,
                       color: risk === r ? color : '#6B7684',
                     }}
@@ -490,7 +490,7 @@ export function PostRequestPage() {
             </div>
 
             {/* Declared value */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
               <div className="text-xs mb-2" style={{ color: '#6B7684' }}>
                 DECLARED VALUE (OPTIONAL)
               </div>
@@ -597,7 +597,7 @@ export function PostRequestPage() {
               </motion.div>
             )}
 
-            <div className="rounded-xl p-4 mb-4 space-y-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="rounded-xl p-4 mb-4 space-y-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
               <div className="text-xs" style={{ color: '#6B7684' }}>
                 ROUTE DETAILS
               </div>
@@ -637,7 +637,7 @@ export function PostRequestPage() {
                       onClick={() => setPickupType(type)}
                       className="flex-1 py-1.5 rounded-md text-[11px] border transition-all"
                       style={{
-                        background: '#ffffff',
+                        background: 'var(--rb-card-gradient)',
                         border: `1px solid ${pickupType === type ? '#C44536' : 'rgba(11,35,64,0.10)'}`,
                         color: pickupType === type ? '#0B2340' : '#6B7684',
                       }}
@@ -683,7 +683,7 @@ export function PostRequestPage() {
                       onClick={() => setDropType(type)}
                       className="flex-1 py-1.5 rounded-md text-[11px] border transition-all"
                       style={{
-                        background: '#ffffff',
+                        background: 'var(--rb-card-gradient)',
                         border: `1px solid ${dropType === type ? '#C44536' : 'rgba(11,35,64,0.10)'}`,
                         color: dropType === type ? '#0B2340' : '#6B7684',
                       }}
@@ -723,7 +723,7 @@ export function PostRequestPage() {
               <button
                 onClick={() => setStep(2)}
                 className="flex-1 py-3 rounded-lg text-sm border transition-all"
-                style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
+                style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
               >
                 ← Back
               </button>
@@ -757,7 +757,7 @@ export function PostRequestPage() {
                   JOB PREVIEW · {new Date().toLocaleDateString()}
                 </div>
               </div>
-              <div className="p-4 space-y-3" style={{ background: '#ffffff' }}>
+              <div className="p-4 space-y-3" style={{ background: 'var(--rb-card-gradient)' }}>
                 {[
                   { label: 'Job Type', value: JOB_TYPES.find(j => j.type === jobType)?.label },
                   { label: 'Item Type', value: itemType },
@@ -834,7 +834,7 @@ export function PostRequestPage() {
               <button
                 onClick={() => setStep(3)}
                 className="flex-1 py-3 rounded-lg text-sm border"
-                style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
+                style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
               >
                 ← Back
               </button>

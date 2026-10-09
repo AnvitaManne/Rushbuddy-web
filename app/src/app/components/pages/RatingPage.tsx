@@ -244,7 +244,7 @@ export function RatingPage() {
       </div>
 
       {/* Runner card */}
-      <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+      <div className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl"
             style={{ background: '#C44536' }}>
@@ -313,7 +313,7 @@ export function RatingPage() {
 
       {/* Tip — part of payment (before confirm), not during rating */}
       {!disputeMode && !paymentConfirmed && (
-        <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+        <div className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
           <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
             ADD A TIP (OPTIONAL)
           </div>
@@ -338,7 +338,7 @@ export function RatingPage() {
 
       {/* Payment method */}
       {!disputeMode && !paymentConfirmed && (
-        <div className="rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(11,35,64,0.12)' }}>
+        <div className="rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
           <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
             PAYMENT METHOD
           </div>
@@ -526,7 +526,7 @@ export function RatingPage() {
           onClick={() => { setDisputeMode(d => !d); setStars(0); setDisputeError(''); }}
           className="w-full py-2.5 rounded-lg text-sm border transition-all"
           style={{
-            background: '#ffffff',
+            background: 'var(--rb-card-gradient)',
             border: `1px solid ${disputeMode ? 'rgba(11,35,64,0.12)' : '#C4453644'}`,
             color: disputeMode ? '#6B7684' : '#F87171',
           }}
