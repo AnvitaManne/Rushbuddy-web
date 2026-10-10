@@ -66,9 +66,9 @@ export function PhotoCapture({
         disabled={disabled || uploading}
         className="text-xs px-3 py-1.5 rounded-lg transition-all inline-flex items-center gap-1.5"
         style={{
-          background: captured ? '#0A2010' : '#0B1120',
-          border: `1px solid ${captured ? '#1A4020' : '#1E2D45'}`,
-          color: captured ? '#10B981' : '#94A3B8',
+          background: captured ? '#F3F2EF' : '#ffffff',
+          border: `1px solid ${captured ? '#0B2340' : 'rgba(11,35,64,0.12)'}`,
+          color: captured ? '#0B2340' : '#6B7684',
           opacity: uploading ? 0.7 : 1,
         }}
       >

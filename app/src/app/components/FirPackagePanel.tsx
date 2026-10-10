@@ -33,14 +33,14 @@ export function FirPackagePanel({
   };
 
   return (
-    <div className="fir-package space-y-3 rounded-xl p-4" style={{ background: '#0D0303', border: '1px solid #3B1111' }}>
-      <p className="text-[10px] text-amber-200/90 flex items-start gap-1.5">
+    <div className="fir-package space-y-3 rounded-xl p-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(196,69,54,0.25)' }}>
+      <p className="text-[10px] flex items-start gap-1.5" style={{ color: '#9A6A1E' }}>
         <AlertCircle size={11} className="mt-0.5 flex-shrink-0" />
         {fir.disclaimer
           ?? 'RushBuddy campus support package — not a legal FIR or police filing.'}
       </p>
 
-      <div className="grid gap-3 text-[11px]" style={{ color: '#FCA5A5' }}>
+      <div className="grid gap-3 text-[11px]" style={{ color: '#0B2340' }}>
         <section>
           <div className="text-[10px] mb-1" style={{ color: '#7F1D1D', fontFamily: 'JetBrains Mono, monospace' }}>
             JOB · {fir.job_id}
@@ -51,13 +51,13 @@ export function FirPackagePanel({
         <section className="grid sm:grid-cols-2 gap-3">
           <div>
             <div className="text-[10px] mb-1" style={{ color: '#7F1D1D', fontFamily: 'JetBrains Mono, monospace' }}>SENDER</div>
-            <p className="text-red-200 font-medium">{fir.sender_name}</p>
+            <p className="font-medium" style={{ color: '#C44536' }}>{fir.sender_name}</p>
             <p>{fir.sender_hostel}</p>
             {fir.sender_email && <p>{fir.sender_email}</p>}
           </div>
           <div>
             <div className="text-[10px] mb-1" style={{ color: '#7F1D1D', fontFamily: 'JetBrains Mono, monospace' }}>RUNNER</div>
-            <p className="text-red-200 font-medium">{fir.runner_name}</p>
+            <p className="font-medium" style={{ color: '#C44536' }}>{fir.runner_name}</p>
             {fir.runner_hostel && <p>{fir.runner_hostel}</p>}
             {fir.runner_email && <p>{fir.runner_email}</p>}
             <p className="opacity-70" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{fir.runner_id}</p>
@@ -77,7 +77,7 @@ export function FirPackagePanel({
 
         <section>
           <div className="text-[10px] mb-1" style={{ color: '#7F1D1D', fontFamily: 'JetBrains Mono, monospace' }}>DISPUTE</div>
-          <p className="text-red-200 font-medium">{fir.dispute_type ?? 'Not specified'}</p>
+          <p className="font-medium" style={{ color: '#C44536' }}>{fir.dispute_type ?? 'Not specified'}</p>
           {fir.dispute_description && <p>{fir.dispute_description}</p>}
         </section>
 
@@ -147,7 +147,7 @@ export function FirPackagePanel({
           type="button"
           onClick={onCopy}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white"
-          style={{ background: '#3B1111', border: '1px solid #7F1D1D' }}
+          style={{ background: '#C44536' }}
         >
           {copied ? <Check size={12} /> : <Copy size={12} />}
           {copied ? 'Copied' : 'Copy JSON'}
@@ -156,7 +156,7 @@ export function FirPackagePanel({
           type="button"
           onClick={downloadJson}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white"
-          style={{ background: '#3B1111', border: '1px solid #7F1D1D' }}
+          style={{ background: '#C44536' }}
         >
           <Download size={12} />
           Download JSON
@@ -165,7 +165,7 @@ export function FirPackagePanel({
           type="button"
           onClick={printPackage}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white"
-          style={{ background: '#3B1111', border: '1px solid #7F1D1D' }}
+          style={{ background: '#C44536' }}
         >
           <Printer size={12} />
           Print

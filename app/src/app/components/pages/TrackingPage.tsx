@@ -367,12 +367,12 @@ export function TrackingPage() {
 
   if (!job) {
     return (
-      <div className="p-6 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="p-6 text-center" >
         <Package size={32} className="text-slate-600 mx-auto mb-3" />
-        <p className="text-sm" style={{ color: '#64748B' }}>No active request found.</p>
+        <p className="text-sm" style={{ color: '#6B7684' }}>No active request found.</p>
         <button onClick={() => navigate('/sender/post')}
-          className="mt-4 px-4 py-2 rounded-lg text-sm text-cyan-400 border"
-          style={{ border: '1px solid #0E2D3D', background: '#061620' }}>
+          className="mt-4 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+          style={{ background: '#C44536' }}>
           Post a Request
         </button>
       </div>
@@ -390,14 +390,14 @@ export function TrackingPage() {
     !!job.runner_id && runnerTrustRecords[job.runner_id]?.suspension_status === 'suspended';
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl space-y-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl space-y-4" >
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="text-xs mb-1" style={{ color: '#6B7684' }}>
             TRACKING · {job.id}
           </div>
-          <h1 className="text-white" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
+          <h1 className="text-[#0B2340]" style={{ fontWeight: 700, fontSize: '1.2rem' }}>
             Live Job Status
           </h1>
         </div>
@@ -407,7 +407,7 @@ export function TrackingPage() {
             onClick={() => void handleCancel()}
             disabled={ttlBusy}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all disabled:opacity-50"
-            style={{ background: '#1C0A0A', border: '1px solid #3B1111', color: '#F87171' }}
+            style={{ background: '#C4453612', border: '1px solid #C4453644', color: '#F87171' }}
           >
             <X size={12} />
             Cancel
@@ -423,8 +423,8 @@ export function TrackingPage() {
           <div
             className="rounded-xl p-4 space-y-3"
             style={{
-              background: urgent ? '#1A1005' : '#0B1120',
-              border: `1px solid ${urgent ? '#3B2A0A' : '#1E2D45'}`,
+              background: urgent ? '#FFF6EA' : '#ffffff',
+              border: `1px solid ${urgent ? '#3B2A0A' : 'rgba(11,35,64,0.12)'}`,
             }}
           >
             <div className="flex items-start justify-between gap-3">
@@ -434,7 +434,7 @@ export function TrackingPage() {
                   <p className={`text-xs font-medium ${urgent ? 'text-amber-300' : 'text-slate-300'}`}>
                     {left <= 0 ? 'Listing expired' : 'Time left to find a buddy'}
                   </p>
-                  <p className="text-[11px] mt-0.5" style={{ color: '#64748B' }}>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#6B7684' }}>
                     {job.job_type === 'campus_immediate'
                       ? job.open_extended
                         ? 'Already extended once — cancel or wait for a match.'
@@ -446,8 +446,8 @@ export function TrackingPage() {
                 </div>
               </div>
               <div
-                className={`text-sm font-semibold tabular-nums ${left <= 0 ? 'text-red-400' : urgent ? 'text-amber-300' : 'text-cyan-300'}`}
-                style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                className={`text-sm font-semibold tabular-nums ${left <= 0 ? 'text-red-400' : urgent ? 'text-amber-300' : 'text-[#0B2340]'}`}
+               
               >
                 {formatTtl(left)}
               </div>
@@ -464,7 +464,7 @@ export function TrackingPage() {
                   type="button"
                   onClick={() => void handleExtend()}
                   disabled={ttlBusy}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#0B2340] disabled:opacity-50"
                   style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}
                 >
                   Extend +{CAMPUS_IMMEDIATE_TTL_MS / 60000} min
@@ -476,7 +476,7 @@ export function TrackingPage() {
                   onClick={() => void handleDevNearExpiry()}
                   disabled={ttlBusy}
                   className="px-3 py-1.5 rounded-lg text-xs border disabled:opacity-50"
-                  style={{ borderColor: '#3B2A0A', color: '#FBBF24', background: '#120E05' }}
+                  style={{ borderColor: '#E8A04A66', color: '#9A6A1E', background: '#FFF6EA' }}
                 >
                   DEV: near expiry
                 </button>
@@ -494,14 +494,14 @@ export function TrackingPage() {
 
       {/* Confirmation code — visible while the job hasn't been handed off yet */}
       {['OPEN', 'MATCHED', 'IN_TRANSIT'].includes(job.status) && (
-        <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
+        <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: '#F3F2EF', border: '1px solid #1A3520' }}>
           <div className="flex items-center gap-2">
             <KeyRound size={14} className="text-emerald-400" />
             <div>
-              <div className="text-[10px]" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+              <div className="text-[10px]" style={{ color: '#6B7684' }}>
                 HANDOFF CODE — GIVE TO YOUR RUNNER
               </div>
-              <div className="text-emerald-400 font-semibold" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '1.3rem', letterSpacing: '0.15em' }}>
+              <div className="text-emerald-400 font-semibold" style={{ fontSize: '1.3rem', letterSpacing: '0.15em' }}>
                 {job.confirmation_code}
               </div>
             </div>
@@ -510,7 +510,7 @@ export function TrackingPage() {
       )}
 
       {/* Status card */}
-      <div className="rounded-xl p-5" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
+      <div className="rounded-xl p-5" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
         {/* Timeline */}
         <div className="flex items-start justify-between mb-6">
           {TIMELINE_STEPS.map((s, i) => {
@@ -522,18 +522,18 @@ export function TrackingPage() {
                 <div className="flex items-center w-full">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${i === 0 ? 'ml-0' : 'ml-auto'} ${i === TIMELINE_STEPS.length - 1 ? 'mr-0' : 'mr-auto'}`}
                     style={{
-                      background: isDone ? '#0A2010' : isActive ? '#061620' : '#111827',
-                      border: `2px solid ${isDone ? '#10B981' : isActive ? '#06B6D4' : '#1E2D45'}`,
+                      background: isDone ? '#F3F2EF' : isActive ? '#C44536' : '#ffffff',
+                      border: `2px solid ${isDone ? '#10B981' : isActive ? '#0B2340' : 'rgba(11,35,64,0.12)'}`,
                     }}>
-                    <Icon size={14} style={{ color: isDone ? '#10B981' : isActive ? '#06B6D4' : '#475569' }} />
+                    <Icon size={14} style={{ color: isDone ? '#10B981' : isActive ? '#0B2340' : '#6B7684' }} />
                   </div>
                   {i < TIMELINE_STEPS.length - 1 && (
                     <div className="flex-1 h-0.5 mx-1 transition-all duration-700"
-                      style={{ background: isDone ? '#10B981' : '#1E2D45' }} />
+                      style={{ background: isDone ? '#10B981' : 'rgba(11,35,64,0.12)' }} />
                   )}
                 </div>
                 <div className="text-center mt-2">
-                  <div className="text-[10px] font-medium" style={{ color: isDone ? '#10B981' : isActive ? '#22D3EE' : '#475569' }}>
+                  <div className="text-[10px] font-medium" style={{ color: isDone ? '#10B981' : isActive ? '#ffffff' : '#6B7684' }}>
                     {s.label}
                   </div>
                 </div>
@@ -559,8 +559,8 @@ export function TrackingPage() {
                       style={{ animationDelay: `${i * 0.2}s` }} />
                   ))}
                 </div>
-                <p className="text-white font-medium">Finding your Buddy</p>
-                <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+                <p className="text-[#0B2340] font-medium">Finding your Buddy</p>
+                <p className="text-sm mt-1" style={{ color: '#6B7684' }}>
                   Notifying {3} active runners nearby...
                 </p>
               </>
@@ -568,20 +568,20 @@ export function TrackingPage() {
             {displayStep === 1 && (
               <>
                 <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
-                  style={{ background: '#0A2010', border: '2px solid #10B981' }}>
+                  style={{ background: '#F3F2EF', border: '2px solid #10B981' }}>
                   <CheckCircle2 size={22} className="text-emerald-400" />
                 </div>
-                <p className="text-white font-medium">Buddy Found!</p>
-                <p className="text-sm mt-1" style={{ color: '#64748B' }}>
-                  <span className="text-white">{runnerName}</span> accepted your request · ETA ~{job.eta || '10 min'}
+                <p className="text-[#0B2340] font-medium">Buddy Found!</p>
+                <p className="text-sm mt-1" style={{ color: '#6B7684' }}>
+                  <span className="text-[#0B2340]">{runnerName}</span> accepted your request · ETA ~{job.eta || '10 min'}
                 </p>
               </>
             )}
             {displayStep === 2 && (
               <>
                 <div className="text-3xl mb-2">📦</div>
-                <p className="text-white font-medium">Picked up!</p>
-                <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+                <p className="text-[#0B2340] font-medium">Picked up!</p>
+                <p className="text-sm mt-1" style={{ color: '#6B7684' }}>
                   {runnerName} has your item and is heading to the drop point
                 </p>
               </>
@@ -591,7 +591,7 @@ export function TrackingPage() {
                 <div className="text-3xl mb-2">
                   {job.status === 'DISPUTED' ? '⚠️' : job.status === 'ISSUE_REPORTED' ? '🛑' : job.status === 'CLOSED' ? '✔️' : '✅'}
                 </div>
-                <p className="text-white font-medium">
+                <p className="text-[#0B2340] font-medium">
                   {job.status === 'DISPUTED'
                     ? 'Dispute filed'
                     : job.status === 'ISSUE_REPORTED'
@@ -600,7 +600,7 @@ export function TrackingPage() {
                         ? 'Job closed'
                         : 'Delivered!'}
                 </p>
-                <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+                <p className="text-sm mt-1" style={{ color: '#6B7684' }}>
                   {job.status === 'DISPUTED'
                     ? 'Ops is reviewing this dispute — use mock resolution below (or FIR package).'
                     : job.status === 'ISSUE_REPORTED'
@@ -620,7 +620,7 @@ export function TrackingPage() {
       {/* Find New Buddy — MATCHED, pre-pickup */}
       {job.status === 'MATCHED' && !job.pickup_confirmed_at && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl p-4 flex items-center justify-between gap-3" style={{ background: '#1A0F05', border: '1px solid #3B2A0A' }}>
+          className="rounded-xl p-4 flex items-center justify-between gap-3" style={{ background: '#FFF6EA', border: '1px solid #E8A04A66' }}>
           <div className="flex items-start gap-2">
             <Users size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
             <div>
@@ -637,7 +637,7 @@ export function TrackingPage() {
           <button
             onClick={handleFindNewBuddy}
             disabled={!canFindNewBuddy && !devFindNewBuddyAvailable}
-            className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+            className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold text-[#0B2340] disabled:opacity-50"
             style={{ background: (canFindNewBuddy || devFindNewBuddyAvailable) ? 'linear-gradient(135deg, #F59E0B, #DC2626)' : '#3B2A0A' }}
             title={!canFindNewBuddy && !devFindNewBuddyAvailable ? 'Unlocked after 10 minutes' : 'Unassign runner and re-open job'}
           >
@@ -653,7 +653,7 @@ export function TrackingPage() {
           animate={{ opacity: 1, y: 0 }}
           onClick={() => navigate('/rate', { state: { jobId: job.id } })}
           className="w-full py-3 rounded-lg text-sm font-semibold text-white"
-          style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
+          style={{ background: '#C44536' }}
         >
           {job.status === 'ISSUE_REPORTED' ? 'Open payment / dispute →' : 'Continue to payment & rating →'}
         </motion.button>
@@ -664,7 +664,7 @@ export function TrackingPage() {
         <div className="space-y-3">
           {/* Theft escalation — only for theft-like disputes */}
           {(jobTheftEscalation || disputedRunnerSuspended) && (
-            <div className="rounded-xl p-4 space-y-3" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+            <div className="rounded-xl p-4 space-y-3" style={{ background: '#C4453612', border: '1px solid #C4453644' }}>
               <div className="flex items-center gap-2">
                 <Shield size={14} className="text-red-400" />
                 <span className="text-sm text-red-300 font-medium">Theft escalation active</span>
@@ -682,7 +682,7 @@ export function TrackingPage() {
                 <button
                   type="button"
                   onClick={() => void handleGenerateFir()}
-                  className="w-full py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
+                  className="w-full py-2.5 rounded-lg text-sm font-semibold text-[#0B2340] flex items-center justify-center gap-2"
                   style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)' }}
                 >
                   {firCopied ? <Check size={14} /> : <Copy size={14} />}
@@ -708,7 +708,7 @@ export function TrackingPage() {
 
           {/* Non-theft dispute notice */}
           {!jobTheftEscalation && !disputedRunnerSuspended && (
-            <div className="rounded-xl p-4 space-y-2" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+            <div className="rounded-xl p-4 space-y-2" style={{ background: '#C4453612', border: '1px solid #C4453644' }}>
               <div className="flex items-center gap-2">
                 <FileWarning size={14} className="text-red-400" />
                 <span className="text-sm text-red-300 font-medium">Dispute under review</span>
@@ -720,11 +720,11 @@ export function TrackingPage() {
             </div>
           )}
 
-          <div className="rounded-xl p-4 space-y-3" style={{ background: '#0D1120', border: '1px solid #1E2D45' }}>
-            <div className="text-xs" style={{ color: '#94A3B8', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+            <div className="text-xs" style={{ color: '#6B7684' }}>
               MOCK OPS RESOLUTION
             </div>
-            <p className="text-[11px]" style={{ color: '#64748B' }}>
+            <p className="text-[11px]" style={{ color: '#6B7684' }}>
               Closes the dispute (`DISPUTED` → `CLOSED`). Pilot mock — no real ops dashboard.
             </p>
             <div className="grid gap-2">
@@ -737,14 +737,14 @@ export function TrackingPage() {
                   key={outcome}
                   type="button"
                   onClick={() => handleResolveDispute(outcome)}
-                  className="w-full py-2.5 rounded-lg text-xs font-semibold text-left px-3 text-white"
-                  style={{ background: '#0B1525', border: '1px solid #1E2D45' }}
+                  className="w-full py-2.5 rounded-lg text-xs font-semibold text-left px-3 text-[#0B2340]"
+                  style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}
                 >
                   {label}
                 </button>
               ))}
             </div>
-            <label className="flex items-center gap-2 text-[11px]" style={{ color: '#64748B' }}>
+            <label className="flex items-center gap-2 text-[11px]" style={{ color: '#6B7684' }}>
               <input
                 type="checkbox"
                 checked={opsUnsuspendRunner}
@@ -768,34 +768,34 @@ export function TrackingPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           className="rounded-xl p-4"
-          style={{ background: '#0B1120', border: '1px solid #1E2D45' }}
+          style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}
         >
-          <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
             YOUR BUDDY
           </div>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold"
-              style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)', fontSize: '1.1rem' }}>
+              style={{ background: '#C44536', fontSize: '1.1rem' }}>
               {runnerName.charAt(0)}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-white font-medium">{runnerName}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full text-cyan-400"
-                  style={{ background: '#061620', border: '1px solid #0E2D3D', fontFamily: 'JetBrains Mono, monospace' }}>
+                <span className="text-[#0B2340] font-medium">{runnerName}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full text-[#0B2340]"
+                  style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}>
                   VERIFIED ✓
                 </span>
               </div>
               <div className="flex items-center gap-3 mt-1">
                 <div className="flex items-center gap-1 text-xs" style={{ color: '#F59E0B' }}>
                   <Star size={11} fill="#F59E0B" />
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace' }}>{job.runner_rating ?? 4.9}</span>
+                  <span>{job.runner_rating ?? 4.9}</span>
                 </div>
-                <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
-                  <Shield size={11} className="text-cyan-400" />
+                <div className="flex items-center gap-1 text-xs" style={{ color: '#6B7684' }}>
+                  <Shield size={11} className="text-[#0B2340]" />
                   <span>Trust: 96</span>
                 </div>
-                <div className="flex items-center gap-1 text-xs" style={{ color: '#64748B' }}>
+                <div className="flex items-center gap-1 text-xs" style={{ color: '#6B7684' }}>
                   <Package size={11} />
                   <span>47 runs</span>
                 </div>
@@ -803,11 +803,11 @@ export function TrackingPage() {
             </div>
             <div className="flex gap-2">
               <button className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
-                style={{ background: '#0D1525', border: '1px solid #1E2D45', color: '#64748B' }}>
+                style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}>
                 <Phone size={14} />
               </button>
               <button className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
-                style={{ background: '#0D1525', border: '1px solid #1E2D45', color: '#64748B' }}>
+                style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}>
                 <MessageSquare size={14} />
               </button>
             </div>
@@ -816,11 +816,11 @@ export function TrackingPage() {
       )}
 
       {/* Job details */}
-      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1E2D45' }}>
-        <div className="px-4 py-3" style={{ background: '#0D1525', borderBottom: '1px solid #1E2D45' }}>
-          <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>JOB DETAILS</div>
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(11,35,64,0.12)' }}>
+        <div className="px-4 py-3" style={{ background: '#F3F2EF', borderBottom: '1px solid rgba(11,35,64,0.12)' }}>
+          <div className="text-xs" style={{ color: '#6B7684' }}>JOB DETAILS</div>
         </div>
-        <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
+        <div className="p-4 space-y-3" style={{ background: 'var(--rb-card-gradient)' }}>
           {[
             { label: 'From', value: job.pickup_location, icon: <div className="w-2 h-2 rounded-full bg-cyan-400" /> },
             { label: 'To', value: job.drop_location, icon: <div className="w-2 h-2 rounded-full bg-violet-400" /> },
@@ -831,10 +831,10 @@ export function TrackingPage() {
             <div key={label} className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 {icon && <span>{icon}</span>}
-                <span className="text-xs" style={{ color: '#475569' }}>{label}</span>
+                <span className="text-xs" style={{ color: '#6B7684' }}>{label}</span>
               </div>
               <span className="text-xs text-right" style={{
-                color: muted ? '#475569' : '#E2E8F0',
+                color: muted ? '#6B7684' : '#0B2340',
                 fontFamily: mono ? 'JetBrains Mono, monospace' : 'inherit',
               }}>
                 {value}
@@ -850,7 +850,7 @@ export function TrackingPage() {
           onClick={simulateProgress}
           disabled={simulating}
           className="w-full py-3 rounded-lg text-sm font-medium border transition-all flex items-center justify-center gap-2"
-          style={{ background: '#070B17', border: '1px solid #1A2535', color: simulating ? '#475569' : '#94A3B8' }}
+          style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)', color: simulating ? '#6B7684' : '#6B7684' }}
         >
           {simulating ? (
             <>

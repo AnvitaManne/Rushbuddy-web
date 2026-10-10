@@ -98,18 +98,16 @@ function SessionRestoreGate() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center gap-3"
-      style={{ background: '#060A14', fontFamily: 'Inter, sans-serif' }}
+      style={{ background: 'var(--rb-paper)' }}
     >
       <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center"
-        style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)' }}
+        className="w-10 h-10 flex items-center justify-center overflow-hidden"
+        style={{ background: '#0B2340' }}
       >
-        <span className="text-white font-bold text-sm" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
-          RB
-        </span>
+        <span className="text-white font-bold text-sm tracking-tight">&gt;&gt;</span>
       </div>
-      <div className="w-5 h-5 rounded-full border-2 border-cyan-400/30 border-t-cyan-400 animate-spin" />
-      <p className="text-sm" style={{ color: '#64748B' }}>
+      <div className="w-5 h-5 rounded-full border-2 border-[#C44536]/30 border-t-[#C44536] animate-spin" />
+      <p className="text-sm" style={{ color: '#6B7684' }}>
         Restoring session…
       </p>
     </div>

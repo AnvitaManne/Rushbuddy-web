@@ -63,10 +63,10 @@ function OptionButton<T extends string>({
       onClick={onClick}
       className={`transition-all duration-150 rounded-lg border text-sm ${className}`}
       style={{
-        background: selected ? '#061620' : '#0B1120',
-        border: `1px solid ${selected ? '#06B6D4' : '#1E2D45'}`,
-        color: selected ? '#22D3EE' : '#94A3B8',
-        boxShadow: selected ? '0 0 0 2px rgba(6,182,212,0.1)' : 'none',
+        background: selected ? '#ffffff' : '#ffffff',
+        border: `1px solid ${selected ? '#C44536' : 'rgba(11,35,64,0.12)'}`,
+        color: selected ? '#0B2340' : '#6B7684',
+        boxShadow: selected ? '0 0 0 2px rgba(196,69,54,0.18)' : 'none',
       }}
     >
       {children}
@@ -234,17 +234,17 @@ export function PostRequestPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="p-4 md:p-6 pb-24 md:pb-6 max-w-2xl" >
 
       {/* Header */}
       <div className="mb-6">
-        <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+        <div className="text-xs mb-1" style={{ color: '#6B7684' }}>
           SENDER FLOW · POST REQUEST
         </div>
-        <h1 className="text-white mb-1" style={{ fontWeight: 700, fontSize: '1.3rem' }}>
+        <h1 className="text-[#0B2340] mb-1" style={{ fontWeight: 700, fontSize: '1.3rem' }}>
           Post an Urgent Request
         </h1>
-        <p className="text-sm" style={{ color: '#64748B' }}>
+        <p className="text-sm" style={{ color: '#6B7684' }}>
           Tell us what you need moved and where.
         </p>
       </div>
@@ -260,16 +260,15 @@ export function PostRequestPage() {
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0"
                   style={{
-                    background: isDone ? '#10B981' : isActive ? '#06B6D4' : '#1E2D45',
-                    color: isDone || isActive ? 'white' : '#475569',
-                    fontFamily: 'JetBrains Mono, monospace',
+                    background: isDone ? '#10B981' : isActive ? '#0B2340' : 'rgba(11,35,64,0.12)',
+                    color: isDone || isActive ? 'white' : '#6B7684',
                   }}>
                   {isDone ? '✓' : stepNum}
                 </div>
-                <span className="text-xs hidden sm:block" style={{ color: isActive ? '#E2E8F0' : '#475569' }}>{s}</span>
+                <span className="text-xs hidden sm:block" style={{ color: isActive ? '#0B2340' : '#6B7684' }}>{s}</span>
               </div>
               {i < 3 && (
-                <div className="flex-1 mx-2 h-px" style={{ background: isDone ? '#10B981' : '#1E2D45', minWidth: 16 }} />
+                <div className="flex-1 mx-2 h-px" style={{ background: isDone ? '#10B981' : 'rgba(11,35,64,0.12)', minWidth: 16 }} />
               )}
             </React.Fragment>
           );
@@ -280,8 +279,8 @@ export function PostRequestPage() {
         {/* Step 1: Job type */}
         {step === 1 && (
           <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-              <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
                 JOB TYPE
               </div>
               <div className="space-y-2">
@@ -303,29 +302,29 @@ export function PostRequestPage() {
             {/* Conditional: campus_scheduled window */}
             {jobType === 'campus_scheduled' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="rounded-xl p-4 mb-4 space-y-3" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-                <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                className="rounded-xl p-4 mb-4 space-y-3" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+                <div className="text-xs" style={{ color: '#6B7684' }}>
                   SCHEDULED WINDOW
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>Start</label>
+                    <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>Start</label>
                     <input
                       type="datetime-local"
                       value={scheduledStart}
                       onChange={e => setScheduledStart(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm text-white outline-none"
-                      style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                      className="w-full px-3 py-2 rounded-lg text-sm text-[#0B2340] outline-none"
+                      style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}
                     />
                   </div>
                   <div>
-                    <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>End</label>
+                    <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>End</label>
                     <input
                       type="datetime-local"
                       value={scheduledEnd}
                       onChange={e => setScheduledEnd(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg text-sm text-white outline-none"
-                      style={{ background: '#060A14', border: `1px solid ${scheduledEnd <= scheduledStart ? '#EF4444' : '#1E2D45'}` }}
+                      className="w-full px-3 py-2 rounded-lg text-sm text-[#0B2340] outline-none"
+                      style={{ background: '#F3F2EF', border: `1px solid ${scheduledEnd <= scheduledStart ? '#EF4444' : 'rgba(11,35,64,0.12)'}` }}
                     />
                   </div>
                 </div>
@@ -334,7 +333,7 @@ export function PostRequestPage() {
                     <AlertCircle size={10} />End must be after start.
                   </p>
                 )}
-                <p className="text-[11px]" style={{ color: '#64748B' }}>
+                <p className="text-[11px]" style={{ color: '#6B7684' }}>
                   Goes live on the feed immediately so a buddy can claim it early — pickup should happen during this window, not ASAP.
                 </p>
               </motion.div>
@@ -343,40 +342,40 @@ export function PostRequestPage() {
             {/* Conditional: intercity fields */}
             {jobType === 'intercity' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="rounded-xl p-4 mb-4 space-y-3" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-                <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                className="rounded-xl p-4 mb-4 space-y-3" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+                <div className="text-xs" style={{ color: '#6B7684' }}>
                   INTERCITY DETAILS (MODE 2 · LANDMARK HANDOFF)
                 </div>
                 <div>
-                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>Travel Date</label>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>Travel Date</label>
                   <input
                     type="date"
                     value={travelDate}
                     onChange={e => setTravelDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg text-sm text-white outline-none"
-                    style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                    className="w-full px-3 py-2 rounded-lg text-sm text-[#0B2340] outline-none"
+                    style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}
                   />
                 </div>
                 <div>
-                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>Corridor Landmark</label>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>Corridor Landmark</label>
                   <input
                     type="text"
                     value={corridorLandmark}
                     onChange={e => setCorridorLandmark(e.target.value)}
                     placeholder="e.g. Chennai Central — Platform 1 entrance"
-                    className="w-full px-3 py-2 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
-                    style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                    className="w-full px-3 py-2 rounded-lg text-sm text-[#0B2340] placeholder-slate-600 outline-none"
+                    style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}
                   />
                 </div>
                 <div>
-                  <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>Receiver Phone</label>
+                  <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>Receiver Phone</label>
                   <input
                     type="tel"
                     value={receiverPhone}
                     onChange={e => setReceiverPhone(e.target.value)}
                     placeholder="10-digit mobile number"
-                    className="w-full px-3 py-2 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
-                    style={{ background: '#060A14', border: '1px solid #1E2D45' }}
+                    className="w-full px-3 py-2 rounded-lg text-sm text-[#0B2340] placeholder-slate-600 outline-none"
+                    style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}
                   />
                 </div>
               </motion.div>
@@ -387,8 +386,8 @@ export function PostRequestPage() {
               disabled={!canProceedStep1}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
               style={{
-                background: canProceedStep1 ? 'linear-gradient(135deg, #06B6D4, #6366F1)' : '#1E2D45',
-                color: canProceedStep1 ? 'white' : '#475569',
+                background: canProceedStep1 ? '#C44536' : 'rgba(11,35,64,0.12)',
+                color: canProceedStep1 ? 'white' : '#6B7684',
               }}
             >
               {canProceedStep1 ? (
@@ -404,8 +403,8 @@ export function PostRequestPage() {
         {step === 2 && (
           <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             {/* Item type */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-              <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
                 ITEM TYPE
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -427,14 +426,14 @@ export function PostRequestPage() {
               {itemType === 'Food' && (
                 <motion.label initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   className="flex items-start gap-2 mt-3 p-3 rounded-lg cursor-pointer"
-                  style={{ background: '#070B17', border: '1px solid #1A2535' }}>
+                  style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)' }}>
                   <input
                     type="checkbox"
                     checked={foodReadyAck}
                     onChange={e => setFoodReadyAck(e.target.checked)}
                     className="w-4 h-4 mt-0.5 accent-cyan-400"
                   />
-                  <span className="text-xs" style={{ color: '#94A3B8' }}>
+                  <span className="text-xs" style={{ color: '#6B7684' }}>
                     The food is already ordered and ready for pickup. RushBuddy runners are carry-only — they cannot order on your behalf.
                   </span>
                 </motion.label>
@@ -442,8 +441,8 @@ export function PostRequestPage() {
             </div>
 
             {/* Weight */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-              <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
                 WEIGHT TIER
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -462,8 +461,8 @@ export function PostRequestPage() {
             </div>
 
             {/* Risk */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-              <div className="text-xs mb-3" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="text-xs mb-3" style={{ color: '#6B7684' }}>
                 RISK LEVEL
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -478,9 +477,9 @@ export function PostRequestPage() {
                     onClick={() => setRisk(r)}
                     className="p-3 text-center rounded-lg border transition-all duration-150"
                     style={{
-                      background: risk === r ? '#061620' : '#0B1120',
-                      border: `1px solid ${risk === r ? color : '#1E2D45'}`,
-                      color: risk === r ? color : '#94A3B8',
+                      background: 'var(--rb-card-gradient)',
+                      border: `1px solid ${risk === r ? color : 'rgba(11,35,64,0.12)'}`,
+                      color: risk === r ? color : '#6B7684',
                     }}
                   >
                     <div className="font-medium text-sm">{r}</div>
@@ -491,12 +490,12 @@ export function PostRequestPage() {
             </div>
 
             {/* Declared value */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-              <div className="text-xs mb-2" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="text-xs mb-2" style={{ color: '#6B7684' }}>
                 DECLARED VALUE (OPTIONAL)
               </div>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#64748B' }}>₹</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#6B7684' }}>₹</span>
                 <input
                   type="number"
                   min={0}
@@ -504,14 +503,14 @@ export function PostRequestPage() {
                   value={declaredValue}
                   onChange={e => setDeclaredValue(e.target.value)}
                   placeholder={`Up to ₹${DECLARED_VALUE_MAX_INR}`}
-                  className="w-full pl-7 pr-4 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
+                  className="w-full pl-7 pr-4 py-2.5 rounded-lg text-sm text-[#0B2340] placeholder-slate-600 outline-none"
                   style={{
-                    background: '#060A14',
-                    border: `1px solid ${declaredValue && Number(declaredValue) > DECLARED_VALUE_MAX_INR ? '#EF4444' : '#1E2D45'}`,
+                    background: '#F3F2EF',
+                    border: `1px solid ${declaredValue && Number(declaredValue) > DECLARED_VALUE_MAX_INR ? '#EF4444' : 'rgba(11,35,64,0.12)'}`,
                   }}
                 />
               </div>
-              <p className="text-[10px] mt-1.5" style={{ color: '#475569' }}>
+              <p className="text-[10px] mt-1.5" style={{ color: '#6B7684' }}>
                 Capped at ₹{DECLARED_VALUE_MAX_INR}. Used only for dispute/FIR support — not insured.
               </p>
             </div>
@@ -522,17 +521,17 @@ export function PostRequestPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-xl p-4 mb-4"
-                style={{ background: '#0A1A10', border: '1px solid #1A3520' }}
+                style={{ background: '#F3F2EF', border: '1px solid #1A3520' }}
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs mb-1" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+                    <div className="text-xs mb-1" style={{ color: '#6B7684' }}>
                       SYSTEM PRICE FLOOR
                     </div>
-                    <div className="text-emerald-400" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: '1.5rem' }}>
+                    <div className="text-emerald-400" style={{ fontWeight: 700, fontSize: '1.5rem' }}>
                       ₹{priceFloor}
                     </div>
-                    <div className="text-xs mt-1" style={{ color: '#64748B' }}>
+                    <div className="text-xs mt-1" style={{ color: '#6B7684' }}>
                       Based on {itemType} × {weight} × {risk} risk{jobType === 'intercity' ? ' + corridor' : ''}. Your offer must meet or beat this.
                     </div>
                   </div>
@@ -546,8 +545,8 @@ export function PostRequestPage() {
               disabled={!canProceedStep2}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
               style={{
-                background: canProceedStep2 ? 'linear-gradient(135deg, #06B6D4, #6366F1)' : '#1E2D45',
-                color: canProceedStep2 ? 'white' : '#475569',
+                background: canProceedStep2 ? '#C44536' : 'rgba(11,35,64,0.12)',
+                color: canProceedStep2 ? 'white' : '#6B7684',
               }}
             >
               {!canProceedStep2 && itemType === 'Food' && !foodReadyAck
@@ -574,7 +573,7 @@ export function PostRequestPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="rounded-xl p-4 mb-4"
-                style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}
+                style={{ background: '#C4453612', border: '1px solid #C4453644' }}
               >
                 <div className="flex items-start gap-3">
                   <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
@@ -598,14 +597,14 @@ export function PostRequestPage() {
               </motion.div>
             )}
 
-            <div className="rounded-xl p-4 mb-4 space-y-4" style={{ background: '#0B1120', border: '1px solid #1E2D45' }}>
-              <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl p-4 mb-4 space-y-4" style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="text-xs" style={{ color: '#6B7684' }}>
                 ROUTE DETAILS
               </div>
 
               {/* Pickup */}
               <div>
-                <label className="text-xs mb-1.5 flex items-center gap-1.5" style={{ color: '#94A3B8' }}>
+                <label className="text-xs mb-1.5 flex items-center gap-1.5" style={{ color: '#6B7684' }}>
                   <div className="w-2 h-2 rounded-full bg-cyan-400" />
                   Pickup Location
                 </label>
@@ -616,13 +615,13 @@ export function PostRequestPage() {
                     value={pickup}
                     onChange={e => { setPickup(e.target.value); setErrors(p => ({ ...p, pickup: '' })); }}
                     placeholder="e.g. MBA Hall Gate, SJT Ground Floor"
-                    className="w-full pl-8 pr-4 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
+                    className="w-full pl-8 pr-4 py-2.5 rounded-lg text-sm text-[#0B2340] placeholder-slate-600 outline-none"
                     style={{
-                      background: '#060A14',
-                      border: `1px solid ${errors.pickup ? '#EF4444' : '#1E2D45'}`,
+                      background: '#F3F2EF',
+                      border: `1px solid ${errors.pickup ? '#EF4444' : 'rgba(11,35,64,0.12)'}`,
                     }}
-                    onFocus={e => e.target.style.borderColor = '#06B6D4'}
-                    onBlur={e => e.target.style.borderColor = errors.pickup ? '#EF4444' : '#1E2D45'}
+                    onFocus={e => e.target.style.borderColor = '#0B2340'}
+                    onBlur={e => e.target.style.borderColor = errors.pickup ? '#EF4444' : 'rgba(11,35,64,0.12)'}
                   />
                 </div>
                 {errors.pickup && (
@@ -638,9 +637,9 @@ export function PostRequestPage() {
                       onClick={() => setPickupType(type)}
                       className="flex-1 py-1.5 rounded-md text-[11px] border transition-all"
                       style={{
-                        background: pickupType === type ? '#061620' : '#070B17',
-                        border: `1px solid ${pickupType === type ? '#06B6D4' : '#1A2535'}`,
-                        color: pickupType === type ? '#22D3EE' : '#64748B',
+                        background: 'var(--rb-card-gradient)',
+                        border: `1px solid ${pickupType === type ? '#C44536' : 'rgba(11,35,64,0.10)'}`,
+                        color: pickupType === type ? '#0B2340' : '#6B7684',
                       }}
                     >
                       {label}
@@ -651,7 +650,7 @@ export function PostRequestPage() {
 
               {/* Drop */}
               <div>
-                <label className="text-xs mb-1.5 flex items-center gap-1.5" style={{ color: '#94A3B8' }}>
+                <label className="text-xs mb-1.5 flex items-center gap-1.5" style={{ color: '#6B7684' }}>
                   <div className="w-2 h-2 rounded-full bg-violet-400" />
                   Drop Location
                 </label>
@@ -662,13 +661,13 @@ export function PostRequestPage() {
                     value={drop}
                     onChange={e => { setDrop(e.target.value); setErrors(p => ({ ...p, drop: '' })); }}
                     placeholder="e.g. MH-B Block 3, Room 214"
-                    className="w-full pl-8 pr-4 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none"
+                    className="w-full pl-8 pr-4 py-2.5 rounded-lg text-sm text-[#0B2340] placeholder-slate-600 outline-none"
                     style={{
-                      background: '#060A14',
-                      border: `1px solid ${errors.drop ? '#EF4444' : '#1E2D45'}`,
+                      background: '#F3F2EF',
+                      border: `1px solid ${errors.drop ? '#EF4444' : 'rgba(11,35,64,0.12)'}`,
                     }}
                     onFocus={e => e.target.style.borderColor = '#6366F1'}
-                    onBlur={e => e.target.style.borderColor = errors.drop ? '#EF4444' : '#1E2D45'}
+                    onBlur={e => e.target.style.borderColor = errors.drop ? '#EF4444' : 'rgba(11,35,64,0.12)'}
                   />
                 </div>
                 {errors.drop && (
@@ -684,9 +683,9 @@ export function PostRequestPage() {
                       onClick={() => setDropType(type)}
                       className="flex-1 py-1.5 rounded-md text-[11px] border transition-all"
                       style={{
-                        background: dropType === type ? '#061620' : '#070B17',
-                        border: `1px solid ${dropType === type ? '#06B6D4' : '#1A2535'}`,
-                        color: dropType === type ? '#22D3EE' : '#64748B',
+                        background: 'var(--rb-card-gradient)',
+                        border: `1px solid ${dropType === type ? '#C44536' : 'rgba(11,35,64,0.10)'}`,
+                        color: dropType === type ? '#0B2340' : '#6B7684',
                       }}
                     >
                       {label}
@@ -704,7 +703,7 @@ export function PostRequestPage() {
 
               {/* Description */}
               <div>
-                <label className="text-xs mb-1.5 block" style={{ color: '#94A3B8' }}>
+                <label className="text-xs mb-1.5 block" style={{ color: '#6B7684' }}>
                   Description (optional)
                 </label>
                 <textarea
@@ -712,10 +711,10 @@ export function PostRequestPage() {
                   onChange={e => setDescription(e.target.value)}
                   rows={3}
                   placeholder="Any specific instructions for your runner..."
-                  className="w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder-slate-600 outline-none resize-none"
-                  style={{ background: '#060A14', border: '1px solid #1E2D45' }}
-                  onFocus={e => e.target.style.borderColor = '#06B6D4'}
-                  onBlur={e => e.target.style.borderColor = '#1E2D45'}
+                  className="w-full px-3 py-2.5 rounded-lg text-sm text-[#0B2340] placeholder-slate-600 outline-none resize-none"
+                  style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.12)' }}
+                  onFocus={e => e.target.style.borderColor = '#0B2340'}
+                  onBlur={e => e.target.style.borderColor = 'rgba(11,35,64,0.12)'}
                 />
               </div>
             </div>
@@ -724,7 +723,7 @@ export function PostRequestPage() {
               <button
                 onClick={() => setStep(2)}
                 className="flex-1 py-3 rounded-lg text-sm border transition-all"
-                style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
               >
                 ← Back
               </button>
@@ -733,8 +732,8 @@ export function PostRequestPage() {
                 disabled={!canProceedStep3}
                 className="flex-1 py-3 rounded-lg text-sm font-semibold transition-all"
                 style={{
-                  background: canProceedStep3 ? 'linear-gradient(135deg, #06B6D4, #6366F1)' : '#1E2D45',
-                  color: canProceedStep3 ? 'white' : '#475569',
+                  background: canProceedStep3 ? '#C44536' : 'rgba(11,35,64,0.12)',
+                  color: canProceedStep3 ? 'white' : '#6B7684',
                 }}
               >
                 {!canProceedStep3 && (!pickup.trim() || !drop.trim())
@@ -752,13 +751,13 @@ export function PostRequestPage() {
         {/* Step 4: Review + editable price */}
         {step === 4 && (
           <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-            <div className="rounded-xl overflow-hidden mb-4" style={{ border: '1px solid #1E2D45' }}>
-              <div className="px-4 py-3" style={{ background: '#0D1525', borderBottom: '1px solid #1E2D45' }}>
-                <div className="text-xs" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl overflow-hidden mb-4" style={{ border: '1px solid rgba(11,35,64,0.12)' }}>
+              <div className="px-4 py-3" style={{ background: '#F3F2EF', borderBottom: '1px solid rgba(11,35,64,0.12)' }}>
+                <div className="text-xs" style={{ color: '#6B7684' }}>
                   JOB PREVIEW · {new Date().toLocaleDateString()}
                 </div>
               </div>
-              <div className="p-4 space-y-3" style={{ background: '#0B1120' }}>
+              <div className="p-4 space-y-3" style={{ background: 'var(--rb-card-gradient)' }}>
                 {[
                   { label: 'Job Type', value: JOB_TYPES.find(j => j.type === jobType)?.label },
                   { label: 'Item Type', value: itemType },
@@ -776,10 +775,10 @@ export function PostRequestPage() {
                   { label: 'Price Floor', value: `₹${priceFloor}`, mono: true },
                 ].map(({ label, value, mono }) => (
                   <div key={label} className="flex items-start justify-between gap-4">
-                    <span className="text-xs flex-shrink-0" style={{ color: '#475569' }}>{label}</span>
+                    <span className="text-xs flex-shrink-0" style={{ color: '#6B7684' }}>{label}</span>
                     <span
                       className="text-xs text-right"
-                      style={{ color: '#E2E8F0', fontFamily: mono ? 'JetBrains Mono, monospace' : 'inherit' }}
+                      style={{ color: '#0B2340', fontFamily: mono ? 'JetBrains Mono, monospace' : 'inherit' }}
                     >
                       {value}
                     </span>
@@ -789,8 +788,8 @@ export function PostRequestPage() {
             </div>
 
             {/* Editable offer price */}
-            <div className="rounded-xl p-4 mb-4" style={{ background: '#0A1A10', border: '1px solid #1A3520' }}>
-              <div className="text-xs mb-2" style={{ color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            <div className="rounded-xl p-4 mb-4" style={{ background: '#F3F2EF', border: '1px solid #1A3520' }}>
+              <div className="text-xs mb-2" style={{ color: '#6B7684' }}>
                 YOUR OFFER PRICE
               </div>
               <div className="relative">
@@ -800,21 +799,20 @@ export function PostRequestPage() {
                   min={priceFloor}
                   value={postedPrice ?? ''}
                   onChange={e => { setPriceTouched(true); setPostedPrice(Number(e.target.value)); }}
-                  className="w-full pl-7 pr-4 py-2.5 rounded-lg text-lg text-emerald-400 font-semibold outline-none"
+                  className="w-full pl-7 pr-4 py-2.5 rounded-lg text-lg text-[#0B2340] font-semibold outline-none"
                   style={{
-                    background: '#060A14',
-                    border: `1px solid ${postedPrice !== null && postedPrice < priceFloor ? '#EF4444' : '#1A3520'}`,
-                    fontFamily: 'JetBrains Mono, monospace',
+                    background: '#F3F2EF',
+                    border: `1px solid ${postedPrice !== null && postedPrice < priceFloor ? '#EF4444' : 'rgba(11,35,64,0.12)'}`,
                   }}
                 />
               </div>
-              <div className="text-[10px] mt-1.5" style={{ color: postedPrice !== null && postedPrice < priceFloor ? '#F87171' : '#475569' }}>
+              <div className="text-[10px] mt-1.5" style={{ color: postedPrice !== null && postedPrice < priceFloor ? '#F87171' : '#6B7684' }}>
                 Must be at least the system floor: ₹{priceFloor}. Platform fee: ₹0 (beta).
               </div>
             </div>
 
             {formErrors.length > 0 && (
-              <div className="rounded-xl p-3 mb-4 space-y-1" style={{ background: '#1C0A0A', border: '1px solid #3B1111' }}>
+              <div className="rounded-xl p-3 mb-4 space-y-1" style={{ background: '#C4453612', border: '1px solid #C4453644' }}>
                 {formErrors.map(err => (
                   <p key={err} className="text-[11px] text-red-300 flex items-start gap-1.5">
                     <AlertCircle size={10} className="mt-0.5 flex-shrink-0" />{err}
@@ -824,9 +822,9 @@ export function PostRequestPage() {
             )}
 
             <div className="rounded-xl p-3 mb-4 flex items-start gap-2"
-              style={{ background: '#070B17', border: '1px solid #1A2535' }}>
-              <Info size={13} className="text-cyan-400 flex-shrink-0 mt-0.5" />
-              <p className="text-[11px]" style={{ color: '#64748B' }}>
+              style={{ background: '#F3F2EF', border: '1px solid rgba(11,35,64,0.10)' }}>
+              <Info size={13} className="text-[#0B2340] flex-shrink-0 mt-0.5" />
+              <p className="text-[11px]" style={{ color: '#6B7684' }}>
                 Posting this job will notify all available runners on campus. Matching is first-come, first-served.
                 You can cancel before a runner accepts.
               </p>
@@ -836,7 +834,7 @@ export function PostRequestPage() {
               <button
                 onClick={() => setStep(3)}
                 className="flex-1 py-3 rounded-lg text-sm border"
-                style={{ background: '#0B1120', border: '1px solid #1E2D45', color: '#64748B' }}
+                style={{ background: 'var(--rb-card-gradient)', border: '1px solid rgba(11,35,64,0.12)', color: '#6B7684' }}
               >
                 ← Back
               </button>
@@ -844,7 +842,7 @@ export function PostRequestPage() {
                 onClick={handlePost}
                 disabled={loading}
                 className="flex-[2] flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white transition-all"
-                style={{ background: 'linear-gradient(135deg, #06B6D4, #6366F1)', opacity: loading ? 0.8 : 1 }}
+                style={{ background: '#C44536', opacity: loading ? 0.8 : 1 }}
               >
                 {loading ? (
                   <>
